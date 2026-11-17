@@ -47,9 +47,9 @@ data/
   private/        un-anonymised bills (git-ignored; never committed)
 ```
 
-## Dependency rules (enforced by import-linter in CI)
+## Dependency rules (enforced in CI by import-linter and `tests/unit/test_domain_purity.py`)
 
-1. `munisense.domain` imports nothing outside `munisense.domain`, the standard library and Pydantic v2 (strict mode only; ADR-0004).
+1. `munisense.domain` imports nothing outside `munisense.domain`, an allow-list of pure standard-library modules and Pydantic v2 (strict mode only, never `pydantic.v1`; ADR-0004). It does no I/O, reads no clock and uses no randomness: `open`, `print`, `input`, `eval`, `exec`, `compile` and `__import__` are refused, and so are `now`, `today` and `utcnow`, called or passed (for example as a Pydantic `default_factory`). `zoneinfo` and `uuid` are deliberately not on the allow-list: the caller passes dates and offset-aware datetimes in, and identifiers are made outside the domain. import-linter enforces the munisense part and forbids named third-party packages (rule 1b); the test enforces the allow-list.
 2. Within the domain: `money` ← `tariffs` ← `billing` (arrows point at what may be imported).
 3. `api`, `console` and `mcp` import `services` and `platform` only, never `persistence` or `ingestion` directly.
 4. Only `persistence` imports SQLAlchemy.

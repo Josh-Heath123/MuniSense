@@ -1,11 +1,11 @@
 # Status
 
-_Last updated: 2026-11-17, on branch `docs/p1-task-list`._
+_Last updated: 2026-11-17, on branch `chore/p1-1-dependencies`._
 
 ## Now
 
 - **Phase:** P1 Calculation core. P0 approved by the owner on 2026-11-17 (W4).
-- **Next task:** P1-1 (dependencies).
+- **Next task:** P1-2 (money and units).
 - **Blocked on:** nothing.
 - **Design checkpoint:** after P1-9, stop and write `/report progress` on the domain model for the architect (P1-10). P1-11 onwards waits for that review.
 
@@ -66,7 +66,7 @@ Each task is one branch and one pull request, about half a day. Unless a task sa
 
 | ID | Task | Acceptance criteria | Status |
 | --- | --- | --- | --- |
-| P1-1 | Dependencies for P1 | Starts with **one approval request**: Pydantic v2 (runtime, with its transitive packages and licences) and mutmut (dev); hypothesis is already approved (E14). Each version is at least 14 days old. The import-linter contract that the domain imports only the standard library and Pydantic is added (pays back half of TD-6) and **shown to break** on a deliberate violation. `uv run poe verify` and `uv run poe audit` pass | todo |
+| P1-1 | Dependencies for P1 | Starts with **one approval request**: Pydantic v2 (runtime, with its transitive packages and licences) and mutmut (dev); hypothesis is already approved (E14). Each version is at least 14 days old. The import-linter contract that the domain imports only the standard library and Pydantic is added (pays back half of TD-6) and **shown to break** on a deliberate violation. `uv run poe verify` and `uv run poe audit` pass | **done** (PR pending) |
 | P1-2 | Money and units | `domain.money`: a strict Decimal type that **rejects `float`** (and `str` only where explicitly parsed), with a test per entry point; `Money` in ZAR; `Rate` keeping the printed value and unit (c/kWh, R/kWh, R/day, R/month) and an exact canonical value; unit conversion without quantising. Property tests: conversion round-trips exactly; adding money is associative and exact | todo |
 | P1-3 | Cited values and verification status | `CitedValue` holding a value, a citation (document id, page, table or row, printed text) and a status: `verified` (verifier, method, date), `estimated` (reason) or `user_provided` (who). The weakest-status summary of a set of values. Invalid combinations refused (for example `estimated` without a reason). Lives in the domain because the domain may not import `munisense.provenance`; the PR states why | todo |
 | P1-4 | Rounding policies and the VAT table | `RoundingPolicy` naming each quantisation point of ADR-0005 (line amount, VAT per line or on the subtotal, total, prepaid kWh allocation), each with granularity and rounding mode, or "none"; a policy carries a status. `VatTable` of dated rates: a date outside the table is **refused**, never defaulted. No VAT rate or rounding rule appears in code; tests use fixtures | todo |
@@ -87,6 +87,7 @@ Each task is one branch and one pull request, about half a day. Unless a task sa
 
 | Task | Evidence |
 | --- | --- |
+| P1-1 Dependencies | Owner approval E28. Locked: pydantic 2.14.2 (MIT, capped below 3) with pydantic-core 2.50.2 (MIT), annotated-types 0.8.0 (MIT), typing-inspection 0.4.4 (MIT), typing-extensions 4.16.0 (PSF, already locked); hypothesis 6.170.14 (MPL-2.0, E14) with sortedcontainers 2.4.0 (Apache-2.0, already locked); mutmut 3.8.1 (BSD-3) with libcst 1.9.0 (MIT, some files PSF and Apache-2.0), textual 8.2.8 (MIT), linkify-it-py 2.2.0 (MIT), mdit-py-plugins 0.6.1 (MIT), pyyaml-ft 8.0.0 (MIT), setproctitle 1.3.8 (BSD-3), and the already-locked click (BSD-3), rich, platformdirs, markdown-it-py, mdurl (MIT), pygments (BSD-2). Licences read from installed metadata; all fit E15. Newest upload 2026-10-30 (at least 14 days). **Contract:** import-linter rule 1b forbids named third-party packages in the domain; `tests/unit/test_domain_purity.py` enforces the full allow-list (pure standard-library modules and Pydantic v2, no `pydantic.v1`; no `open`, `print`, clock reads even when passed uncalled). **Shown to break:** `import hypothesis` planted in `domain/money/__init__.py` broke rule 1b (`munisense.domain.money -> hypothesis (l.2)`) and failed the test; 17 parametrised negative cases stand as the repeatable proof. pydantic's mypy plugin enabled (its effect is shown in P1-2). Reviews: security APPROVE (notes only); code review CHANGES REQUIRED, all findings fixed (see the pull request)
 | P0-1 Verify the environment | `reports/2026-11-17-P0-progress.md`, section "P0-1 re-run inside WSL": every item green, run from WSL `Ubuntu` 24.04 |
 | P0-8 Gate report | `reports/2026-11-17-P0-gate.md` (PR #9, merged; approved by the owner, E22). Reviewed by code and security reviewers: the first draft overclaimed and was corrected; final verdicts APPROVE from both. Re-measured on `main` (dbfa714): `poe verify` and `poe audit` green, `poe check` 4.4 to 4.7 s, CI green on `main` after each merge |
 | P0-7 Prove the hooks inside WSL | Exact commands and outputs: `reports/2026-11-17-P0-7-hook-evidence.md`. All in WSL `Ubuntu` 24.04 on 2026-11-17 (the owner's script ran from Claude Code's `!` shell in the same session). **session_context:** ran at the start of this session; run directly, it prints the branch, the uncommitted-file count and the status sections (exit 0). **guard_bash:** blocked, live, `git push --dry-run origin HEAD:main`, `docker volume rm <name>`, `rm -rf <path>` and `git commit --no-verify` (each chosen to be harmless had it run); it allowed this session's feature-branch pushes (for example `chore/p0-7-prove-hooks`); earlier in the same session it blocked `cat .env`. **guard_files:** blocked an Edit of ADR-0002 ("is Accepted on main") and a Write containing a private-key header. **format_lint:** after a Write of a badly formatted Python file, it reformatted the file, removed an unused import and blocked on an undefined name (`F821`). **quality_gate:** run with the Stop payload: exit 2 ("Quality gate failed") with that file present; exit 0 with `stop_hook_active` (no loop); exit 0 once no Python file had changed; and it **blocked live at a real turn end** on a temporary mypy error (see the report). **pre-commit pre-push (moved from P0-5, E21):** the owner ran `p07-push-proof.sh` (a throwaway clone with `origin` removed, and a throwaway local bare remote). `git push throwaway HEAD:refs/heads/main` was refused ("refuse pushes to main ... Failed", "Pushing to main is not allowed", exit 1); `HEAD:refs/heads/feat/p07-proof` was accepted (exit 0); only `feat/p07-proof` reached the remote. **Hook tests:** 33 pass (`uv run poe hook-tests`, and in CI) |
@@ -127,7 +128,6 @@ Each task is one branch and one pull request, about half a day. Unless a task sa
 ## Known limitations
 
 - No application code exists yet: the package holds empty modules, so the 100% coverage reported in P0 is vacuous.
-- Hypothesis (approved, MPL-2.0) is added in P1-1.
 - Every hook has been seen firing on chosen examples inside WSL (P0-7). They are best-effort controls with known gaps (security document, TD-1 to TD-3, TD-8, TD-9).
 - CI is not a merge gate: there is no branch protection on the free plan, so a red pull request can still be merged by hand. Claude Code merges only on green (E17).
 - PostgreSQL runs locally and in CI from the same image digest; the test connection variable `MUNISENSE_TEST_DATABASE_URL`, the user `munisense` and the database `munisense_test` match, while CI has no development database and its own throwaway password. No test connects to it yet; database tests and a driver dependency arrive in P2.
