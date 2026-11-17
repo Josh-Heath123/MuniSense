@@ -1,12 +1,12 @@
 # Status
 
-_Last updated: 2026-11-17, on branch `chore/p0-7-prove-hooks`._
+_Last updated: 2026-11-17, on branch `docs/p0-8-gate-report`._
 
 ## Now
 
-- **Phase:** P0 Foundation (in progress). P0-1 to P0-7 and P0-9 are done once the P0-7 pull request merges.
-- **Next task:** P0-8 gate report, then stop for the owner's approval.
-- **Blocked on:** nothing. Pull requests with green CI and clean reviews are merged with `gh pr merge --squash` (the owner approves the prompt).
+- **Phase:** P0 Foundation: all tasks done; the gate report is written (`reports/2026-11-17-P0-gate.md`).
+- **Next task:** none until the owner approves the P0 gate. Then P1 Calculation core, starting with `/next`.
+- **Blocked on:** the owner's approval of the P0 gate.
 
 ## Waiting for the owner
 
@@ -14,6 +14,7 @@ _Last updated: 2026-11-17, on branch `chore/p0-7-prove-hooks`._
 | --- | --- | --- |
 | W1 | Confirm in GitHub Settings → Billing that the Actions spending limit is $0, so CI can never be charged. The repository uses about 1 minute per run of the 2,000 free minutes a month | Check once; R0 |
 | W2 | Optional, free GitHub settings: require actions pinned to a full commit SHA, and allow only GitHub-owned actions plus `astral-sh/setup-uv`; and/or enable Dependabot version updates for GitHub Actions (TD-7) | Turn on the SHA-pinning requirement; decide Dependabot when TD-7 is paid back. These change account settings, so they are the owner's call |
+| W4 | Approve the P0 gate and start P1 (calculation core) | Approve |
 
 ## Decided (owner: Josh Heath, 2026-11-17)
 
@@ -63,8 +64,8 @@ _Last updated: 2026-11-17, on branch `chore/p0-7-prove-hooks`._
 | P0-5 | pre-commit | ruff, gitleaks and basic file checks run on commit, and are proven by a failing example. A **pre-push** hook rejects a push whose remote branch (`PRE_COMMIT_REMOTE_BRANCH`, the first ref of the push) is `main`, catching pushes that the `guard_bash.py` parser cannot see; proven by a blocked push | **done** (PR #7; real blocked-push proof moved to P0-7, gap accepted as TD-9, E21) |
 | P0-6 | Continuous integration | GitHub Actions on `ubuntu-latest` with a `postgres:17` service and `astral-sh/setup-uv` runs `uv run poe verify` (which includes the hook tests in `.claude/hooks/tests/`) and `uv run poe audit`, with `UV_LOCKED=1` so a stale lock fails instead of being re-resolved on pull requests and on pushes to main. A pull request shows green. The current free Actions allowance is re-checked | **done** (PR #5) |
 | P0-9 | Block pushes to `main` (E6) | `guard_bash.py` blocks `git push` to `main` (explicit refspecs, `HEAD:main`, and a bare `git push` while on `main`); tests show blocked and allowed cases. Needs the owner's approval because it changes `.claude/` | **done** (PR #2) |
-| P0-7 | Prove the hooks inside WSL | Evidence, from a WSL session, that each hook blocks or acts as documented: guard_bash (including the push-to-main rule), the pre-commit pre-push hook aborting a real push to `main` (run by the owner against a throwaway local bare repository, never GitHub), guard_files, format_lint, quality_gate, session_context | in review (PR #8) |
-| P0-8 | Gate report | `/report gate` saved in `docs/reports/`, including how long `uv run poe check` takes | todo |
+| P0-7 | Prove the hooks inside WSL | Evidence, from a WSL session, that each hook blocks or acts as documented: guard_bash (including the push-to-main rule), the pre-commit pre-push hook aborting a real push to `main` (run by the owner against a throwaway local bare repository, never GitHub), guard_files, format_lint, quality_gate, session_context | **done** (PR #8) |
+| P0-8 | Gate report | `/report gate` saved in `docs/reports/`, including how long `uv run poe check` takes | **done** (`reports/2026-11-17-P0-gate.md`; this pull request) |
 
 ## Done
 
