@@ -1,0 +1,59 @@
+# Security and privacy
+
+> Technical controls do not make MuniSense legally compliant. This document lists controls that exist, risks, and **items that need formal verification by a qualified person**. Never describe the system as "POPIA-compliant".
+
+## Principles
+
+- Collect nothing that is not needed. The MVP stores no personal information (ADR-0008).
+- Secrets only in environment variables (`.env` locally; never committed).
+- Least privilege for database roles, API keys and staff accounts.
+- Validate every external input with types and size limits.
+- Log metadata, never bodies or personal information.
+
+## Controls by phase
+
+| Control | Phase | Status |
+| --- | --- | --- |
+| Secret scanning (gitleaks) in pre-commit and CI | P0 | planned |
+| Dependency vulnerability audit (pip-audit) in CI | P0 | planned |
+| Claude Code guard hooks (destructive commands, secrets) | P0 | in starter pack, to be proven in P0-7 |
+| Parameterised queries only (SQLAlchemy); separate migration and app database roles | P3 | planned |
+| Hashed API keys, timing-safe comparison, rate limits, request size limits | P5 | planned |
+| RFC 9457 errors without stack traces; debug off by default | P5 | planned |
+| Console: argon2 passwords, secure session cookies, CSRF tokens, security headers | P6 | planned |
+| MCP server: same authentication and limits as the API; read-only tools | P7 | planned |
+| Backups, encryption at rest and in transit, monitoring, incident response | P10 | planned |
+
+## Threats to watch (short list)
+
+| Threat | Mitigation |
+| --- | --- |
+| Wrong tariff data published (the biggest business risk) | Citations, verifier, golden bills, review-and-publish, statuses shown to users |
+| Malicious or malformed source documents (PDF parsing) | Parse in isolation; size limits; never execute content; human review of extracted values |
+| Secret leakage via commits or logs | gitleaks; guard hooks; log policy |
+| Injection (SQL, template) | ORM parameters; auto-escaping templates; no string-built queries |
+| API abuse | Keys, rate limits, size limits (P5) |
+| Supply-chain compromise | Locked dependencies; pip-audit; owner approval for new packages |
+| Claude Code acting destructively | Permission rules, guard hooks, pull requests, CI, the owner approving merges. (GitHub branch protection on private repositories needs a paid plan, so it is not relied on.) |
+
+## POPIA register
+
+| Processing | Personal information? | Phase | Notes and decisions needed |
+| --- | --- | --- | --- |
+| Bill calculation requests | Potentially (consumption plus any identifying context) | P5 | Stateless; not stored; bodies not logged (ADR-0008) |
+| Real bills used for testing | Yes, before anonymisation | P4 | Originals stay in git-ignored `data/private/` on the owner's machine; only figures enter the repository. **Owner decision before P4:** redact bills before Claude Code reads them, or let Claude Code read the originals (their content is then sent to the model provider) |
+| Pilot organisations' API keys and contact details | Yes (names, emails; juristic persons are covered too) | P5 | **Owner decision before P5:** what is stored, where, for how long |
+| Staff console accounts | Yes (staff names, emails) | P6 | Minimal fields; hashed passwords |
+| Pilot user feedback | Possibly | P9 | Consent and retention to be decided |
+| Production logs and analytics | Possibly (IP addresses) | P10 | Retention and minimisation policy needed |
+
+## Needs formal verification before charging money or going to production
+
+- [ ] Legal opinion: may tariff schedules and related municipal and Eskom documents be reused commercially? (Copyright Act s12(8)(a) suggests yes for official administrative texts; confirm.)
+- [ ] Legal opinion: terms of use of any website the data comes from.
+- [ ] POPIA: register an information officer with the Information Regulator; prepare a PAIA manual.
+- [ ] POPIA: privacy notice; lawful basis for each processing activity; retention periods; operator agreements with any hosting provider.
+- [ ] POPIA s72: requirements if data is hosted outside South Africa.
+- [ ] Terms of service and limitation of liability for calculation errors (Consumer Protection Act and ECTA considerations).
+- [ ] Tax: VAT registration and invoicing requirements once revenue starts (accountant).
+- [ ] Trademark and domain checks for the product name.

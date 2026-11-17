@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+
+# Tooling caches and reports
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+mutants/
+.mutmut-cache
+
+# Secrets and local configuration (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Claude Code: personal settings stay local; shared settings are committed
+.claude/settings.local.json
+
+# Source documents are kept locally and identified by SHA-256 in the database.
+# See docs/architecture/overview.md ("Source documents").
+data/sources/
+
+# Real bills before anonymisation never enter the repository
+data/private/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
