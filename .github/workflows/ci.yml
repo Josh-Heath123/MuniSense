@@ -24,6 +24,8 @@ jobs:
     env:
       # A stale uv.lock fails the run instead of being re-resolved on CI.
       UV_LOCKED: "1"
+      # Same variable as in the example settings file; read by database tests from P2.
+      MUNISENSE_TEST_DATABASE_URL: postgresql://munisense:ci-only-not-a-secret@localhost:5432/munisense_test
     services:
       postgres:
         # Pinned by digest (multi-arch index of postgres:17, 17.12 on 2026-11-17).
