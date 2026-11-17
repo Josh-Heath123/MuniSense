@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | Secret scanning (gitleaks) in pre-commit and CI | P0 | planned |
 | Dependency vulnerability audit (pip-audit, `uv run poe audit`) in CI on every run | P0 | planned |
-| Claude Code cannot push to `main` (guard_bash.py rule, with tests); changes reach `main` only through a pull request the owner merges | P0 | approved by the owner; not built yet |
+| guard_bash.py blocks the common forms of `git push` to `main`, and fails closed if it crashes (18 tests in `.claude/hooks/tests/`). Known gaps: pushes driven only by git configuration, and commands hidden in `bash -c`, `eval` or scripts. A pre-commit pre-push hook (P0-5) closes the gap at the git level. Changes reach `main` only through a pull request the owner merges | P0 | built (PR #2); pre-push hook planned (P0-5) |
 | Claude Code guard hooks (destructive commands, secrets) | P0 | in starter pack, to be proven in P0-7 |
 | Parameterised queries only (SQLAlchemy); separate migration and app database roles | P2 | planned |
 | Hashed API keys, timing-safe comparison, rate limits, request size limits | P5 | planned |
