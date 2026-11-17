@@ -86,7 +86,7 @@ select = [
 [tool.mypy]
 python_version = "3.13"
 strict = true
-mypy_path = "src"
+mypy_path = "src:tests"
 files = ["src", "tests"]
 warn_unreachable = true
 # Test files in different folders may share a name (tests/unit/test_x.py, tests/property/test_x.py).
@@ -103,7 +103,7 @@ warn_required_dynamic_aliases = true
 [tool.pytest.ini_options]
 minversion = "9.0"
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
 markers = [
     "slow: slow tests, excluded from `poe check`",
@@ -213,6 +213,12 @@ forbidden_modules = [
     "munisense.ingestion",
     "munisense.persistence",
 ]
+
+[[tool.importlinter.contracts]]
+name = "Rule 6: production code never imports the test-support package"
+type = "forbidden"
+source_modules = ["munisense"]
+forbidden_modules = ["support"]
 
 [[tool.importlinter.contracts]]
 name = "Rule 5: nothing imports an interface"

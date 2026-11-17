@@ -17,6 +17,7 @@ from munisense.domain.citations import (
     UnparameterisedCitedError,
     UserProvided,
     Verified,
+    cited_statuses,
     weakest,
 )
 from munisense.domain.money import ExactDecimal, Rate, RateUnit
@@ -224,3 +225,11 @@ def test_weakest_of_nothing_is_refused() -> None:
 
 def test_status_order_is_user_provided_then_estimated_then_verified() -> None:
     assert StatusKind.USER_PROVIDED.rank < StatusKind.ESTIMATED.rank < StatusKind.VERIFIED.rank
+
+
+def test_cited_statuses_walks_models_tuples_lists_and_dicts() -> None:
+    one = Cited[ExactDecimal](value=Decimal("1"), citation=citation(), status=VERIFIED)
+    two = Cited[ExactDecimal](value=Decimal("2"), citation=citation(), status=USER)
+    found = cited_statuses({"a": [one, (two,)], "b": "not cited", "c": 3})
+    assert [s.kind for s in found] == [StatusKind.VERIFIED, StatusKind.USER_PROVIDED]
+    assert cited_statuses(citation()) == []

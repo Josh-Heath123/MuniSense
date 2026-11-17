@@ -26,7 +26,7 @@ src/munisense/
     periods/      DateRange (half-open [start, end))
     citations/    Citation, Cited[T] (the "cited value"), VerificationStatus (Verified, Estimated, UserProvided), weakest()
     money/        ExactDecimal, exact(), Money, Rate, RateUnit, CanonicalUnit, VatRate, VatTable, Quantisation, RoundingPolicy (Decimal only)
-    tariffs/      TariffVersion, component types, TOU calendars, validation
+    tariffs/      TariffVersion (header + ordered components; PriceBasis), FixedCharge, FlatEnergy, BlockEnergy, VatTreatment; later TOU calendars
     billing/      calculate(), prepaid purchase, period splitting, ConsumptionProfile (PeriodTotal; TimeOfUseBuckets refused until P4), BillingPeriod,
                   LineItem, BillResult, warnings
   catalogue/      suppliers, customer classes, supply areas
@@ -57,6 +57,7 @@ data/
 3. `api`, `console` and `mcp` import `services` and `platform` only, never `persistence` or `ingestion` directly.
 4. Only `persistence` imports SQLAlchemy.
 5. Nothing imports `api`, `console` or `mcp`.
+6. No production code imports the test-support package `support` (`tests/support`), which is importable only under pytest and mypy.
 
 ## Data model (target for P2; details decided in the P2 storage ADR if they differ)
 

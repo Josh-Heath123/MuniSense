@@ -21,6 +21,8 @@
 | **Prepaid purchase** | One token purchase: a rand amount paid and the kWh received. The kWh depend on earlier purchases in the same month, because they decide which blocks are already used |
 | **Consumption profile** | How consumption is given to the engine: a period kWh total, kWh per time-of-use bucket (from P4), or (later) interval data |
 | **Period total** | The kWh used over a whole billing period (`PeriodTotal`). Called a period total, not a monthly total, because billing periods are not always calendar months |
+| **Price basis** | Whether a tariff schedule prints its prices excluding VAT or including VAT. Recorded (and cited) per tariff version |
+| **VAT treatment** | How VAT applies to one component's amount: standard-rated, zero-rated or exempt. Recorded (and cited) per component |
 | **Billing period** | The dates a bill covers, as a half-open range: from the start date up to, but not including, the end date |
 | **Credit meter** | Conventional metered supply billed in arrears |
 | **NERSA** | National Energy Regulator of South Africa. Approves municipal electricity tariff increases annually |

@@ -1,1 +1,22 @@
-"""Tariff versions, typed tariff components and validation. Built in P1."""
+"""Tariff versions and their typed components (ADR-0004)."""
+
+from munisense.domain.tariffs.components import (
+    Block,
+    BlockEnergy,
+    Component,
+    FixedCharge,
+    FlatEnergy,
+    VatTreatment,
+)
+from munisense.domain.tariffs.version import PriceBasis, TariffVersion
+
+__all__ = [
+    "Block",
+    "BlockEnergy",
+    "Component",
+    "FixedCharge",
+    "FlatEnergy",
+    "PriceBasis",
+    "TariffVersion",
+    "VatTreatment",
+]
