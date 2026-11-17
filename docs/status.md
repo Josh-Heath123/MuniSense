@@ -6,15 +6,13 @@ _Last updated: 2026-11-17, on branch `docs/accept-decisions` (owner's decisions 
 
 - **Phase:** P0 Foundation (in progress). P0-1 and P0-2 are done.
 - **Next task:** P0-3 Python project skeleton, starting with one dependency approval request. It starts after the owner merges the `docs/accept-decisions` pull request.
-- **Blocked on:** the owner merging the `docs/accept-decisions` pull request. P0-9 (push guard) waits separately for the owner's approval of a `.claude/` change; P0-3 does not depend on it.
+- **Blocked on:** the owner merging the `docs/accept-decisions` pull request. P0-9 (push guard and `.claude/` alignment) is approved and runs on its own branch; P0-3 does not depend on it.
 
 ## Waiting for the owner
 
 | ID | Question | Recommendation |
 | --- | --- | --- |
 | W1 | Merge the `docs/accept-decisions` pull request | Merge. CI does not exist yet (P0-6), so it has no checks |
-| W2 | Approve `.claude/` changes: (a) P0-9, a `guard_bash.py` rule blocking `git push` to `main`, with tests; (b) bringing skills and agents in line with the decisions: `skills/add-tariff/SKILL.md` (phase numbers, committed sources, stricter `verified`, publish writes the tariff file), `agents/tariff-verifier.md` (stricter `verified`), `skills/verify/SKILL.md` (run `poe audit` separately), `skills/report/SKILL.md` (time `poe check`) | Approve. Small and can be undone |
-| W3 | P3 gate: "at least 10 golden cases" with a prepaid case being a whole month means 10 whole months of receipts, but only about 4 complete months exist under the 2026/27 schedule (from 1 July 2026) | Load the 2025/26 schedule as well in P3 (ADR-0007 already covers history from 2025/26), so earlier months count |
 
 ## Decided (owner: Josh Heath, 2026-11-17)
 
@@ -37,6 +35,9 @@ _Last updated: 2026-11-17, on branch `docs/accept-decisions` (owner's decisions 
 | E5 | Calculator is staff-only in the MVP; a public one is decided at P9 | ADR-0007 |
 | E6 | Block `git push` to `main` in `guard_bash.py`, with tests | P0-9 |
 | E7 | The owner is Josh Heath | All documents |
+| E8 | P3 loads the 2025/26 Ekurhuleni schedule as well as 2026/27, so 10 whole months of prepaid receipts can be golden cases | `roadmap.md` |
+| E10 | `.claude/` changes approved: P0-9 push guard with tests, and skills and agents aligned with the decisions | P0-9 |
+| E9 | ADR-0003, ADR-0004 and ADR-0010 corrected on the unmerged `docs/accept-decisions` branch after review, with the owner's permission | PR #1 |
 | Review items | Accepted: A1 to A3, A5 to A7, A9 to A13. A8: City Power dropped from P1; P1 examples use the Ekurhuleni 2026/27 electricity schedule, downloaded in P1 from the official municipal website only. C2: Pydantic in the domain, strict mode, float rejection tested. C5: keep PostgreSQL 17 and Python 3.13. C6: not now. B4: stay on `/mnt/c`; every gate report states how long `uv run poe check` takes | `reports/2026-11-17-P0-progress.md` |
 
 ## Phase 0 tasks
@@ -49,7 +50,7 @@ _Last updated: 2026-11-17, on branch `docs/accept-decisions` (owner's decisions 
 | P0-4 | Local PostgreSQL | `docker-compose.yml` with PostgreSQL 17, a healthcheck, a named volume and separate dev and test databases. `.env.example` documents the variables. `docker compose up -d db` gives a healthy database | todo |
 | P0-5 | pre-commit | ruff, gitleaks and basic file checks run on commit, and are proven by a failing example | todo |
 | P0-6 | Continuous integration | GitHub Actions on `ubuntu-latest` with a `postgres:17` service and `astral-sh/setup-uv` runs `uv run poe verify` and `uv run poe audit` on pull requests and on pushes to main. A pull request shows green. The current free Actions allowance is re-checked | todo |
-| P0-9 | Block pushes to `main` (E6) | `guard_bash.py` blocks `git push` to `main` (explicit refspecs, `HEAD:main`, and a bare `git push` while on `main`); tests show blocked and allowed cases. Needs the owner's approval because it changes `.claude/` | waiting for owner (W2) |
+| P0-9 | Block pushes to `main` (E6) | `guard_bash.py` blocks `git push` to `main` (explicit refspecs, `HEAD:main`, and a bare `git push` while on `main`); tests show blocked and allowed cases. Needs the owner's approval because it changes `.claude/` | approved (E10); in progress on `chore/claude-guard-and-skills` |
 | P0-7 | Prove the hooks inside WSL | Evidence, from a WSL session, that each hook blocks or acts as documented: guard_bash (including the push-to-main rule), guard_files, format_lint, quality_gate, session_context | todo |
 | P0-8 | Gate report | `/report gate` saved in `docs/reports/`, including how long `uv run poe check` takes | todo |
 

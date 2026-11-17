@@ -21,7 +21,7 @@ Suppliers combine a limited set of building blocks in different ways: fixed char
 
 ## Consequences
 
-- Good: adding a supplier with known shapes is data entry plus verification. The P8 roadmap phase measures this claim. One schema serves JSONB validation, tariff files and the API, with JSON Schema available for free.
+- Good: adding a supplier with known shapes is data entry plus verification. The P8 roadmap phase measures this claim. One schema can serve JSONB validation and tariff files, with JSON Schema available for free. Whether the API reuses domain models or has its own schemas is decided in P5.
 - Bad: the component model must be designed carefully; a wrong abstraction is costly. Edge cases may push towards a "custom" escape hatch, which is **not** allowed without an ADR. The domain depends on a third-party library; Pydantic's lax mode silently converts floats, so strict mode is essential and is tested.
 - Cost: R0.
 - Reversibility: moderate. Component payloads are versioned, so migrations between schemas are possible.
