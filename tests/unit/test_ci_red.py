@@ -2,4 +2,4 @@
 
 
 def test_ci_must_fail() -> None:
-    assert 1 == 2  # noqa: PLR0133
+    assert 1 == 2
