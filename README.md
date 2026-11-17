@@ -7,15 +7,15 @@ Exact, source-cited South African municipal utility bill calculations, for softw
 ## What it will do
 
 - Store municipal and Eskom electricity tariffs as versioned data. Every value is linked to its official source document, page and verification status.
-- Calculate a bill for a supplier, tariff, period and consumption, returning line items, VAT, assumptions and warnings.
+- Calculate a bill for a supplier, tariff, period and consumption, returning line items, VAT, assumptions and warnings. For prepaid meters, calculate the kWh a purchase buys, given earlier purchases that month.
 - Answer "what did we calculate on date X" exactly, even after a tariff is corrected retroactively.
-- Serve all of this through a REST API, a staff curation console, a simple public calculator and, later, an MCP server.
+- Serve all of this through a REST API, a staff curation console with a staff-only calculator and, later, an MCP server.
 
 ## Set up (Windows with WSL2)
 
 Everything runs inside WSL2 (Ubuntu), so local development matches CI and future hosting.
 
-1. **WSL2.** In PowerShell as administrator, run `wsl --install -d Ubuntu-24.04`, restart, then open "Ubuntu" from the Start menu and create your Linux user. Skip this if you already have WSL2 with Ubuntu (`wsl -l -v` shows `VERSION 2`).
+1. **WSL2.** In PowerShell as administrator, run `wsl --install -d Ubuntu-24.04` (the project uses Ubuntu 24.04 with a normal, non-root user), restart, then open "Ubuntu" from the Start menu and create your Linux user. Skip this if you already have WSL2 with Ubuntu (`wsl -l -v` shows `VERSION 2`).
 2. **Docker Desktop.** Install it from docker.com. In Settings, open Resources, then WSL integration, and enable your Ubuntu distribution. Docker Desktop is free for personal use and small businesses.
 3. **Tools inside Ubuntu:**
    ```bash
@@ -44,7 +44,8 @@ Phase 0 creates these commands:
 docker compose up -d db     # PostgreSQL 17
 uv sync                     # install locked dependencies
 uv run poe check            # lint, types, fast tests
-uv run poe verify           # everything CI runs
+uv run poe verify           # everything CI runs (offline)
+uv run poe audit            # dependency vulnerability audit (needs network)
 ```
 
 ## How this project is built

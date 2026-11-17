@@ -1,12 +1,12 @@
 # ADR-0002: Build a Python modular monolith with FastAPI
 
-- **Status:** Proposed
-- **Date:** 2026-11-17
-- **Deciders:** Malcolm Heath (owner)
+- **Status:** Accepted
+- **Date:** 2026-11-17 (proposed); 2026-11-17 (accepted by the owner)
+- **Deciders:** Josh Heath (owner)
 
 ## Context
 
-One developer (Claude Code, directed by the owner) builds a service with a calculation core, a REST API, a staff console, a public calculator and later an MCP server. The work involves heavy document and data handling (PDF tariff schedules). Everything must be free to develop and run locally, and must not need rewriting when it becomes commercial.
+One developer (Claude Code, directed by the owner) builds a service with a calculation core, a REST API, a staff console with a staff-only calculator, and later an MCP server. The work involves heavy document and data handling (PDF tariff schedules). Everything must be free to develop and run locally, and must not need rewriting when it becomes commercial.
 
 ## Decision
 
@@ -30,3 +30,4 @@ One developer (Claude Code, directed by the owner) builds a service with a calcu
 | TypeScript/Node (NestJS) | Weaker for PDF and data work; two ecosystems if Python is needed for extraction anyway |
 | Django + DRF | Heavier; its ORM and admin pull towards CRUD rather than a pure domain core |
 | Flask | Less built-in typing and validation; more assembly required |
+| Python 3.14 | Stable, but nothing in the plan needs it. Python 3.13 is supported until 2029; revisit before P10 |

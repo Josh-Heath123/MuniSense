@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-17
-- **Deciders:** Malcolm Heath (owner)
+- **Deciders:** Josh Heath (owner)
 
 ## Context
 

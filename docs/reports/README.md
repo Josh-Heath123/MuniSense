@@ -27,6 +27,7 @@ Two or three sentences: where we are, and whether anything is red.
 | Mutation score (if run) | killed / total |
 | pip-audit | findings |
 | CI | link and status |
+| `uv run poe check` duration | seconds, measured on the owner's machine (WSL, repository on `/mnt/c`) |
 
 ## Assumptions and estimated values
 - Each one, with where it is recorded.

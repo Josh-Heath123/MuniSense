@@ -1,6 +1,6 @@
 # Product requirements: MuniSense MVP
 
-_Status: draft for owner approval (decisions D1 to D3 in `status.md`)._
+_Status: decisions D1 to D3, E2 and E5 approved by the owner on 2026-11-17 (`status.md`); this text is approved when the owner merges the `docs/accept-decisions` pull request._
 
 ## Problem
 
@@ -16,31 +16,32 @@ A trusted service that calculates municipal utility bills exactly. Every number 
 
 | Who | Need | MVP interface |
 | --- | --- | --- |
-| Solar installers and solar software | Before-and-after bills, and export-credit value, for proposals | API, calculator |
+| Solar installers and solar software | Before-and-after bills, and export-credit value, for proposals | API |
 | Energy consultants | Tariff comparisons and audit-ready figures | API |
-| Property managers | Correct utility recovery from tenants | API, calculator |
+| Property managers | Correct utility recovery from tenants | API |
 | Solar-finance teams | Savings estimates they can defend | API |
 | AI agents acting for any of these | A citable answer with provenance | MCP server (P7) |
-| MuniSense staff (the owner, initially) | Load, check, correct and publish tariffs safely | Console |
+| MuniSense staff (the owner, initially) | Load, check, correct and publish tariffs safely; run calculations for demos | Console, staff-only calculator |
 
 Buyer interviews (the owner's parallel track) will confirm or change this table before P5.
 
 ## MVP scope
 
-**In:** electricity for residential and small-business customers of the pilot suppliers (Ekurhuleni first, then Eskom-direct and five metros in P8). Prepaid and credit meters; single- and three-phase supply; block, flat, seasonal and time-of-use tariffs; fixed and capacity charges; free basic electricity; VAT; small-scale embedded generation export credits where published. Historical tariffs from 2025/26 onward. REST API, staff console, simple public calculator, MCP server.
+**In:** electricity for residential and small-business customers of the pilot suppliers (Ekurhuleni first, then Eskom-direct and five metros in P8). Prepaid and credit meters, including the prepaid purchase calculation (rand amount to kWh, given earlier purchases in the same month); single- and three-phase supply; block, flat, seasonal and time-of-use tariffs; fixed and capacity charges; free basic electricity; VAT; small-scale embedded generation export credits where published. Historical tariffs from 2025/26 onward. REST API, staff console with a staff-only calculator, MCP server.
 
-**Out of the MVP (modelled so they can be added later):** water, sanitation, refuse and property rates; large-power-user and industrial tariffs; address-to-supplier lookup beyond a basic list; user accounts for the public; payments; hosting.
+**Out of the MVP (modelled so they can be added later):** water, sanitation, refuse and property rates; large-power-user and industrial tariffs; address-to-supplier lookup beyond a basic list; user accounts for the public; payments; hosting; a public calculator (decided at P9, with the legal opinion).
 
 ## Functional requirements
 
 1. Store versioned electricity tariffs. Each value is linked to its source document, page and verification status.
 2. Calculate a bill for a period, supplier, tariff, meter type, phase and consumption (and time-of-use profile where needed). Return line items, VAT, total, assumptions and warnings.
 3. Split periods that straddle a tariff change or season boundary, and report how the split was made.
-4. Compare two or more tariffs for the same consumption, including solar export where the tariff allows it.
-5. Answer "as recorded on date X", reproducing any past answer exactly.
-6. Never return a number without its provenance and status. Refuse or warn rather than guess when data is missing or estimated.
-7. Provide a staff review-and-publish workflow with states draft, checked and published.
-8. Expose these through a versioned REST API and, at the end of the MVP, an MCP server.
+4. For a prepaid meter, calculate the kWh received for a rand amount, given earlier purchases in the same month, and show how the kWh fall across the blocks.
+5. Compare two or more tariffs for the same consumption, including solar export where the tariff allows it.
+6. Answer "as recorded on date X", reproducing any past answer exactly.
+7. Never return a number without its provenance and status. Refuse or warn rather than guess when data is missing or estimated.
+8. Provide a staff review-and-publish workflow with states draft, checked and published.
+9. Expose these through a versioned REST API and, at the end of the MVP, an MCP server.
 
 ## Quality requirements
 
@@ -52,11 +53,11 @@ Buyer interviews (the owner's parallel track) will confirm or change this table 
 
 ## Success measures for the validated MVP (end of P9)
 
-- At least 10 real Ekurhuleni bills reproduced to the cent (P4).
+- At least 10 real Ekurhuleni golden cases reproduced (P3). A prepaid golden case is a whole month of purchases, matched by amount to the cent and kWh at the receipt's printed precision.
 - Golden bills passing for every pilot supplier (P8).
 - Pilot users confirm accuracy on their own bills.
 - An intent-to-pay pass mark, agreed with the owner before P9, is met.
 
 ## Open questions
 
-See "Undecided or unknown" in the strategy document and `domain/sa-tariffs.md`, under open questions.
+See `domain/sa-tariffs.md`, under open questions, and the decisions waiting for the owner in `status.md`.
