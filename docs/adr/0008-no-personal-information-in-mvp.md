@@ -1,8 +1,8 @@
 # ADR-0008: The MVP stores no personal information
 
-- **Status:** Proposed
-- **Date:** 2026-11-17
-- **Deciders:** Malcolm Heath (owner)
+- **Status:** Accepted
+- **Date:** 2026-11-17 (proposed); 2026-11-17 (accepted by the owner)
+- **Deciders:** Josh Heath (owner)
 
 ## Context
 

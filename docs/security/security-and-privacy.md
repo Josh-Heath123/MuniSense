@@ -15,12 +15,13 @@
 | Control | Phase | Status |
 | --- | --- | --- |
 | Secret scanning (gitleaks) in pre-commit and CI | P0 | planned |
-| Dependency vulnerability audit (pip-audit) in CI | P0 | planned |
+| Dependency vulnerability audit (pip-audit, `uv run poe audit`) in CI on every run | P0 | planned |
+| Claude Code cannot push to `main` (guard_bash.py rule, with tests); changes reach `main` only through a pull request the owner merges | P0 | approved by the owner; not built yet |
 | Claude Code guard hooks (destructive commands, secrets) | P0 | in starter pack, to be proven in P0-7 |
-| Parameterised queries only (SQLAlchemy); separate migration and app database roles | P3 | planned |
+| Parameterised queries only (SQLAlchemy); separate migration and app database roles | P2 | planned |
 | Hashed API keys, timing-safe comparison, rate limits, request size limits | P5 | planned |
 | RFC 9457 errors without stack traces; debug off by default | P5 | planned |
-| Console: argon2 passwords, secure session cookies, CSRF tokens, security headers | P6 | planned |
+| Console and staff-only calculator: argon2 passwords, secure session cookies, CSRF tokens, security headers | P6 | planned |
 | MCP server: same authentication and limits as the API; read-only tools | P7 | planned |
 | Backups, encryption at rest and in transit, monitoring, incident response | P10 | planned |
 
@@ -34,14 +35,15 @@
 | Injection (SQL, template) | ORM parameters; auto-escaping templates; no string-built queries |
 | API abuse | Keys, rate limits, size limits (P5) |
 | Supply-chain compromise | Locked dependencies; pip-audit; owner approval for new packages |
-| Claude Code acting destructively | Permission rules, guard hooks, pull requests, CI, the owner approving merges. (GitHub branch protection on private repositories needs a paid plan, so it is not relied on.) |
+| Claude Code acting destructively | Permission rules, guard hooks (including a block on pushing to `main`), pull requests, CI, the owner approving merges. (GitHub branch protection on private repositories needs a paid plan, so it is not relied on.) |
+| Tampered or swapped source documents | Source PDFs are committed and identified by SHA-256; citations are checked against the committed file |
 
 ## POPIA register
 
 | Processing | Personal information? | Phase | Notes and decisions needed |
 | --- | --- | --- | --- |
 | Bill calculation requests | Potentially (consumption plus any identifying context) | P5 | Stateless; not stored; bodies not logged (ADR-0008) |
-| Real bills used for testing | Yes, before anonymisation | P4 | Originals stay in git-ignored `data/private/` on the owner's machine; only figures enter the repository. **Owner decision before P4:** redact bills before Claude Code reads them, or let Claude Code read the originals (their content is then sent to the model provider) |
+| Real bills and prepaid receipts used for testing | Yes, before anonymisation (receipts may show a meter number or token) | P3 | Originals stay in git-ignored `data/private/` on the owner's machine; only figures (amount, kWh, date) enter the repository. **Owner decision before P3:** redact bills before Claude Code reads them, or let Claude Code read the originals (their content is then sent to the model provider) |
 | Pilot organisations' API keys and contact details | Yes (names, emails; juristic persons are covered too) | P5 | **Owner decision before P5:** what is stored, where, for how long |
 | Staff console accounts | Yes (staff names, emails) | P6 | Minimal fields; hashed passwords |
 | Pilot user feedback | Possibly | P9 | Consent and retention to be decided |
@@ -54,6 +56,6 @@
 - [ ] POPIA: register an information officer with the Information Regulator; prepare a PAIA manual.
 - [ ] POPIA: privacy notice; lawful basis for each processing activity; retention periods; operator agreements with any hosting provider.
 - [ ] POPIA s72: requirements if data is hosted outside South Africa.
-- [ ] Terms of service and limitation of liability for calculation errors (Consumer Protection Act and ECTA considerations).
+- [ ] Terms of service and limitation of liability for calculation errors (Consumer Protection Act and ECTA considerations). Needed before any public calculator (decided at P9).
 - [ ] Tax: VAT registration and invoicing requirements once revenue starts (accountant).
 - [ ] Trademark and domain checks for the product name.

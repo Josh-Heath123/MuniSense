@@ -1,12 +1,12 @@
-# ADR-0009: Server-rendered console and calculator with Jinja2 and HTMX
+# ADR-0009: Server-rendered console and staff calculator with Jinja2 and HTMX
 
-- **Status:** Proposed
-- **Date:** 2026-11-17
-- **Deciders:** Malcolm Heath (owner)
+- **Status:** Accepted
+- **Date:** 2026-11-17 (proposed); 2026-11-17 (accepted by the owner)
+- **Deciders:** Josh Heath (owner)
 
 ## Context
 
-The MVP needs a staff console (review queue, version comparison, publish) and a simple public calculator page. Both are small. The API is the product; the pages exist to load data safely and to demonstrate it.
+The MVP needs a staff console (review queue, version comparison, publish) and a staff-only calculator page behind the console login (ADR-0007). Both are small. The API is the product; the pages exist to load data safely and to demonstrate it.
 
 ## Decision
 

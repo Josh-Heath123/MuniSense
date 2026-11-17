@@ -6,7 +6,7 @@ MuniSense calculates South African municipal utility bills exactly, from version
 
 ## Roles
 
-- **Malcolm Heath (the owner)** approves decisions and phase gates. He reads reports, not code.
+- **Josh Heath (the owner)** approves decisions and phase gates, and reads reports, not code.
 - **You** plan, implement, test, document and report. You may propose decisions, but you never approve your own proposals.
 - **An architect** reviews your phase reports in a separate claude.ai chat. Expect your claims to be challenged, and answer with evidence.
 
@@ -14,7 +14,7 @@ MuniSense calculates South African municipal utility bills exactly, from version
 
 1. **Never invent tariff data.** No rate, charge, threshold, VAT rate or effective date appears in code. Every value lives in tariff data with a citation (document, page, table) and a status: `verified`, `estimated` or `user_provided`. When a value is unknown, the system refuses or warns. It never guesses.
 2. **Money is `Decimal`.** Never use `float` in money, tariff or billing code. Every rounding names its rounding policy.
-3. **The domain is pure.** `munisense.domain` does no I/O, reads no clock and imports nothing outside `munisense.domain`.
+3. **The domain is pure.** `munisense.domain` does no I/O, reads no clock and imports nothing outside `munisense.domain`, the standard library and Pydantic v2 in strict mode (ADR-0004).
 4. **Do not claim what you did not prove.** "Done" means `docs/quality/definition-of-done.md`; written code is not done. If something could not be tested or verified, say so plainly, with the reason.
 5. **No compliance claims.** Never describe the system as POPIA-compliant, legally compliant or licensed. Items needing formal verification go in `docs/security/security-and-privacy.md`.
 6. **Zero spending.** Use free, local, open-source tools only. No paid APIs, hosting, SaaS, subscriptions or trials that convert to paid.
@@ -54,9 +54,10 @@ These are created in Phase 0 (task P0-3). Until then they do not exist.
 | `uv run poe fmt` | Format and auto-fix |
 | `uv run poe check` | Lint, type-check and fast tests (the Stop hook runs this) |
 | `uv run poe test` | Full test suite with coverage |
-| `uv run poe verify` | Everything CI runs |
+| `uv run poe verify` | Everything CI runs, except the audit (works offline) |
+| `uv run poe audit` | pip-audit dependency vulnerability check (needs network; CI always runs it) |
 | `docker compose up -d db` | Start PostgreSQL |
-| `uv run alembic upgrade head` | Apply migrations (from Phase 3) |
+| `uv run alembic upgrade head` | Apply migrations (from Phase 2) |
 
 ## Architecture
 
@@ -92,6 +93,6 @@ Interfaces (`api`, `console`, `mcp`) call `services` only. import-linter enforce
 
 ## Hooks you will meet
 
-- `guard_bash.py` and `guard_files.py` block destructive commands, secret access and edits to Accepted ADRs or committed migrations.
+- `guard_bash.py` and `guard_files.py` block destructive commands, secret access, pushes to `main` (once that rule is merged) and edits to Accepted ADRs or committed migrations.
 - `format_lint.py` runs ruff after every Python edit. Fix what it reports.
 - `quality_gate.py` runs `uv run poe check` when you finish with changed Python files. Fix the failures, or state plainly that checks are red and why. It blocks once only.

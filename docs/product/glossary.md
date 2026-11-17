@@ -18,13 +18,15 @@
 | **FBE** | Free basic electricity: a monthly free allocation (typically 50 kWh) for registered indigent households |
 | **SSEG** | Small-scale embedded generation: rooftop solar and similar. May earn export credits |
 | **Prepaid** | Electricity bought in advance as tokens. Block thresholds may reset per calendar month |
+| **Prepaid purchase** | One token purchase: a rand amount paid and the kWh received. The kWh depend on earlier purchases in the same month, because they decide which blocks are already used |
+| **Consumption profile** | How consumption is given to the engine: a monthly kWh total, kWh per time-of-use bucket, or (later) interval data |
 | **Credit meter** | Conventional metered supply billed in arrears |
 | **NERSA** | National Energy Regulator of South Africa. Approves municipal electricity tariff increases annually |
 | **MFMA** | Municipal Finance Management Act. Section 75 requires budget and tariff documents to be published on the municipal website |
 | **Valid time** | When a tariff applies in the real world |
 | **Record time** | When MuniSense recorded or superseded a fact. With valid time, this gives two timelines ("bitemporal") |
 | **Provenance** | Where a value came from: source document, page, table, retrieval date and hash |
-| **Verification status** | `verified` (matched to the source by a check), `estimated` (with a reason), `user_provided` (with who provided it) |
-| **Golden bill** | A real or official example bill, anonymised to figures, that the engine must reproduce |
+| **Verification status** | `verified` (printed text found verbatim on the cited page by a deterministic check, plus a recorded verifier, method and date; ADR-0006), `estimated` (with a reason), `user_provided` (with who provided it) |
+| **Golden bill** | A real or official example bill, anonymised to figures, that the engine must reproduce. For prepaid, a golden case is a whole month of purchases, not a single receipt |
 | **Rounding policy** | A supplier's rule for rounding: per line or per bill, to cents or rands, half-up or half-even |
 | **Gate** | The end-of-phase review: report, architect review, owner approval |

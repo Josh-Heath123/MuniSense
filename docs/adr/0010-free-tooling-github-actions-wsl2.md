@@ -1,8 +1,8 @@
 # ADR-0010: Free tooling, GitHub Actions CI and WSL2 for development
 
-- **Status:** Proposed
-- **Date:** 2026-11-17
-- **Deciders:** Malcolm Heath (owner)
+- **Status:** Accepted
+- **Date:** 2026-11-17 (proposed); 2026-11-17 (accepted by the owner)
+- **Deciders:** Josh Heath (owner)
 
 ## Context
 
@@ -11,9 +11,10 @@ The brief requires free resources until the product shows commercial promise. Wo
 ## Decision
 
 - **Code hosting:** a private GitHub repository on the free plan. GitHub Free includes 2,000 Actions minutes a month for private repositories, which is ample at this stage.
-- **CI:** GitHub Actions runs `uv run poe verify` with a PostgreSQL service container on every pull request and every push to main. Nothing merges red.
-- **Development machine:** Windows with WSL2 (Ubuntu) and Docker Desktop with WSL integration. Claude Code, git, uv and Docker commands run inside WSL2. Docker Desktop is free for personal use and for businesses under its size thresholds.
-- **Repository location:** `C:\MuniSense\MuniSense`, worked on from WSL2 at `/mnt/c/MuniSense/MuniSense`. This lets the architect chat in the Claude desktop app read the repository directly. Linux file access to `C:` is slower, so the Python virtual environment lives on the Linux side (`UV_PROJECT_ENVIRONMENT=$HOME/.venvs/munisense`). If speed becomes a real problem, move the working copy into the Linux file system and accept that the architect chat then sees only what is pasted.
+- **CI:** GitHub Actions (`ubuntu-latest`, a `postgres:17` service container, uv installed with `astral-sh/setup-uv`) runs `uv run poe verify` and `uv run poe audit` on every pull request and every push to main. Nothing merges red.
+- **Protecting `main`:** GitHub branch protection on a private repository needs a paid plan, so it is not relied on. Instead, `guard_bash.py` blocks Claude Code from pushing to `main`; changes reach `main` only through a pull request that the owner merges.
+- **Development machine:** Windows with WSL2 (Ubuntu 24.04, as a non-root user) and Docker Desktop with WSL integration. Claude Code, git, uv and Docker commands run inside WSL2. Docker Desktop is free for personal use and for businesses under its size thresholds.
+- **Repository location:** `C:\MuniSense\MuniSense`, worked on from WSL2 at `/mnt/c/MuniSense/MuniSense`. This lets the architect chat in the Claude desktop app read the repository directly. Linux file access to `C:` is slower, so the Python virtual environment lives on the Linux side (`UV_PROJECT_ENVIRONMENT=$HOME/.venvs/munisense`). If speed becomes a real problem, move the working copy into the Linux file system and accept that the architect chat then sees only what is pasted. To watch this, every gate report states how long `uv run poe check` takes.
 - **Tools:** uv, ruff, mypy, pytest, Hypothesis, Schemathesis, mutmut, import-linter, pre-commit, gitleaks and pip-audit. All are open source.
 
 ## Consequences
@@ -31,3 +32,4 @@ The brief requires free resources until the product shows commercial promise. Wo
 | GitLab CI | Fine too, but GitHub has better Claude Code and `gh` integration |
 | Native Windows development | Hooks and tooling differ from CI and production; Docker works better from WSL2 |
 | Paid CI or hosting | Not allowed before the Phase 9 decision |
+| Docker Engine inside WSL instead of Docker Desktop | Apache-licensed with no size threshold, but Docker Desktop works now. Revisit if the business approaches Docker Desktop's free-use limits |

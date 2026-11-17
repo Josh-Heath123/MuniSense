@@ -2,7 +2,7 @@
 
 - **Status:** Proposed | Accepted | Superseded by ADR-NNNN
 - **Date:** YYYY-MM-DD (proposed); YYYY-MM-DD (accepted by the owner)
-- **Deciders:** Malcolm Heath (owner)
+- **Deciders:** Josh Heath (owner)
 
 ## Context
 

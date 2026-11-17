@@ -12,7 +12,7 @@ These apply to all code in `src/` and `tests/`. Tools enforce most of them; revi
 ## Types and structure
 
 - `mypy --strict` passes. No `Any` in the domain. `# type: ignore` needs a specific error code and a comment.
-- Pydantic models at system boundaries (API, ingestion drafts, settings); plain frozen dataclasses or Pydantic models inside the domain (ADR-0004 decides).
+- Pydantic models at system boundaries (API, ingestion drafts, settings). Inside the domain, Pydantic v2 models in **strict mode only**, with a Decimal type that rejects floats; plain frozen dataclasses are fine where no validation is needed (ADR-0004).
 - Functions are short (aim for under about 40 lines) and do one thing; modules have one job.
 - Names describe the domain (`block_threshold_kwh`, not `t1`). Use the glossary's terms.
 - No copy-paste between suppliers. Differences are data or policy.

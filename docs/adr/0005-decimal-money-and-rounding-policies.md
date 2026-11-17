@@ -1,8 +1,8 @@
 # ADR-0005: Use Decimal money and explicit, per-supplier rounding policies
 
-- **Status:** Proposed
-- **Date:** 2026-11-17
-- **Deciders:** Malcolm Heath (owner)
+- **Status:** Accepted
+- **Date:** 2026-11-17 (proposed); 2026-11-17 (accepted by the owner)
+- **Deciders:** Josh Heath (owner)
 
 ## Context
 
@@ -12,7 +12,12 @@ The product promise is "matches your bill to the cent". Binary floating point ca
 
 - All money and rate arithmetic uses Python `Decimal`, constructed from strings. `float` is banned in money, tariff and billing code (enforced by review and a lint rule where possible).
 - Each rate stores its **original printed value and unit** and a **canonical value**.
-- Quantisation happens only at defined points (line items, totals) under a named `RoundingPolicy` per supplier: granularity, rounding mode, and whether rounding is per line or per bill.
+- Quantisation happens only at points that the supplier's named `RoundingPolicy` lists explicitly. Each point has its own granularity and rounding mode:
+  - **line amount** (per line, or not at all before the total);
+  - **VAT** (per line, or once on the VAT-able subtotal);
+  - **total**;
+  - **prepaid kWh allocation** (how the kWh bought with a rand amount is rounded across blocks).
+  Nothing is quantised anywhere else.
 - A rounding policy not yet confirmed from real bills has status `estimated`, and every result using it carries a warning.
 - The VAT rate comes from a dated table, never a constant.
 
