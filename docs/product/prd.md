@@ -53,7 +53,7 @@ Buyer interviews (the owner's parallel track) will confirm or change this table 
 
 ## Success measures for the validated MVP (end of P9)
 
-- At least 10 real Ekurhuleni golden cases reproduced (P3). A prepaid golden case is a whole month of purchases, matched by amount to the cent and kWh at the receipt's printed precision.
+- At least 10 real Ekurhuleni golden cases reproduced (P3). A prepaid golden case is a whole month of purchases, which matches when, given each purchase's rand amount and the month's earlier purchases, the computed kWh equals the receipt's kWh at the printed precision.
 - Golden bills passing for every pilot supplier (P8).
 - Pilot users confirm accuracy on their own bills.
 - An intent-to-pay pass mark, agreed with the owner before P9, is met.
