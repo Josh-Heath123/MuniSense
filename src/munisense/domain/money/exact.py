@@ -36,6 +36,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BeforeValidator, Strict, ValidationInfo
 
+from munisense.domain.base import EXACT_DECIMAL_MARKER
 from munisense.domain.money.errors import InexactArithmeticError, InvalidArithmeticError
 
 # Digits available to exact arithmetic. Inputs are far smaller (see the JSON grammar), so
@@ -81,6 +82,7 @@ def _check_fits_exact_context(value: Decimal) -> Decimal:
 
 ExactDecimal = Annotated[
     Decimal,
+    EXACT_DECIMAL_MARKER,
     BeforeValidator(_parse_input),
     Strict(),
     AfterValidator(_check_fits_exact_context),

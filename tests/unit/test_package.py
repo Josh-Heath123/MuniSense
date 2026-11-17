@@ -9,6 +9,7 @@ import munisense
 EXPECTED = {
     "munisense.domain",
     "munisense.domain.money",
+    "munisense.domain.citations",
     "munisense.domain.tariffs",
     "munisense.domain.billing",
     "munisense.catalogue",

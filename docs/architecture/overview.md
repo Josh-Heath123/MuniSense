@@ -22,13 +22,14 @@ MuniSense is a **modular monolith**: one Python 3.13 application, one PostgreSQL
 ```text
 src/munisense/
   domain/
-    base.py       DomainModel (strict, frozen, no extra fields) and DomainError; every layer may import it
+    base.py       DomainModel (strict, frozen, no extra fields, no bare Decimal fields) and DomainError; every layer may import it
+    citations/    Citation, Cited[T], VerificationStatus (Verified, Estimated, UserProvided), weakest()
     money/        ExactDecimal, exact(), Money, Rate, RateUnit, CanonicalUnit, VatRate, RoundingPolicy (Decimal only)
     tariffs/      TariffVersion, component types, TOU calendars, validation
     billing/      calculate(), prepaid purchase, period splitting, consumption profiles,
                   LineItem, BillResult, warnings
   catalogue/      suppliers, customer classes, supply areas
-  provenance/     SourceDocument, Citation, VerificationStatus, review log
+  provenance/     SourceDocument records, verification workflow, review log (the per-value Citation and status types live in domain/citations, because the domain may not import this package)
   ingestion/      draft format, parsers/helpers, validator, review-and-publish
   persistence/    SQLAlchemy models, repositories, Alembic migrations, as-of queries
   services/       use cases: calculate_bill, compare_tariffs, publish_version, ...
@@ -51,7 +52,7 @@ data/
 ## Dependency rules (enforced in CI by import-linter and `tests/unit/test_domain_purity.py`)
 
 1. `munisense.domain` imports nothing outside `munisense.domain`, an allow-list of pure standard-library modules and Pydantic v2 (strict mode only, never `pydantic.v1`; ADR-0004). It does no I/O, reads no clock and uses no randomness: `open`, `print`, `input`, `eval`, `exec`, `compile` and `__import__` are refused, and so are `now`, `today` and `utcnow`, called or passed (for example as a Pydantic `default_factory`). `zoneinfo` and `uuid` are deliberately not on the allow-list: the caller passes dates and offset-aware datetimes in, and identifiers are made outside the domain. import-linter enforces the munisense part and forbids named third-party packages (rule 1b); the test enforces the allow-list.
-2. Within the domain: `money` ← `tariffs` ← `billing` (arrows point at what may be imported).
+2. Within the domain: `citations` ← `money` ← `tariffs` ← `billing` (arrows point at what may be imported). `domain/base.py` is outside the layers and may be imported by all of them.
 3. `api`, `console` and `mcp` import `services` and `platform` only, never `persistence` or `ingestion` directly.
 4. Only `persistence` imports SQLAlchemy.
 5. Nothing imports `api`, `console` or `mcp`.

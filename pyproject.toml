@@ -179,12 +179,13 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Rule 2: within the domain, billing -> tariffs -> money"
+name = "Rule 2: within the domain, billing -> tariffs -> money -> citations"
 type = "layers"
 layers = [
     "munisense.domain.billing",
     "munisense.domain.tariffs",
     "munisense.domain.money",
+    "munisense.domain.citations",
 ]
 
 [[tool.importlinter.contracts]]
