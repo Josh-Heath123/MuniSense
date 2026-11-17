@@ -26,7 +26,8 @@ jobs:
       UV_LOCKED: "1"
     services:
       postgres:
-        image: postgres:17
+        # Pinned by digest (multi-arch index of postgres:17, 17.12 on 2026-11-17).
+        image: postgres:17@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac
         env:
           # CI-only throwaway credentials for a database that lives for one run.
           POSTGRES_USER: munisense
