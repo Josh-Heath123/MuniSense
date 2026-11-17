@@ -1,0 +1,64 @@
+# Continuous integration (P0-6, ADR-0010): every pull request and every push to main
+# runs the full check on a clean ubuntu-latest machine with PostgreSQL 17.
+# Actions are pinned to full commit SHAs (supply chain); the tag is in the comment.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: verify and audit
+    runs-on: ubuntu-latest
+    # Keeps a stuck run from eating the free Actions allowance.
+    timeout-minutes: 15
+    env:
+      # A stale uv.lock fails the run instead of being re-resolved on CI.
+      UV_LOCKED: "1"
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          # CI-only throwaway credentials for a database that lives for one run.
+          POSTGRES_USER: munisense
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: munisense_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U munisense -d munisense_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.9"
+          enable-cache: true
+
+      - name: Install Python 3.13 and the locked dev dependencies
+        run: uv sync
+
+      - name: Check the database service is reachable
+        run: pg_isready -h localhost -p 5432 -U munisense -d munisense_test
+
+      - name: uv run poe verify
+        run: uv run poe verify
+
+      - name: uv run poe audit
+        run: uv run poe audit
