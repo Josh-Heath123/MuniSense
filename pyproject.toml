@@ -7,7 +7,7 @@ requires-python = "==3.13.*"
 # Runtime dependencies are added only in the phase that needs them (standards.md).
 # pydantic: approved by the owner for P1 (E28); strict mode only inside the domain (ADR-0004).
 dependencies = [
-    "pydantic>=2.14",
+    "pydantic>=2.14,<3",
 ]
 
 [dependency-groups]
@@ -125,15 +125,16 @@ show_missing = true
 skip_empty = false
 
 # ---------------------------------------------------- import-linter contracts
-# docs/architecture/overview.md, "Dependency rules". The third-party half of rule 1
-# (the domain imports only the standard library and Pydantic) is checked by
-# tests/unit/test_domain_purity.py, because import-linter has no allow-list for
-# external packages. Rule 4 (only persistence imports SQLAlchemy) arrives with
-# SQLAlchemy in P2 (tech-debt TD-6). When a top-level package is
+# docs/architecture/overview.md, "Dependency rules". Rule 1b forbids named third-party
+# packages in the domain; import-linter has no allow-list, so the full rule (only the
+# standard library and Pydantic v2) is tests/unit/test_domain_purity.py. Rule 4 (only
+# persistence imports SQLAlchemy) arrives with SQLAlchemy in P2 (tech-debt TD-6). When a top-level package is
 # added, update these lists and EXPECTED in tests/unit/test_package.py together.
 
 [tool.importlinter]
 root_package = "munisense"
+# Needed by rule 1b, which names third-party packages.
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Rule 1: the domain imports nothing else from munisense"
@@ -149,6 +150,32 @@ forbidden_modules = [
     "munisense.console",
     "munisense.mcp",
     "munisense.platform",
+]
+
+[[tool.importlinter.contracts]]
+name = "Rule 1b: the domain imports no third-party package except Pydantic"
+type = "forbidden"
+source_modules = ["munisense.domain"]
+# Every locked third-party package the domain could reach for, plus the ones planned for
+# later phases. The allow-list test covers anything not named here.
+forbidden_modules = [
+    "hypothesis",
+    "pytest",
+    "mutmut",
+    "libcst",
+    "rich",
+    "textual",
+    "click",
+    "sqlalchemy",
+    "alembic",
+    "psycopg",
+    "fastapi",
+    "starlette",
+    "httpx",
+    "requests",
+    "structlog",
+    "jinja2",
+    "pydantic_settings",
 ]
 
 [[tool.importlinter.contracts]]
