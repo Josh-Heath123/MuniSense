@@ -1,6 +1,6 @@
 # P0-7 hook evidence: 2026-11-17
 
-Evidence that each hook works inside WSL (`Ubuntu` 24.04, user `flosh`, repository at `/mnt/c/MuniSense/MuniSense`). The summary is in `docs/status.md` (P0-7 row in "Done"). This file holds the exact commands and outputs, so that they can be checked.
+Evidence that each hook works inside WSL (`Ubuntu` 24.04, non-root user, repository at `/mnt/c/MuniSense/MuniSense`). The summary is in `docs/status.md` (P0-7 row in "Done"). This file holds the exact commands and outputs, so that they can be checked.
 
 ## Claude Code hooks, seen in Claude's WSL session
 
