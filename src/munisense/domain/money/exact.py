@@ -36,6 +36,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BeforeValidator, Strict, ValidationInfo
 
+from munisense.domain.base import exact_decimal_validator
 from munisense.domain.money.errors import InexactArithmeticError, InvalidArithmeticError
 
 # Digits available to exact arithmetic. Inputs are far smaller (see the JSON grammar), so
@@ -52,6 +53,7 @@ _JSON_DECIMAL = re.compile(
 )
 
 
+@exact_decimal_validator
 def _parse_input(value: object, info: ValidationInfo) -> object:
     # Pydantic turns a ValueError raised here into a ValidationError. Messages are fixed
     # text: they never contain the rejected value.
