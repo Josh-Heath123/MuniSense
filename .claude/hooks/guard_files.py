@@ -3,9 +3,11 @@
 Blocks:
 - writing .env files or key files
 - content that looks like a private key or a live token
-- editing an ADR whose status is Accepted on main (supersede it with a new ADR instead).
-  An ADR that is Accepted only on an unmerged branch may still be corrected. If git
+- editing an ADR whose number is Accepted on main or origin/main (supersede it with a new
+  ADR instead). An ADR Accepted only on an unmerged branch may still be corrected. If git
   cannot say what main holds, the working-tree file decides, as before.
+
+Any crash blocks (fails closed). Git calls share a time budget below the hook timeout.
 - editing an Alembic migration that already exists on the main branch
 """
 
@@ -14,6 +16,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -30,9 +33,9 @@ SECRET_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 KEY_SUFFIXES = {".pem", ".key", ".p12", ".pfx"}
-ADR_PATH = re.compile(r"^docs/adr/\d{4}-[^/]+\.md$")
+ADR_PATH = re.compile(r"^docs/adr/(\d{4})-[^/]+\.md$", re.IGNORECASE)
 ACCEPTED = re.compile(r"(?im)^\W*status\W*:?\W*accepted\b")
-MIGRATION_PATH = re.compile(r"(^|/)migrations/versions/[^/]+\.py$")
+MIGRATION_PATH = re.compile(r"(^|/)migrations/versions/[^/]+\.py$", re.IGNORECASE)
 
 
 def new_content(tool_input: dict[str, Any]) -> str:
@@ -52,45 +55,86 @@ def relative(path: Path, root: Path) -> str | None:
         return None
 
 
-def on_main(rel: str, root: Path) -> bool:
-    """True if the file exists on the main branch (locally or on origin)."""
-    for ref in ("main", "origin/main"):
-        if run(["git", "cat-file", "-e", f"{ref}:{rel}"], cwd=root, timeout=10).returncode == 0:
+MAIN_REFS = ("refs/heads/main", "refs/remotes/origin/main")  # fully qualified: no shadowing
+GIT_BUDGET_SECONDS = 20.0  # the hook's own timeout in settings.json is 30 s
+GIT_CALL_SECONDS = 5.0
+
+
+class GitBudget:
+    """Runs git with a total time budget, so the hook finishes before Claude Code kills it."""
+
+    def __init__(self, root: Path, seconds: float = GIT_BUDGET_SECONDS) -> None:
+        self.root = root
+        self.deadline = time.monotonic() + seconds
+
+    def __call__(self, *args: str) -> subprocess.CompletedProcess[str] | None:
+        """The finished git command, or None if git could not run or time ran out."""
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        try:
+            return run(["git", *args], cwd=self.root, timeout=min(GIT_CALL_SECONDS, remaining))
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return None
+
+
+def main_refs(git: GitBudget) -> list[str] | None:
+    """The main refs that exist, or None if git cannot answer."""
+    found: list[str] = []
+    for ref in MAIN_REFS:
+        result = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+        if result is None:
+            return None
+        if result.returncode == 0:
+            found.append(ref)
+    return found
+
+
+def on_main(rel: str, git: GitBudget) -> bool | None:
+    """True if the file exists on main (locally or on origin); None if git cannot answer."""
+    refs = main_refs(git)
+    if refs is None:
+        return None
+    for ref in refs:
+        result = git("cat-file", "-e", f"{ref}:{rel}")
+        if result is None:
+            return None
+        if result.returncode == 0:
             return True
     return False
 
 
-def ref_exists(ref: str, root: Path) -> bool:
-    """True if `ref` resolves to a commit in the repository at `root` (never raises)."""
-    try:
-        result = run(["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], cwd=root, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return result.returncode == 0
+def adr_accepted_on_main(number: str, git: GitBudget) -> bool | None:
+    """Whether any ADR with this number is Accepted on main or origin/main.
 
+    Matching by number, not by path, covers renamed ADRs and case-variant paths on
+    case-insensitive file systems such as /mnt/c. Returns None when git cannot answer
+    (not a repository, git missing, no main branch, time budget used up).
 
-def accepted_on_main(rel: str, root: Path) -> bool | None:
-    """Whether the ADR at `rel` is Accepted on main or origin/main.
-
-    None when git cannot answer (not a repository, git missing, no main branch).
-    False when main exists but the file is not on it, or is not Accepted there.
+    Known limit: the refs are only as fresh as the last `git fetch`. An ADR accepted
+    by a merge on GitHub that has not been fetched yet is not seen as Accepted.
+    Assumes the project directory is the repository root.
     """
-    answered = False
-    for ref in ("main", "origin/main"):
-        if not ref_exists(ref, root):
-            continue
-        answered = True
-        try:
-            result = run(["git", "show", f"{ref}:{rel}"], cwd=root, timeout=10)
-        except (OSError, subprocess.SubprocessError):
+    refs = main_refs(git)
+    if not refs:
+        return None
+    prefix = f"docs/adr/{number}-"
+    for ref in refs:
+        listing = git("ls-tree", "--name-only", "--full-tree", ref, "docs/adr/")
+        if listing is None or listing.returncode != 0:
             return None
-        if result.returncode == 0 and ACCEPTED.search(result.stdout):
-            return True
-    return False if answered else None
+        for name in listing.stdout.splitlines():
+            if not name.lower().startswith(prefix):
+                continue
+            shown = git("show", f"{ref}:{name}")
+            if shown is None or shown.returncode != 0:
+                return None
+            if ACCEPTED.search(shown.stdout):
+                return True
+    return False
 
 
-def main() -> int:
-    data = read_input()
+def check(data: dict[str, Any]) -> int:
     tool_input = data.get("tool_input", {}) or {}
     file_path = str(tool_input.get("file_path", ""))
     if not file_path:
@@ -117,25 +161,36 @@ def main() -> int:
             )
 
     rel = relative(path, root)
-    if rel and ADR_PATH.match(rel) and path.exists():
-        adr_on_main = accepted_on_main(rel, root)
-        if adr_on_main is None:  # git cannot answer: fall back to the working-tree file
-            current = path.read_text(encoding="utf-8", errors="replace")
+    git = GitBudget(root)
+    adr = ADR_PATH.match(rel) if rel else None
+    if adr:
+        adr_on_main = adr_accepted_on_main(adr.group(1), git)
+        if adr_on_main is None:  # git cannot answer: the working-tree file decides
+            current = (
+                path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+            )
             accepted = bool(ACCEPTED.search(current))
         else:
             accepted = adr_on_main
         if accepted and "superseded by" not in text.lower():
+            where = " on main" if adr_on_main else ""
             problems.append(
-                f"{rel} is Accepted{' on main' if adr_on_main else ''}. Accepted ADRs are never edited. "
-                "Create a new ADR "
-                "with /adr that supersedes it; the only permitted edit here is marking "
-                "it 'Superseded by ADR-NNNN'."
+                f"{rel} is Accepted{where}. Accepted ADRs are never edited. Create a new "
+                "ADR with /adr that supersedes it; the only permitted edit here is "
+                "marking it 'Superseded by ADR-NNNN'."
             )
-    if rel and MIGRATION_PATH.search(rel) and path.exists() and on_main(rel, root):
-        problems.append(
-            f"{rel} is already on main. Never edit a released migration; "
-            "add a new migration instead."
-        )
+    if rel and MIGRATION_PATH.search(rel):
+        released = on_main(rel, git)
+        if released is None and path.exists():
+            problems.append(
+                f"Could not check with git whether {rel} is already on main, "
+                "so the edit is blocked. Ask the owner."
+            )
+        elif released:
+            problems.append(
+                f"{rel} is already on main. Never edit a released migration; "
+                "add a new migration instead."
+            )
 
     if not problems:
         return OK
@@ -145,6 +200,17 @@ def main() -> int:
         + f"\nFile: {file_path}\n"
         "Do not try to work around this. Ask the owner if you believe it is wrong."
     )
+
+
+def main() -> int:
+    data = read_input()
+    try:
+        return check(data)
+    except Exception as exc:  # top-level boundary: a crashed guard must block, not allow
+        return block(
+            f"Blocked: .claude/hooks/guard_files.py crashed ({type(exc).__name__}: {exc}), "
+            "so it fails closed. Tell the owner; do not work around it."
+        )
 
 
 if __name__ == "__main__":

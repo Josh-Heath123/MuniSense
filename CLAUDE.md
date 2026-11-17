@@ -93,6 +93,6 @@ Interfaces (`api`, `console`, `mcp`) call `services` only. import-linter enforce
 
 ## Hooks you will meet
 
-- `guard_bash.py` and `guard_files.py` block destructive commands, secret access, pushes to `main` (once that rule is merged) and edits to Accepted ADRs or committed migrations.
+- `guard_bash.py` and `guard_files.py` block destructive commands, secret access, pushes to `main`, and edits to ADRs Accepted on `main` or to migrations already on `main`. A crashed guard blocks.
 - `format_lint.py` runs ruff after every Python edit. Fix what it reports.
 - `quality_gate.py` runs `uv run poe check` when you finish with changed Python files. Fix the failures, or state plainly that checks are red and why. It blocks once only.

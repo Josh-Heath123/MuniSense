@@ -5,7 +5,7 @@ _Last updated: 2026-11-17, on branch `chore/p0-followups` (after PR #1 and PR #2
 ## Now
 
 - **Phase:** P0 Foundation (in progress). P0-1, P0-2 and P0-9 are done.
-- **Next task:** P0-3 Python project skeleton, starting with one dependency approval request. It starts after this follow-up pull request is opened.
+- **Next task:** P0-3 Python project skeleton, starting with one dependency approval request. It does not wait for the follow-up pull request.
 - **Blocked on:** nothing for P0-3. The owner merges the `chore/p0-followups` pull request.
 
 ## Waiting for the owner
@@ -62,6 +62,7 @@ _Last updated: 2026-11-17, on branch `chore/p0-followups` (after PR #1 and PR #2
 | Task | Evidence |
 | --- | --- |
 | P0-1 Verify the environment | `reports/2026-11-17-P0-progress.md`, section "P0-1 re-run inside WSL": every item green, run from WSL `Ubuntu` 24.04 |
+| P0 follow-ups (E11, E12, E13) | Branch `chore/p0-followups`: 33 hook tests in `.claude/hooks/tests/` pass (18 guard_bash, 15 guard_files); 5 of the new guard_files tests fail against the previous version; a case-variant ADR path on `/mnt/c` is blocked (reproduced by hand); code and security reviews done, findings fixed or recorded in `tech-debt.md` |
 | P0-9 Block pushes to `main` | PR #2: 18 tests in `.claude/hooks/tests/` pass; a live `git push --dry-run origin HEAD:main` was blocked; review findings fixed |
 | P0-2 Review the documents | `reports/2026-11-17-P0-progress.md`, sections A to D; the owner's decisions are in the table above and applied to the documents on `docs/accept-decisions` |
 

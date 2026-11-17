@@ -55,10 +55,12 @@ class AdrRule(unittest.TestCase):
         git(self.repo, "init", "-q", "-b", "main")
         git(self.repo, "commit", "-q", "--allow-empty", "-m", "init")
 
-    def edit(self, new_string: str = "Corrected text.") -> subprocess.CompletedProcess[str]:
-        """Run the hook as Claude Code does for an Edit of the ADR."""
+    def edit(
+        self, new_string: str = "Corrected text.", rel: str = ADR
+    ) -> subprocess.CompletedProcess[str]:
+        """Run the hook as Claude Code does for an Edit of `rel`."""
         payload = json.dumps(
-            {"tool_input": {"file_path": str(self.repo / ADR), "new_string": new_string}}
+            {"tool_input": {"file_path": str(self.repo / rel), "new_string": new_string}}
         )
         env = {**os.environ, "CLAUDE_PROJECT_DIR": str(self.repo)}
         return subprocess.run(
@@ -103,6 +105,57 @@ class AdrRule(unittest.TestCase):
         commit_adr(self.repo, ACCEPTED, "accept")
         git(self.repo, "update-ref", "refs/remotes/origin/main", "HEAD")
         git(self.repo, "branch", "-q", "-m", "main", "trunk")
+        self.assertEqual(self.edit().returncode, 2)
+
+    def accepted_then_branch(self) -> None:
+        """main holds the ADR as Accepted; work continues on branch docs/x."""
+        self.init_repo()
+        commit_adr(self.repo, ACCEPTED, "accept")
+        git(self.repo, "switch", "-q", "-c", "docs/x")
+
+    def test_case_variant_path_is_blocked(self) -> None:
+        # On /mnt/c the file system ignores case; git does not. Match by ADR number.
+        self.accepted_then_branch()
+        self.assertEqual(self.edit(rel="docs/adr/0002-EXAMPLE.md").returncode, 2)
+        self.assertEqual(self.edit(rel="DOCS/ADR/0002-example.md").returncode, 2)
+
+    def test_renamed_adr_is_blocked(self) -> None:
+        self.accepted_then_branch()
+        git(self.repo, "mv", ADR, "docs/adr/0002-renamed.md")
+        self.assertEqual(self.edit(rel="docs/adr/0002-renamed.md").returncode, 2)
+
+    def test_recreating_a_deleted_accepted_adr_is_blocked(self) -> None:
+        self.accepted_then_branch()
+        (self.repo / ADR).unlink()
+        self.assertEqual(self.edit().returncode, 2)
+
+    def test_reverting_working_tree_to_proposed_does_not_unlock(self) -> None:
+        self.accepted_then_branch()
+        commit_adr(self.repo, PROPOSED, "pretend it was never accepted")
+        self.assertEqual(self.edit().returncode, 2)
+
+    def test_origin_accepted_local_main_stale_is_blocked(self) -> None:
+        self.init_repo()
+        commit_adr(self.repo, PROPOSED, "propose")
+        git(self.repo, "switch", "-q", "-c", "accepted")
+        commit_adr(self.repo, ACCEPTED, "accept")
+        git(self.repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+        git(self.repo, "switch", "-q", "main")  # local main still says Proposed
+        self.assertEqual(self.edit().returncode, 2)
+
+    def test_local_main_accepted_origin_stale_is_blocked(self) -> None:
+        self.init_repo()
+        commit_adr(self.repo, PROPOSED, "propose")
+        git(self.repo, "update-ref", "refs/remotes/origin/main", "HEAD")  # origin: Proposed
+        commit_adr(self.repo, ACCEPTED, "accept")  # local main: Accepted
+        self.assertEqual(self.edit().returncode, 2)
+
+    def test_shadowing_refs_cannot_hide_main(self) -> None:
+        self.init_repo()
+        commit_adr(self.repo, PROPOSED, "propose")
+        git(self.repo, "tag", "main")  # a tag named main pointing at the Proposed commit
+        git(self.repo, "branch", "origin/main", "HEAD")  # a local branch named origin/main
+        commit_adr(self.repo, ACCEPTED, "accept")  # refs/heads/main: Accepted
         self.assertEqual(self.edit().returncode, 2)
 
     def test_without_git_the_working_tree_decides(self) -> None:
@@ -158,6 +211,9 @@ class MigrationRuleUnchanged(unittest.TestCase):
             blocked = self.run_edit(repo, released)
             self.assertEqual(blocked.returncode, 2, blocked.stderr)
             self.assertIn("already on main", blocked.stderr)
+            (repo / released).unlink()
+            recreated = self.run_edit(repo, released)
+            self.assertEqual(recreated.returncode, 2, "deleting then rewriting must not unlock")
             fresh = "migrations/versions/0002_next.py"
             (repo / fresh).write_text("# new\n", encoding="utf-8")
             allowed = self.run_edit(repo, fresh)
