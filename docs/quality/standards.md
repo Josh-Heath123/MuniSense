@@ -32,7 +32,11 @@ These apply to all code in `src/` and `tests/`. Tools enforce most of them; revi
 
 ## Dependencies
 
-- Every new dependency needs the owner's approval: purpose, licence (MIT, BSD or Apache preferred; no GPL/AGPL in the service without an ADR), maintenance status and size.
+- Every new dependency needs the owner's approval: purpose, licence, maintenance status and size. Recommend on this licence policy (owner decision E15):
+  - **Permissive** (MIT, BSD, Apache-2.0, ISC, PSF): fine.
+  - **MPL-2.0 and LGPL:** fine for libraries used unmodified.
+  - **GPL and AGPL:** need an ADR first.
+  - Transitive dependencies are listed with their licences in the pull request that adds or upgrades them.
 - Runtime dependencies are added only in the phase that needs them.
 - `uv.lock` is committed. No `pip install`.
 
