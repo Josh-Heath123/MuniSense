@@ -10,7 +10,8 @@ disable-model-invocation: true
 The report type is `$ARGUMENTS`: `progress` (default) or `gate` (end of a phase).
 
 1. Gather evidence:
-   - a fresh `uv run poe verify` (or what exists so far)
+   - a fresh `uv run poe verify` and `uv run poe audit` (or what exists so far)
+   - how long `uv run poe check` takes (`time uv run poe check`), for the quality-numbers table
    - `git log` since the last report in `docs/reports/`
    - `docs/status.md` and `docs/tech-debt.md`
    - CI status of recent pull requests (`gh pr checks`, `gh run list`)

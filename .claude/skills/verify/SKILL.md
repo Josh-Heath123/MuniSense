@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # /verify
 
-1. Run `uv run poe verify`. If it does not exist yet (early Phase 0), run whatever checks do exist, and list what is missing.
+1. Run `uv run poe verify`, then `uv run poe audit` (pip-audit; needs network). If either does not exist yet (early Phase 0), run whatever checks do exist, and list what is missing. If the audit cannot reach the network, report it as **not run**, not as passed.
 2. Summarise each check with its result and numbers:
    - lint and format
    - mypy (error count)
