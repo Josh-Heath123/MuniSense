@@ -17,7 +17,7 @@ Read `docs/domain/sa-tariffs.md` for context. Remember that it holds research no
 2. Check that the transcribed original text matches the document exactly.
 3. Check the conversion to the canonical value and unit, for example 234.67 c/kWh to R2.3467/kWh. Watch for mixed decimal separators such as "R3.77,05", VAT-inclusive versus VAT-exclusive prices, per-day versus per-month charges, and single-phase versus three-phase.
 4. Check the effective dates, customer class, meter type and phase against the document.
-5. Check that the status is justified: `verified` only if the value matches the source exactly; `estimated` must carry a reason; `user_provided` must say who provided it.
+5. Check that the status is justified under ADR-0006. `verified` needs a passing deterministic citation check (original text found verbatim on the cited page's extracted text) **and** a recorded verifier identity, method and date. Your MATCH verdict is evidence, but on its own it does not make a value `verified`. `estimated` must carry a reason; `user_provided` must say who provided it.
 
 ## Golden bills
 

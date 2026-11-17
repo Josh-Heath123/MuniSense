@@ -10,8 +10,9 @@ from __future__ import annotations
 import re
 import shlex
 import sys
+from typing import Any
 
-from _common import OK, block, read_input
+from _common import OK, block, project_dir, read_input, run
 
 # (pattern, reason). Patterns are searched in the whole command string.
 RULES: list[tuple[re.Pattern[str], str]] = [
@@ -112,6 +113,86 @@ def recursive_force_rm(command: str) -> bool:
     return False
 
 
+PROTECTED_BRANCH = "main"
+# `git` options that take a separate value, e.g. `git -C path push`.
+GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
+# `git push` options that take a separate value, e.g. `git push -o ci.skip origin x`.
+PUSH_OPTIONS_WITH_VALUE = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
+PUSH_ALL_FLAGS = {"--all", "--mirror", "--branches"}
+PUSH_TO_MAIN_REASON = (
+    "Pushing to `main` is not allowed. Push a branch and open a pull request; "
+    "the owner merges it (decision E6)."
+)
+
+
+def _push_arguments(tokens: list[str]) -> list[str] | None:
+    """The arguments after `git [options] push`, or None if this is not a git push."""
+    if not tokens or tokens[0] not in {"git", "/usr/bin/git"}:
+        return None
+    i = 1
+    while i < len(tokens) and tokens[i].startswith("-"):
+        i += 2 if tokens[i] in GIT_OPTIONS_WITH_VALUE else 1
+    if i >= len(tokens) or tokens[i] != "push":
+        return None
+    return tokens[i + 1 :]
+
+
+def _destination(refspec: str, current_branch: str | None) -> str | None:
+    """The branch a refspec writes to (None if unknown), e.g. `HEAD:main` -> `main`."""
+    dst = refspec.lstrip("+").split(":")[-1]
+    if dst == "HEAD":
+        dst = current_branch or ""
+    dst = dst.removeprefix("refs/heads/")
+    return dst or None
+
+
+def push_to_main_reason(command: str, current_branch: str | None) -> str | None:
+    """Why the command would push to the protected branch, or None if it would not.
+
+    `current_branch` is the checked-out branch (None if unknown). A push without a
+    refspec pushes the current branch, so it is blocked on `main` or when the
+    branch is unknown (fail closed).
+    """
+    for segment in SEGMENT_SPLIT.split(command):
+        try:
+            tokens = shlex.split(segment)
+        except ValueError:
+            tokens = segment.split()
+        args = _push_arguments(tokens)
+        if args is None:
+            continue
+        positional: list[str] = []
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg in PUSH_ALL_FLAGS:
+                return PUSH_TO_MAIN_REASON
+            if arg.startswith("-"):
+                i += 2 if arg in PUSH_OPTIONS_WITH_VALUE else 1
+                continue
+            positional.append(arg)
+            i += 1
+        refspecs = positional[1:]  # positional[0] is the remote
+        if not refspecs:
+            if current_branch is None:
+                return PUSH_TO_MAIN_REASON + " (The current branch could not be determined.)"
+            if current_branch == PROTECTED_BRANCH:
+                return PUSH_TO_MAIN_REASON
+            continue
+        if any(_destination(r, current_branch) == PROTECTED_BRANCH for r in refspecs):
+            return PUSH_TO_MAIN_REASON
+    return None
+
+
+def current_branch(data: dict[str, Any]) -> str | None:
+    """The checked-out branch in the project, or None if git cannot say."""
+    result = run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=project_dir(data), timeout=10
+    )
+    branch = result.stdout.strip()
+    return branch if result.returncode == 0 and branch and branch != "HEAD" else None
+
+
 def main() -> int:
     data = read_input()
     command = str((data.get("tool_input", {}) or {}).get("command", ""))
@@ -121,6 +202,10 @@ def main() -> int:
     reasons = [reason for pattern, reason in RULES if pattern.search(command)]
     if recursive_force_rm(command):
         reasons.append("`rm -rf` deletes irreversibly. Delete specific files, or ask the owner.")
+    if re.search(r"\bpush\b", command):
+        push_reason = push_to_main_reason(command, current_branch(data))
+        if push_reason:
+            reasons.append(push_reason)
 
     if not reasons:
         return OK
