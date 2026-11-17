@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Annotated, Any
 
 import pytest
-from pydantic import BaseModel, PlainValidator
+from pydantic import BaseModel, PlainValidator, ValidationError
 
 import munisense.domain
 from munisense.domain.base import DomainModel, UnsafeNumberFieldError, unsafe_number_schemas
@@ -92,3 +92,13 @@ def test_every_domain_model_in_the_package_is_safe() -> None:
     assert models
     for model in models:
         assert unsafe_number_schemas(model.__pydantic_core_schema__) == [], model.__name__
+
+
+def test_validation_errors_do_not_repeat_the_input() -> None:
+    class Holder(DomainModel):
+        value: ExactDecimal
+
+    rejected = "123456789ACCOUNT"
+    with pytest.raises(ValidationError) as caught:
+        Holder.model_validate({"value": rejected})
+    assert rejected not in str(caught.value)
