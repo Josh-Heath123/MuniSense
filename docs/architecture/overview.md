@@ -27,7 +27,7 @@ src/munisense/
     citations/    Citation, Cited[T] (the "cited value"), VerificationStatus (Verified, Estimated, UserProvided), weakest()
     money/        ExactDecimal, exact(), Money, Rate, RateUnit, CanonicalUnit, VatRate, VatTable, Quantisation, RoundingPolicy (Decimal only)
     tariffs/      TariffVersion, component types, TOU calendars, validation
-    billing/      calculate(), prepaid purchase, period splitting, consumption profiles,
+    billing/      calculate(), prepaid purchase, period splitting, ConsumptionProfile (PeriodTotal; TimeOfUseBuckets refused until P4), BillingPeriod,
                   LineItem, BillResult, warnings
   catalogue/      suppliers, customer classes, supply areas
   provenance/     SourceDocument records, verification workflow, review log (the per-value Citation and status types live in domain/citations, because the domain may not import this package)
