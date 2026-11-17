@@ -8,7 +8,8 @@ requires-python = "==3.13.*"
 dependencies = []
 
 [dependency-groups]
-# Approved by the owner on 2026-11-17 (P0-3; pre-commit in P0-5). hypothesis is added in P1.
+# Approved by the owner on 2026-11-17 (P0-3; pre-commit and pre-commit-hooks in P0-5).
+# hypothesis is added in P1.
 dev = [
     "ruff>=0.15",
     "mypy>=2.0",

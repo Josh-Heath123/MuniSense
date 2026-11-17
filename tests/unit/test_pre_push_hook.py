@@ -56,4 +56,6 @@ def test_hook_runs_only_at_push_time() -> None:
     config = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
     hooks = {h["id"]: h for repo in config["repos"] for h in repo["hooks"]}
     assert hooks["no-push-to-main"]["stages"] == ["pre-push"]
+    # Without always_run the hook is skipped for pushes that change no files.
+    assert hooks["no-push-to-main"]["always_run"] is True
     assert "pre-push" in config["default_install_hook_types"]

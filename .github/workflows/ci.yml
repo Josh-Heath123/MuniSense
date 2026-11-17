@@ -75,8 +75,16 @@ jobs:
           for f in .gitleaks.toml .gitleaksignore; do
             if [ -e "$f" ]; then echo "::error::$f found: needs the owner's approval"; exit 1; fi
           done
-          if git grep -n "gitleaks:allow" -- ':!.github/workflows/ci.yml'; then
-            echo "::error::inline gitleaks:allow found: needs the owner's approval"; exit 1
+          # The marker is built from two parts so this file does not contain it.
+          marker="gitleaks"":allow"
+          if git grep -n "$marker"; then
+            echo "::error::inline allow comment in the tree: needs the owner's approval"; exit 1
+          fi
+          # Also in history, where gitleaks would honour it even if a later commit removed it.
+          # (Excludes this file, whose history contains the marker from before it was split.)
+          found=$(git log --all -p -G "$marker" -- . ':!.github/workflows/ci.yml')
+          if [ -n "$found" ]; then
+            echo "::error::inline allow comment in the history: needs the owner's approval"; exit 1
           fi
 
       - name: gitleaks on the full history
