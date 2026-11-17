@@ -15,7 +15,8 @@
 | Control | Phase | Status |
 | --- | --- | --- |
 | Secret scanning (gitleaks) in pre-commit and CI | P0 | planned |
-| Dependency vulnerability audit (`uv run poe audit`): pip-audit on the exported lock, every locked package for every platform, hashes required | P0 | task exists (P0-3); CI run planned (P0-6) |
+| Dependency vulnerability audit (`uv run poe audit`): pip-audit on the exported lock, every locked package for every platform, hashes required | P0 | built; runs in CI on every pull request and push to main (P0-6) |
+| CI on GitHub Actions: clean machine per run, actions pinned to commit SHAs, read-only `GITHUB_TOKEN`, checkout without persisted credentials, `UV_LOCKED=1`, no secrets used | P0 | built (P0-6) |
 | Locked, hash-verified dependencies from PyPI only; wheels only (`no-build`, so no package build code runs at install); the lock ignores releases younger than 14 days (`exclude-newer`). Gaps: the cutoff is relative and not recorded as a date in the lock; it does not cover `uvx` tools, GitHub Actions or pre-commit hook environments | P0 | built (P0-3) |
 | guard_bash.py blocks the common forms of `git push` to `main`, and fails closed if it crashes (18 tests in `test_guard_bash.py`). Known gaps: pushes driven only by git configuration, and commands hidden in `bash -c`, `eval` or scripts. A pre-commit pre-push hook (P0-5) is planned to narrow the gap; client-side git hooks can be bypassed (`--no-verify`, `core.hooksPath`). "Changes reach `main` only through a pull request the owner merges" is a process rule, not an enforced control: there is no branch protection | P0 | built (PR #2); pre-push hook planned (P0-5) |
 | Claude Code guard hooks (destructive commands, secrets) | P0 | in starter pack, to be proven in P0-7 |
