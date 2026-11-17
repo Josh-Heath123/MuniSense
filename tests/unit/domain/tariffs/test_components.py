@@ -267,3 +267,15 @@ def test_a_version_covers_periods_inside_its_effective_range(
 def test_an_open_ended_version_covers_any_later_period() -> None:
     tariff = version(THREE_BLOCKS)
     assert tariff.covers(DateRange(start=date(2030, 1, 1), end=date(2030, 2, 1)))
+
+
+def test_a_flat_energy_component_and_its_status() -> None:
+    flat = FlatEnergy(
+        name="energy", vat=standard_vat(), rate=cited_rate("180.00", RateUnit.CENTS_PER_KWH)
+    )
+    assert flat.rate.value.canonical_value == Decimal("1.8000")
+    assert flat.status is StatusKind.ESTIMATED
+
+
+def test_a_version_with_an_end_date_includes_it_in_its_status() -> None:
+    assert version(THREE_BLOCKS, end=date(2027, 7, 1)).status is StatusKind.ESTIMATED
