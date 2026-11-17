@@ -10,7 +10,7 @@ dependencies = []
 [dependency-groups]
 # Approved by the owner on 2026-11-17 (P0-3). pre-commit is added in P0-5, hypothesis in P1.
 dev = [
-    "ruff>=0.16",
+    "ruff>=0.15",
     "mypy>=2.0",
     "pytest>=9.0",
     "pytest-cov>=7.0",
