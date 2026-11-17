@@ -9,3 +9,11 @@ class InexactArithmeticError(DomainError):
 
 class InvalidArithmeticError(DomainError):
     """A calculation divided by zero, overflowed, mixed in a float or was otherwise invalid."""
+
+
+class NoVatRateError(DomainError):
+    """No VAT rate is recorded for (all of) the period."""
+
+
+class VatRateChangesError(DomainError):
+    """The VAT rate changes inside the period; it must be split first."""

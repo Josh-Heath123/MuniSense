@@ -10,6 +10,7 @@ EXPECTED = {
     "munisense.domain",
     "munisense.domain.money",
     "munisense.domain.citations",
+    "munisense.domain.periods",
     "munisense.domain.tariffs",
     "munisense.domain.billing",
     "munisense.catalogue",

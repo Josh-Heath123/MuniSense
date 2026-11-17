@@ -2,11 +2,14 @@
 
 from collections.abc import Iterable
 from decimal import Decimal
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from munisense.domain.base import DomainModel
 from munisense.domain.money.errors import InvalidArithmeticError
 from munisense.domain.money.exact import ExactDecimal, exact
+
+if TYPE_CHECKING:
+    from munisense.domain.money.rounding import Quantisation
 
 
 class Money(DomainModel):
@@ -36,6 +39,10 @@ class Money(DomainModel):
             return NotImplemented
         with exact():
             return Money(rand=self.rand - other.rand)
+
+    def quantised(self, quantisation: "Quantisation") -> "Money":
+        """This amount rounded at a quantisation point named by a rounding policy."""
+        return Money(rand=quantisation.apply(self.rand))
 
     def __mul__(self, factor: Decimal) -> "Money":
         _require_finite_decimal(factor)
