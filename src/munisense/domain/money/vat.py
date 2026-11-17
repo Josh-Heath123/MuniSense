@@ -20,11 +20,23 @@ from munisense.domain.periods import DateRange
 
 
 class VatRate(DomainModel):
-    """One VAT rate, as a cited percentage, valid from `start` until `end` (exclusive)."""
+    """One VAT rate valid from `start` until `end` (exclusive). Each value is cited.
 
-    start: date
-    end: date | None
+    The effective dates are tariff data like the percentage (CLAUDE.md rule 1), so each
+    carries its own citation and status. `end` is `None` while no later rate is known.
+    """
+
+    start_cited: Cited[date]
+    end_cited: Cited[date] | None
     percent: Cited[ExactDecimal]
+
+    @property
+    def start(self) -> date:
+        return self.start_cited.value
+
+    @property
+    def end(self) -> date | None:
+        return None if self.end_cited is None else self.end_cited.value
 
     @model_validator(mode="after")
     def _valid(self) -> Self:
@@ -52,7 +64,7 @@ class VatRate(DomainModel):
 class VatTable(DomainModel):
     """Contiguous, ordered VAT rates."""
 
-    rates: Annotated[tuple[VatRate, ...], Field(min_length=1)]
+    rates: Annotated[tuple[VatRate, ...], Field(min_length=1, max_length=100)]
 
     @model_validator(mode="after")
     def _contiguous(self) -> Self:

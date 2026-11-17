@@ -77,7 +77,9 @@ def unsafe_number_schemas(schema: object) -> list[str]:
 class DomainModel(BaseModel):
     """Base for domain value objects: strict, immutable, no extra fields, no float path."""
 
-    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    # hide_input_in_errors: a ValidationError never repeats the rejected input, which
+    # could be long or personal (security document, input limits).
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", hide_input_in_errors=True)
 
     @classmethod
     def __pydantic_on_complete__(cls) -> None:

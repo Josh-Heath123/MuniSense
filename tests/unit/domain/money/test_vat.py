@@ -24,8 +24,10 @@ FIXTURE_STATUS = Estimated(reason="test fixture, not the real VAT rate")
 
 def vat(percent: str, start: date, end: date | None) -> VatRate:
     return VatRate(
-        start=start,
-        end=end,
+        start_cited=Cited[date](value=start, citation=FIXTURE_CITATION, status=FIXTURE_STATUS),
+        end_cited=None
+        if end is None
+        else Cited[date](value=end, citation=FIXTURE_CITATION, status=FIXTURE_STATUS),
         percent=Cited[ExactDecimal](
             value=Decimal(percent), citation=FIXTURE_CITATION, status=FIXTURE_STATUS
         ),
@@ -41,6 +43,21 @@ def test_the_rate_for_a_period_inside_one_entry() -> None:
     july = DateRange(start=date(2026, 7, 1), end=date(2026, 8, 1))
     assert TABLE.rate_for(july) is NEW
     assert NEW.fraction == Decimal("0.125")
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "expected"),
+    [
+        (date(2026, 2, 1), date(2026, 3, 1), "old"),  # ends exactly on the change date
+        (date(2026, 3, 1), date(2026, 4, 1), "new"),  # starts exactly on the change date
+        (date(2026, 2, 28), date(2026, 3, 1), "old"),  # the last day of the old rate
+        (date(2026, 3, 1), date(2026, 3, 2), "new"),  # the first day of the new rate
+        (date(2020, 1, 1), date(2020, 1, 2), "old"),  # the first day of the table
+    ],
+)
+def test_change_date_boundaries_are_half_open(start: date, end: date, expected: str) -> None:
+    rate = TABLE.rate_for(DateRange(start=start, end=end))
+    assert rate is {"old": OLD, "new": NEW}[expected]
 
 
 def test_a_period_before_the_table_is_refused() -> None:
@@ -93,6 +110,13 @@ def test_an_impossible_percentage_is_refused(percent: str) -> None:
 def test_an_entry_that_ends_before_it_starts_is_refused() -> None:
     with pytest.raises(ValidationError):
         vat("10", date(2026, 3, 1), date(2026, 3, 1))
+
+
+def test_a_table_longer_than_100_entries_is_refused() -> None:
+    days = [date(2000, 1, 1).fromordinal(date(2000, 1, 1).toordinal() + i) for i in range(102)]
+    rates = tuple(vat("10", days[i], days[i + 1]) for i in range(101))
+    with pytest.raises(ValidationError):
+        VatTable(rates=rates)
 
 
 def test_the_table_round_trips_through_json() -> None:

@@ -39,6 +39,6 @@ class DateRange(DomainModel):
         """True when the range is exactly one calendar month (the 1st to the next 1st)."""
         if self.start.day != 1 or self.end.day != 1:
             return False
-        next_month = (self.start.year * 12 + self.start.month) % 12 + 1
-        next_year = self.start.year + (1 if self.start.month == 12 else 0)
-        return self.end == date(next_year, next_month, 1)
+        if self.start.month == 12:
+            return self.end == date(self.start.year + 1, 1, 1)
+        return self.end == date(self.start.year, self.start.month + 1, 1)
