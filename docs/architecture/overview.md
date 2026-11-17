@@ -57,6 +57,7 @@ data/
 3. `api`, `console` and `mcp` import `services` and `platform` only, never `persistence` or `ingestion` directly.
 4. Only `persistence` imports SQLAlchemy.
 5. Nothing imports `api`, `console` or `mcp`.
+6. No production code imports the test-support package `support` (`tests/support`), which is importable only under pytest and mypy.
 
 ## Data model (target for P2; details decided in the P2 storage ADR if they differ)
 

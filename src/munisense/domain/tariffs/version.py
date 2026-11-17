@@ -1,6 +1,12 @@
 """A tariff version: a header plus an ordered list of typed components (ADR-0004).
 
-The header's values (effective dates, price basis) are cited like every other value. The
+The header's values are cited like every other value: the tariff's printed name, the
+printed statement of whom it applies to (for example "Domestic, prepaid, single phase"),
+the effective dates and the price basis. `supplier`, `tariff_code` and `customer_class`
+are catalogue keys chosen by us, not values printed in the schedule, so they are not
+cited; the printed name and applicability are the cited facts behind them. Variants of a
+tariff (prepaid and credit, single and three phase) are separate versions with separate
+tariff codes until a component needs an applicability condition (an ADR). The
 rounding policy is part of the version, because it is supplier behaviour that can change
 from one year to the next. Record time (when we learnt of a version) is added by the
 publish step in P2; here a version carries only its valid time.
@@ -13,10 +19,10 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from munisense.domain.base import DomainModel
-from munisense.domain.citations import Cited, StatusKind, weakest
+from munisense.domain.citations import Cited, StatusKind, cited_statuses, weakest
 from munisense.domain.money import RoundingPolicy
 from munisense.domain.periods import DateRange
-from munisense.domain.tariffs.components import Component
+from munisense.domain.tariffs.components import Component, PrintedLabel
 
 Code = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
 
@@ -32,10 +38,12 @@ class TariffVersion(DomainModel):
     """One version of one supplier's tariff, valid from `effective_from` (inclusive) to
     `effective_to` (exclusive; `None` while no later version is known)."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1]
     supplier: Code
     tariff_code: Code
     customer_class: Code
+    printed_name: Cited[PrintedLabel]
+    applies_to: Cited[PrintedLabel]
     effective_from: Cited[date]
     effective_to: Cited[date] | None
     price_basis: Cited[PriceBasis]
@@ -60,14 +68,9 @@ class TariffVersion(DomainModel):
 
     @property
     def status(self) -> StatusKind:
-        """The weakest status of the version's own values and its components'.
+        """The weakest status of every cited value in the header and the components.
 
-        The rounding policy's status is reported separately on each result (ADR-0005).
+        The rounding policy holds no cited values; its own status is reported separately
+        on each result (ADR-0005).
         """
-        header = [self.effective_from.status, self.price_basis.status]
-        if self.effective_to is not None:
-            header.append(self.effective_to.status)
-        return min(
-            [weakest(header), *(component.status for component in self.components)],
-            key=lambda kind: kind.rank,
-        )
+        return weakest(cited_statuses(self))

@@ -6,17 +6,9 @@ from decimal import Decimal
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from munisense.domain.citations import (
-    Cited,
-    ProvidedBy,
-    StatusKind,
-    TextCheck,
-    UserProvided,
-    Verified,
-)
+from munisense.domain.citations import ProvidedBy, StatusKind, TextCheck, UserProvided, Verified
 from munisense.domain.money import (
     Quantisation,
-    Rate,
     RateUnit,
     RoundingMode,
     RoundingPolicy,
@@ -29,16 +21,17 @@ from munisense.domain.tariffs import (
     Component,
     FixedCharge,
     FlatEnergy,
-    PriceBasis,
     TariffVersion,
-    VatTreatment,
 )
 from support.builders import (
     FIXTURE_STATUS,
+    Status,
+    cited_basis,
     cited_date,
     cited_decimal,
+    cited_label,
     cited_rate,
-    fixture_citation,
+    cited_vat,
 )
 
 COMPONENT = TypeAdapter[Component](Component)
@@ -53,41 +46,67 @@ POLICY = RoundingPolicy(
     status=FIXTURE_STATUS,
     evidence=(),
 )
+VERIFIED = Verified(
+    verifier="owner",
+    verifier_kind="human",
+    method="fixture",
+    verified_on=date(2026, 11, 17),
+    text_check=TextCheck.PASSED,
+)
+USER = UserProvided(provided_by=ProvidedBy.OWNER_BILL)
 
 
-def standard_vat() -> Cited[VatTreatment]:
-    return Cited[VatTreatment](
-        value=VatTreatment.STANDARD, citation=fixture_citation(), status=FIXTURE_STATUS
-    )
-
-
-def block(up_to: str | None, cents: str) -> Block:
+def block(up_to: str | None, cents: str, status: Status = FIXTURE_STATUS) -> Block:
     return Block(
-        up_to_kwh=None if up_to is None else cited_decimal(up_to),
-        rate=cited_rate(cents, RateUnit.CENTS_PER_KWH),
+        up_to_kwh=None if up_to is None else cited_decimal(up_to, status),
+        rate=cited_rate(cents, RateUnit.CENTS_PER_KWH, status),
     )
 
 
 def blocks(*pairs: tuple[str | None, str]) -> BlockEnergy:
     return BlockEnergy(
-        name="energy", vat=standard_vat(), blocks=tuple(block(u, r) for u, r in pairs)
+        schema_version=1,
+        kind="block_energy",
+        name="energy",
+        label=cited_label("Energy charge"),
+        vat=cited_vat(),
+        blocks=tuple(block(u, r) for u, r in pairs),
     )
 
 
-def fixed(value: str, unit: RateUnit) -> FixedCharge:
-    return FixedCharge(name="basic", vat=standard_vat(), rate=cited_rate(value, unit))
+def fixed(value: str, unit: RateUnit, name: str = "basic") -> FixedCharge:
+    return FixedCharge(
+        schema_version=1,
+        kind="fixed_charge",
+        name=name,
+        label=cited_label("Basic charge"),
+        vat=cited_vat(),
+        rate=cited_rate(value, unit),
+    )
+
+
+def flat(value: str, unit: RateUnit = RateUnit.CENTS_PER_KWH) -> FlatEnergy:
+    return FlatEnergy(
+        schema_version=1,
+        kind="flat_energy",
+        name="energy",
+        label=cited_label("Energy charge"),
+        vat=cited_vat(),
+        rate=cited_rate(value, unit),
+    )
 
 
 def version(*components: Component, end: date | None = None) -> TariffVersion:
     return TariffVersion(
+        schema_version=1,
         supplier="fixture-metro",
         tariff_code="fixture-a",
         customer_class="residential",
+        printed_name=cited_label("Tariff A: Domestic"),
+        applies_to=cited_label("Domestic, prepaid"),
         effective_from=cited_date(date(2026, 7, 1)),
         effective_to=None if end is None else cited_date(end),
-        price_basis=Cited[PriceBasis](
-            value=PriceBasis.EXCLUDING_VAT, citation=fixture_citation(), status=FIXTURE_STATUS
-        ),
+        price_basis=cited_basis(),
         rounding_policy=POLICY,
         components=components,
     )
@@ -96,15 +115,12 @@ def version(*components: Component, end: date | None = None) -> TariffVersion:
 THREE_BLOCKS = blocks(("50", "150.00"), ("350", "200.00"), (None, "250.00"))
 
 
+def _without_schema_version(payload: str) -> str:
+    assert '"schema_version":1,' in payload
+    return payload.replace('"schema_version":1,', "", 1)
+
+
 # ------------------------------------------------------------------------- components
-
-
-def test_a_block_component_has_ordered_blocks_with_an_open_last_block() -> None:
-    assert [b.up_to_kwh.value if b.up_to_kwh else None for b in THREE_BLOCKS.blocks] == [
-        Decimal("50"),
-        Decimal("350"),
-        None,
-    ]
 
 
 def test_block_bounds_give_each_block_its_width() -> None:
@@ -125,6 +141,7 @@ def test_block_bounds_give_each_block_its_width() -> None:
         (("0", "1"), (None, "2")),  # a block of zero width
         (("-5", "1"), (None, "2")),  # a negative threshold
         (("50", "-1"), (None, "2")),  # a negative rate
+        (("50", "-0"), (None, "2")),  # a negative zero rate
     ],
 )
 def test_invalid_blocks_are_refused(pairs: tuple[tuple[str | None, str], ...]) -> None:
@@ -132,19 +149,29 @@ def test_invalid_blocks_are_refused(pairs: tuple[tuple[str | None, str], ...]) -
         blocks(*pairs)
 
 
-def test_an_empty_block_list_is_refused() -> None:
+def test_an_empty_or_oversized_block_list_is_refused() -> None:
     with pytest.raises(ValidationError):
-        BlockEnergy(name="energy", vat=standard_vat(), blocks=())
+        blocks()
+    many = (*((str(i), "1") for i in range(1, 21)), (None, "1"))
+    with pytest.raises(ValidationError):
+        blocks(*many)
 
 
-def test_a_single_open_block_is_allowed() -> None:
+def test_twenty_blocks_and_a_single_open_block_are_allowed() -> None:
+    twenty = (*((str(i), "1") for i in range(1, 20)), (None, "1"))
+    assert len(blocks(*twenty).blocks) == 20
     assert blocks((None, "180.00")).bounds() == [(Decimal(0), None)]
+
+
+def test_a_zero_rate_is_allowed() -> None:
+    assert flat("0").rate.value.value == 0
+    assert blocks(("50", "0"), (None, "1")).blocks[0].rate.value.value == 0
 
 
 @pytest.mark.parametrize("unit", [RateUnit.RAND_PER_DAY, RateUnit.RAND_PER_MONTH])
 def test_an_energy_rate_must_be_per_kwh(unit: RateUnit) -> None:
     with pytest.raises(ValidationError):
-        FlatEnergy(name="energy", vat=standard_vat(), rate=cited_rate("1", unit))
+        flat("1", unit)
     with pytest.raises(ValidationError):
         Block(up_to_kwh=None, rate=cited_rate("1", unit))
 
@@ -159,13 +186,19 @@ def test_negative_rates_are_refused() -> None:
     with pytest.raises(ValidationError):
         fixed("-1", RateUnit.RAND_PER_MONTH)
     with pytest.raises(ValidationError):
-        FlatEnergy(name="energy", vat=standard_vat(), rate=cited_rate("-1", RateUnit.CENTS_PER_KWH))
+        flat("-1")
 
 
 @pytest.mark.parametrize("name", ["", "Basic Charge", "x" * 65, "1abc"])
 def test_a_component_name_is_a_short_slug(name: str) -> None:
     with pytest.raises(ValidationError):
-        FixedCharge(name=name, vat=standard_vat(), rate=cited_rate("1", RateUnit.RAND_PER_MONTH))
+        fixed("1", RateUnit.RAND_PER_MONTH, name=name)
+
+
+@pytest.mark.parametrize("label", ["", "   ", "Basic\ncharge", "x" * 201])
+def test_a_printed_label_is_bounded_plain_text(label: str) -> None:
+    with pytest.raises(ValidationError):
+        cited_label(label)
 
 
 def test_a_component_is_read_from_json_by_its_kind() -> None:
@@ -174,14 +207,14 @@ def test_a_component_is_read_from_json_by_its_kind() -> None:
     assert component == THREE_BLOCKS
 
 
-def test_an_unknown_component_kind_or_schema_version_is_refused() -> None:
-    data = THREE_BLOCKS.model_dump(mode="json")
+def test_an_unknown_kind_or_a_missing_or_unknown_schema_version_is_refused() -> None:
+    payload = THREE_BLOCKS.model_dump_json()
     with pytest.raises(ValidationError):
-        COMPONENT.validate_python(data | {"kind": "demand_charge"})
+        COMPONENT.validate_json(payload.replace('"kind":"block_energy"', '"kind":"demand"'))
     with pytest.raises(ValidationError):
-        COMPONENT.validate_json(
-            THREE_BLOCKS.model_dump_json().replace('"schema_version":1', '"schema_version":2')
-        )
+        COMPONENT.validate_json(payload.replace('"schema_version":1', '"schema_version":2'))
+    with pytest.raises(ValidationError):
+        COMPONENT.validate_json(_without_schema_version(payload))
 
 
 def test_component_rates_refuse_floats() -> None:
@@ -193,28 +226,99 @@ def test_component_rates_refuse_floats() -> None:
 # ----------------------------------------------------------------------------- status
 
 
-def test_a_component_status_is_the_weakest_of_its_values() -> None:
-    assert THREE_BLOCKS.status is StatusKind.ESTIMATED
-    verified = Verified(
-        verifier="owner",
-        verifier_kind="human",
-        method="fixture",
-        verified_on=date(2026, 11, 17),
-        text_check=TextCheck.PASSED,
+def verified_version(weak: str | None) -> TariffVersion:
+    """A version whose every value is verified, except the one named by `weak`."""
+
+    def status(position: str) -> Status:
+        return USER if position == weak else VERIFIED
+
+    energy = BlockEnergy(
+        schema_version=1,
+        kind="block_energy",
+        name="energy",
+        label=cited_label("Energy", status("block_label")),
+        vat=cited_vat(status=status("block_vat")),
+        blocks=(
+            Block(
+                up_to_kwh=cited_decimal("50", status("block_threshold")),
+                rate=cited_rate("150", RateUnit.CENTS_PER_KWH, status("block_rate_1")),
+            ),
+            Block(
+                up_to_kwh=None,
+                rate=cited_rate("250", RateUnit.CENTS_PER_KWH, status("block_rate_2")),
+            ),
+        ),
     )
-    user = UserProvided(provided_by=ProvidedBy.OWNER_BILL)
-    charge = FixedCharge(
+    basic = FixedCharge(
+        schema_version=1,
+        kind="fixed_charge",
         name="basic",
-        vat=Cited[VatTreatment](
-            value=VatTreatment.STANDARD, citation=fixture_citation(), status=verified
-        ),
-        rate=Cited[Rate](
-            value=Rate(value=Decimal("1"), unit=RateUnit.RAND_PER_MONTH),
-            citation=fixture_citation(),
-            status=user,
-        ),
+        label=cited_label("Basic", status("fixed_label")),
+        vat=cited_vat(status=status("fixed_vat")),
+        rate=cited_rate("200", RateUnit.RAND_PER_MONTH, status("fixed_rate")),
     )
-    assert charge.status is StatusKind.USER_PROVIDED
+    network = FlatEnergy(
+        schema_version=1,
+        kind="flat_energy",
+        name="network",
+        label=cited_label("Network", status("flat_label")),
+        vat=cited_vat(status=status("flat_vat")),
+        rate=cited_rate("10", RateUnit.CENTS_PER_KWH, status("flat_rate")),
+    )
+    return TariffVersion(
+        schema_version=1,
+        supplier="fixture-metro",
+        tariff_code="fixture-a",
+        customer_class="residential",
+        printed_name=cited_label("Tariff A", status("printed_name")),
+        applies_to=cited_label("Domestic", status("applies_to")),
+        effective_from=cited_date(date(2026, 7, 1), status("effective_from")),
+        effective_to=cited_date(date(2027, 7, 1), status("effective_to")),
+        price_basis=cited_basis(status=status("price_basis")),
+        rounding_policy=POLICY,
+        components=(basic, energy, network),
+    )
+
+
+# position -> the component it belongs to (None for the version header)
+POSITIONS: dict[str, str | None] = {
+    "printed_name": None,
+    "applies_to": None,
+    "effective_from": None,
+    "effective_to": None,
+    "price_basis": None,
+    "fixed_label": "basic",
+    "fixed_vat": "basic",
+    "fixed_rate": "basic",
+    "block_label": "energy",
+    "block_vat": "energy",
+    "block_threshold": "energy",
+    "block_rate_1": "energy",
+    "block_rate_2": "energy",
+    "flat_label": "network",
+    "flat_vat": "network",
+    "flat_rate": "network",
+}
+
+
+def test_a_fully_verified_version_and_its_components_are_verified() -> None:
+    tariff = verified_version(None)
+    assert tariff.status is StatusKind.VERIFIED
+    assert all(c.status is StatusKind.VERIFIED for c in tariff.components)
+
+
+@pytest.mark.parametrize(("weak", "component"), POSITIONS.items())
+def test_one_weaker_value_anywhere_weakens_the_summary(weak: str, component: str | None) -> None:
+    tariff = verified_version(weak)
+    assert tariff.status is StatusKind.USER_PROVIDED
+    weakened = [c.name for c in tariff.components if c.status is StatusKind.USER_PROVIDED]
+    assert weakened == ([] if component is None else [component])
+
+
+@pytest.mark.parametrize("weak", [None, "effective_to", "block_rate_2"])
+def test_a_version_with_mixed_statuses_round_trips_exactly(weak: str | None) -> None:
+    tariff = verified_version(weak)
+    assert TariffVersion.model_validate_json(tariff.model_dump_json()) == tariff
 
 
 # ---------------------------------------------------------------------------- version
@@ -223,14 +327,23 @@ def test_a_component_status_is_the_weakest_of_its_values() -> None:
 def test_a_version_holds_an_ordered_list_of_components() -> None:
     tariff = version(fixed("200.00", RateUnit.RAND_PER_MONTH), THREE_BLOCKS)
     assert [c.name for c in tariff.components] == ["basic", "energy"]
-    assert tariff.status is StatusKind.ESTIMATED
 
 
-def test_a_version_json_round_trip_is_exact() -> None:
+def test_a_version_json_round_trip_keeps_printed_precision() -> None:
     tariff = version(fixed("200.0000", RateUnit.RAND_PER_MONTH), THREE_BLOCKS)
-    again = TariffVersion.model_validate_json(tariff.model_dump_json())
-    assert again == tariff
+    assert TariffVersion.model_validate_json(tariff.model_dump_json()) == tariff
     assert '"200.0000"' in tariff.model_dump_json()
+
+
+def test_a_version_with_a_missing_or_unknown_schema_version_is_refused() -> None:
+    payload = version(THREE_BLOCKS).model_dump_json()
+    assert payload.startswith('{"schema_version":1,')
+    with pytest.raises(ValidationError):
+        TariffVersion.model_validate_json(_without_schema_version(payload))
+    with pytest.raises(ValidationError):
+        TariffVersion.model_validate_json(
+            payload.replace('"schema_version":1', '"schema_version":2', 1)
+        )
 
 
 def test_duplicate_component_names_are_refused() -> None:
@@ -238,9 +351,12 @@ def test_duplicate_component_names_are_refused() -> None:
         version(fixed("1", RateUnit.RAND_PER_MONTH), fixed("2", RateUnit.RAND_PER_DAY))
 
 
-def test_a_version_needs_at_least_one_component() -> None:
+def test_a_version_needs_one_to_thirty_components() -> None:
     with pytest.raises(ValidationError):
         version()
+    many = [fixed("1", RateUnit.RAND_PER_MONTH, name=f"c{i}") for i in range(31)]
+    with pytest.raises(ValidationError):
+        version(*many)
 
 
 def test_a_version_must_end_after_it_starts() -> None:
@@ -267,15 +383,3 @@ def test_a_version_covers_periods_inside_its_effective_range(
 def test_an_open_ended_version_covers_any_later_period() -> None:
     tariff = version(THREE_BLOCKS)
     assert tariff.covers(DateRange(start=date(2030, 1, 1), end=date(2030, 2, 1)))
-
-
-def test_a_flat_energy_component_and_its_status() -> None:
-    flat = FlatEnergy(
-        name="energy", vat=standard_vat(), rate=cited_rate("180.00", RateUnit.CENTS_PER_KWH)
-    )
-    assert flat.rate.value.canonical_value == Decimal("1.8000")
-    assert flat.status is StatusKind.ESTIMATED
-
-
-def test_a_version_with_an_end_date_includes_it_in_its_status() -> None:
-    assert version(THREE_BLOCKS, end=date(2027, 7, 1)).status is StatusKind.ESTIMATED

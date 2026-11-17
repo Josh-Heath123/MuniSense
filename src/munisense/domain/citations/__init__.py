@@ -11,6 +11,7 @@ from munisense.domain.citations.model import (
     UserProvided,
     VerificationStatus,
     Verified,
+    cited_statuses,
     weakest,
 )
 
@@ -26,5 +27,6 @@ __all__ = [
     "UserProvided",
     "VerificationStatus",
     "Verified",
+    "cited_statuses",
     "weakest",
 ]

@@ -1,13 +1,16 @@
 """Typed tariff components (ADR-0004): declarative data that the engine evaluates.
 
-Each component is a strict, versioned (`schema_version`) model, and every value inside it
-is a `Cited` value with its own citation and status (ADR-0006). A component's status is
-the weakest status of its values. P1 builds `FixedCharge`, `FlatEnergy` and `BlockEnergy`;
-the other types in ADR-0004 arrive with the phase that needs them, each with an ADR.
+Each component is a strict, versioned (`schema_version`, required) model, and every value
+inside it is a `Cited` value with its own citation and status (ADR-0006), including the
+label printed in the schedule. A component's status is the weakest status of all its
+cited values, found by walking its fields (`cited_statuses`), so no value can be left out.
+
+P1 builds `FixedCharge`, `FlatEnergy` and `BlockEnergy`; the other types in ADR-0004
+arrive with the phase that needs them, each with an ADR.
 
 Block thresholds are kWh per calendar month (how SA tariff schedules print them). How a
 threshold applies to a period that is not one calendar month is a policy decided in P1-13;
-until then the engine refuses such periods for block tariffs.
+until then the engine refuses such periods for block tariffs (P1-7 criterion).
 """
 
 from decimal import Decimal
@@ -17,18 +20,17 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from munisense.domain.base import DomainModel
-from munisense.domain.citations import (
-    Cited,
-    Estimated,
-    StatusKind,
-    UserProvided,
-    Verified,
-    weakest,
-)
+from munisense.domain.citations import Cited, StatusKind, cited_statuses, weakest
 from munisense.domain.money import CanonicalUnit, ExactDecimal, Rate
 
 ComponentName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]{0,63}$")]
-Status = Verified | Estimated | UserProvided
+PrintedLabel = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=1, max_length=200, pattern=r"^[^\x00-\x1f\x7f-\x9f]+$"
+    ),
+]
+"""A label as printed in the schedule, for example "Basic charge" or "Tariff A: Domestic"."""
 
 
 class VatTreatment(StrEnum):
@@ -43,29 +45,27 @@ def _require_unit(rate: Cited[Rate], allowed: set[CanonicalUnit], what: str) -> 
     if rate.value.canonical_unit not in allowed:
         msg = f"{what} must be priced per {' or per '.join(sorted(u.value for u in allowed))}"
         raise ValueError(msg)
-    if rate.value.value < 0:
-        msg = f"{what} must not be negative"
+    if rate.value.value.is_signed():
+        msg = f"{what} must not be negative (nor negative zero)"
         raise ValueError(msg)
 
 
 class _ComponentBase(DomainModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1]
     name: ComponentName
+    label: Cited[PrintedLabel]
     vat: Cited[VatTreatment]
-
-    def _statuses(self) -> list[Status]:
-        return [self.vat.status]
 
     @property
     def status(self) -> StatusKind:
-        """The weakest status of the component's values (ADR-0004)."""
-        return weakest(self._statuses())
+        """The weakest status of all the component's cited values (ADR-0004)."""
+        return weakest(cited_statuses(self))
 
 
 class FixedCharge(_ComponentBase):
     """A charge per day or per month, whatever the consumption."""
 
-    kind: Literal["fixed_charge"] = "fixed_charge"
+    kind: Literal["fixed_charge"]
     rate: Cited[Rate]
 
     @model_validator(mode="after")
@@ -74,14 +74,11 @@ class FixedCharge(_ComponentBase):
         _require_unit(self.rate, allowed, "a fixed charge")
         return self
 
-    def _statuses(self) -> list[Status]:
-        return [*super()._statuses(), self.rate.status]
-
 
 class FlatEnergy(_ComponentBase):
     """One energy rate for every kWh."""
 
-    kind: Literal["flat_energy"] = "flat_energy"
+    kind: Literal["flat_energy"]
     rate: Cited[Rate]
 
     @model_validator(mode="after")
@@ -89,13 +86,14 @@ class FlatEnergy(_ComponentBase):
         _require_unit(self.rate, {CanonicalUnit.RAND_PER_KWH}, "an energy rate")
         return self
 
-    def _statuses(self) -> list[Status]:
-        return [*super()._statuses(), self.rate.status]
-
 
 class Block(DomainModel):
-    """One inclining block: its rate applies to kWh above the previous threshold, up to
-    `up_to_kwh` (per calendar month). `None` marks the open-ended last block."""
+    """One block: its rate applies to kWh above the previous threshold, up to `up_to_kwh`
+    (per calendar month). `None` marks the open-ended last block.
+
+    kWh are continuous, so a schedule printing "0-50 / 51-350 / >350" means blocks up to
+    50 and up to 350; the printed text is kept in the citation.
+    """
 
     up_to_kwh: Cited[ExactDecimal] | None
     rate: Cited[Rate]
@@ -107,9 +105,10 @@ class Block(DomainModel):
 
 
 class BlockEnergy(_ComponentBase):
-    """Inclining block energy: ordered blocks, the last one open-ended."""
+    """Block energy: ordered blocks, the last one open-ended. Rates usually rise (inclining
+    blocks) but are not required to."""
 
-    kind: Literal["block_energy"] = "block_energy"
+    kind: Literal["block_energy"]
     blocks: Annotated[tuple[Block, ...], Field(min_length=1, max_length=20)]
 
     @model_validator(mode="after")
@@ -130,7 +129,11 @@ class BlockEnergy(_ComponentBase):
         return self
 
     def bounds(self) -> list[tuple[Decimal, Decimal | None]]:
-        """Each block's (from, up to) kWh; the last block's upper bound is `None`."""
+        """Each block's (from, up to) kWh; the last block's upper bound is `None`.
+
+        Gaps cannot occur: only upper bounds are stored, and each block starts where the
+        previous one ends.
+        """
         result: list[tuple[Decimal, Decimal | None]] = []
         lower = Decimal(0)
         for item in self.blocks:
@@ -139,14 +142,6 @@ class BlockEnergy(_ComponentBase):
             if upper is not None:
                 lower = upper
         return result
-
-    def _statuses(self) -> list[Status]:
-        statuses = [*super()._statuses()]
-        for item in self.blocks:
-            statuses.append(item.rate.status)
-            if item.up_to_kwh is not None:
-                statuses.append(item.up_to_kwh.status)
-        return statuses
 
 
 Component = Annotated[FixedCharge | FlatEnergy | BlockEnergy, Field(discriminator="kind")]

@@ -215,6 +215,12 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "Rule 6: production code never imports the test-support package"
+type = "forbidden"
+source_modules = ["munisense"]
+forbidden_modules = ["support"]
+
+[[tool.importlinter.contracts]]
 name = "Rule 5: nothing imports an interface"
 type = "forbidden"
 source_modules = [

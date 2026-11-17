@@ -173,3 +173,21 @@ def weakest(statuses: Iterable[Verified | Estimated | UserProvided]) -> StatusKi
         msg = "cannot summarise the status of no values"
         raise NoStatusesError(msg)
     return min(kinds, key=lambda kind: kind.rank)
+
+
+def cited_statuses(item: object) -> list[Verified | Estimated | UserProvided]:
+    """Every status of every `Cited` value inside `item`, found by walking its fields.
+
+    Walks domain models, tuples, lists and dicts; stops at each `Cited` (its value is the
+    cited fact itself). Deriving statuses this way means a new cited field can never be
+    left out of a component's or version's summary status.
+    """
+    if isinstance(item, Cited):
+        return [item.status]
+    if isinstance(item, DomainModel):
+        return [s for name in type(item).model_fields for s in cited_statuses(getattr(item, name))]
+    if isinstance(item, tuple | list):
+        return [s for element in item for s in cited_statuses(element)]
+    if isinstance(item, dict):
+        return [s for element in item.values() for s in cited_statuses(element)]
+    return []
