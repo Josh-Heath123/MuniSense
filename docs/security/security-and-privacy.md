@@ -15,7 +15,8 @@
 | Control | Phase | Status |
 | --- | --- | --- |
 | Secret scanning (gitleaks) in pre-commit and CI | P0 | planned |
-| Dependency vulnerability audit (pip-audit, `uv run poe audit`) in CI on every run | P0 | planned |
+| Dependency vulnerability audit (pip-audit, `uv run poe audit`) in CI on every run | P0 | task exists (P0-3); CI run planned (P0-6) |
+| Locked dependencies; the lock ignores releases younger than 14 days (`exclude-newer`), as a supply-chain precaution | P0 | built (P0-3) |
 | guard_bash.py blocks the common forms of `git push` to `main`, and fails closed if it crashes (18 tests in `test_guard_bash.py`). Known gaps: pushes driven only by git configuration, and commands hidden in `bash -c`, `eval` or scripts. A pre-commit pre-push hook (P0-5) is planned to narrow the gap; client-side git hooks can be bypassed (`--no-verify`, `core.hooksPath`). "Changes reach `main` only through a pull request the owner merges" is a process rule, not an enforced control: there is no branch protection | P0 | built (PR #2); pre-push hook planned (P0-5) |
 | Claude Code guard hooks (destructive commands, secrets) | P0 | in starter pack, to be proven in P0-7 |
 | guard_files.py: an ADR is immutable when its number is Accepted on `refs/heads/main` or `refs/remotes/origin/main`; an ADR Accepted only on an unmerged branch may be corrected (deliberately looser than before). Falls back to the working-tree file when git cannot answer; fails closed on a crash (15 tests in `test_guard_files.py`). Known gaps: refs are only as fresh as the last `git fetch`; the guard covers Edit and Write only, so Bash (`sed -i`, scripts) can still change files; the "Superseded by" exemption allows any edit whose new text contains those words; the owner's pull-request review is the backstop | P0 | built (`chore/p0-followups`) |

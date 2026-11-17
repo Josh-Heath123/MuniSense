@@ -47,7 +47,7 @@ Decide everything else yourself (names, structure inside a module, test design, 
 
 ## Commands
 
-These are created in Phase 0 (task P0-3). Until then they do not exist.
+These exist from P0-3, except `docker compose` (P0-4) and `alembic` (P2). Run `uv sync` once after cloning.
 
 | Command | What it does |
 | --- | --- |
