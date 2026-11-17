@@ -79,8 +79,13 @@ _Last updated: 2026-11-17, on branch `chore/p0-4-postgres`._
 
 | Phase | Note |
 | --- | --- |
+| P0-5 | gitleaks: run it over the full history and record the result. If it flags the throwaway passwords (`munisense-local-only`, `ci-only-not-a-secret`), allowlist those exact strings only, never whole files or paths. Prove the failing example with a different, high-entropy value |
+| P0-7 | guard_bash blocks the volume-deleting Docker commands: it blocked a P0-4 shell command that merely quoted them (TD-8). P0-7 records this as evidence |
 | P2 | The PDF text-extraction dependency for the citation check must **not** be PyMuPDF (AGPL). pypdf (BSD) or pdfplumber (MIT) are acceptable candidates; the choice still needs the owner's dependency approval |
+| P2 | Database roles: the app and tests connect as a non-superuser role (the local `munisense` user is a superuser); a test fixture refuses to run unless the database name ends in `_test`; settings refuse the published default passwords outside development |
+| P3 | Reviewed tariff drafts must not live only in the Docker volume: committed files are the source of truth (ADR-0003) |
 | Before P5 | Add a build backend (owner approval as a dependency) so the application can run outside the test setup (`package = false` today) |
+| P5 | The logging policy also covers PostgreSQL server logs (failed statements are logged with their text); parameterised queries keep values out of them |
 | Before P5 | Document how to install an urgent security fix that is younger than the 14-day `exclude-newer` window (for example a per-package override, `exclude-newer-package`, with the owner's approval and a `tech-debt.md` row) |
 
 ## Known limitations
@@ -89,6 +94,7 @@ _Last updated: 2026-11-17, on branch `chore/p0-4-postgres`._
 - Hypothesis (approved, MPL-2.0) is added in P1; pre-commit and gitleaks in P0-5.
 - guard_files, format_lint and quality_gate have not yet been seen running inside WSL (P0-7).
 - CI is not a merge gate: there is no branch protection on the free plan, so a red pull request can still be merged by hand. Claude Code merges only on green (E17).
-- PostgreSQL runs locally and in CI with the same image and variable names, but no test connects to it yet; database tests and a driver dependency arrive in P2.
+- PostgreSQL runs locally and in CI from the same image digest; the test connection variable `MUNISENSE_TEST_DATABASE_URL`, the user `munisense` and the database `munisense_test` match, while CI has no development database and its own throwaway password. No test connects to it yet; database tests and a driver dependency arrive in P2.
+- The local database starts with Docker Desktop (`restart: unless-stopped`) until it is stopped with `docker compose stop db`.
 - `ubuntu-latest` is now Ubuntu 26.04, while development runs on Ubuntu 24.04. uv supplies CPython 3.13 on both (the patch level may differ).
 - The tariff facts in `domain/sa-tariffs.md` come from desk research and are not yet verified against primary documents.
