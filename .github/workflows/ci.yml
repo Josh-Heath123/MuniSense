@@ -47,6 +47,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Full history, so gitleaks scans every commit.
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -59,6 +61,18 @@ jobs:
 
       - name: Check the database service is reachable
         run: pg_isready -h localhost -p 5432 -U munisense -d munisense_test
+
+      - name: pre-commit file checks and ruff on all files
+        # gitleaks runs as its own step below (the hook scans staged changes only).
+        env:
+          SKIP: gitleaks
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
+      - name: gitleaks on the full history
+        run: >-
+          docker run --rm -v "$PWD:/repo:ro"
+          zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git /repo --redact --no-banner
 
       - name: uv run poe verify
         run: uv run poe verify

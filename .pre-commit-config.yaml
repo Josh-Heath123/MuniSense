@@ -1,0 +1,61 @@
+# Git hooks (P0-5). Install once per clone:
+#   uv run pre-commit install
+# That installs both hook types below (pre-commit and pre-push).
+# Run everything by hand:  uv run pre-commit run --all-files
+# External hooks are pinned to a commit SHA or an image digest (tag in the comment).
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+
+repos:
+  # Basic file checks (MIT; approved by the owner for P0-5).
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
+    hooks:
+      # The upstream manifest also enables some of these at push time; fixers must not
+      # change files during a push, so every hook here runs at commit time only.
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        stages: [pre-commit]
+      - id: end-of-file-fixer
+        stages: [pre-commit]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        # Source PDFs are committed (ADR-0006); a tariff schedule can be a few MB.
+        args: [--maxkb=10240]
+        stages: [pre-commit]
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      # ruff from the locked dev environment, so the version matches CI exactly.
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix --exit-non-zero-on-fix
+        language: system
+        types_or: [python, pyi]
+
+      # Secret scanning (gitleaks, MIT), official image pinned by digest. Scans the staged changes.
+      - id: gitleaks
+        name: gitleaks (staged changes)
+        language: docker_image
+        entry: zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git --pre-commit --redact --staged --verbose
+        pass_filenames: false
+
+      # Owner decision: nothing is pushed to main; changes arrive through pull requests.
+      # Catches pushes that guard_bash.py cannot see (for example ones made by hand).
+      - id: no-push-to-main
+        name: refuse pushes to main
+        stages: [pre-push]
+        language: system
+        entry: bash -c 'if [ "${PRE_COMMIT_REMOTE_BRANCH:-}" = "refs/heads/main" ]; then echo "Pushing to main is not allowed. Push a branch and open a pull request." >&2; exit 1; fi'
+        pass_filenames: false
+        always_run: true
