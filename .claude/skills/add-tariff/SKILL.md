@@ -7,9 +7,9 @@ disable-model-invocation: true
 
 # /add-tariff
 
-This is the target workflow. The tooling for steps 3, 4 (the deterministic citation check) and 6 is built in P2 and proven end to end in P3. Before then, do as much as the existing code allows and say which steps are not yet possible. Complete each step before starting the next.
+This is the target workflow. The tooling for steps 3, 4 (the deterministic citation check) and 6 is built in P2 and proven end to end in P3; the console publish comes in P6. Before then, do as much as the existing code allows and say which steps are not yet possible. Complete each step before starting the next.
 
-1. **Source.** Find the official document for `$ARGUMENTS`: the municipal tariff schedule or budget annexure, or the Eskom tariff book or rate card. Download only from the supplier's official website, and ask the owner before downloading (the owner has already approved the Ekurhuleni 2026/27 electricity schedule for P1). Record the URL, retrieval date, SHA-256, title, council resolution or approval reference and effective dates. Keep the file under `data/sources/` and commit it (ADR-0006).
+1. **Source.** Find the official document for `$ARGUMENTS`: the municipal tariff schedule or budget annexure, or the Eskom tariff book or rate card. Download only from official sources (the supplier's website, Eskom, NERSA; ADR-0006), and ask the owner before downloading (the owner has already approved the Ekurhuleni 2026/27 electricity schedule for P1). Record the URL, retrieval date, SHA-256, title, council resolution or approval reference and effective dates. Keep the file under `data/sources/` and commit it (ADR-0006).
 2. **Draft.** Transcribe each tariff into the structured draft format. Every value carries:
    - the original text exactly as printed
    - the canonical value and unit

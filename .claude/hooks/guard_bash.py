@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import re
 import shlex
+import subprocess
 import sys
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from _common import OK, block, project_dir, read_input, run
@@ -113,54 +116,175 @@ def recursive_force_rm(command: str) -> bool:
     return False
 
 
+
+
+# --- Pushing to main (owner decision E6) ---------------------------------------
+#
+# Known limits, documented in docs/security/security-and-privacy.md: pushes driven
+# only by git configuration (remote.<name>.push, push.default=upstream on a branch
+# that tracks main) and commands hidden inside `bash -c`, `eval` or scripts are not
+# inspected. The owner merging pull requests remains the main control.
+
 PROTECTED_BRANCH = "main"
-# `git` options that take a separate value, e.g. `git -C path push`.
 GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
-# `git push` options that take a separate value, e.g. `git push -o ci.skip origin x`.
 PUSH_OPTIONS_WITH_VALUE = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
 PUSH_ALL_FLAGS = {"--all", "--mirror", "--branches"}
+WRAPPERS = {"time", "command", "env", "nohup", "exec", "builtin"}
+ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+HEREDOC = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 PUSH_TO_MAIN_REASON = (
     "Pushing to `main` is not allowed. Push a branch and open a pull request; "
     "the owner merges it (decision E6)."
 )
+UNKNOWN_BRANCH = " (The current branch could not be determined, so the guard fails closed.)"
+
+BranchLookup = Callable[[Path], "str | None"]
 
 
-def _push_arguments(tokens: list[str]) -> list[str] | None:
-    """The arguments after `git [options] push`, or None if this is not a git push."""
-    if not tokens or tokens[0] not in {"git", "/usr/bin/git"}:
+def strip_heredoc_bodies(command: str) -> str:
+    """Remove here-document bodies, which are data (commit messages, PR bodies), not commands."""
+    kept: list[str] = []
+    pending: list[str] = []
+    for line in command.split("\n"):
+        if pending:
+            if line.strip() == pending[0]:
+                pending.pop(0)
+            continue
+        kept.append(line)
+        pending.extend(m.group(2) for m in HEREDOC.finditer(line))
+    return "\n".join(kept)
+
+
+def _unquoted_newlines_to_semicolons(command: str) -> str:
+    """Newlines outside quotes separate commands; inside quotes they are text."""
+    out: list[str] = []
+    quote = ""
+    escaped = False
+    for ch in command:
+        if escaped:
+            escaped = False
+        elif ch == "\\" and quote != "'":
+            escaped = True
+        elif quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "'\"":
+            quote = ch
+        elif ch == "\n":
+            ch = ";"
+        out.append(ch)
+    return "".join(out)
+
+
+def simple_commands(command: str) -> list[list[str]]:
+    """Split a shell command into simple commands, respecting quotes and here-documents.
+
+    Raises ValueError for input shlex cannot parse (for example unbalanced quotes).
+    """
+    text = _unquoted_newlines_to_semicolons(strip_heredoc_bodies(command))
+    lexer = shlex.shlex(text, posix=True, punctuation_chars=";&|()")
+    lexer.whitespace_split = True
+    commands: list[list[str]] = [[]]
+    for token in lexer:
+        if token and set(token) <= set(";&|()"):
+            commands.append([])
+        else:
+            commands[-1].append(token)
+    return [c for c in commands if c]
+
+
+def _strip_prefixes(tokens: list[str]) -> list[str]:
+    """Drop `NAME=value` assignments and wrappers such as `time`, `env -i`, `command`."""
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if ASSIGNMENT.match(token):
+            i += 1
+        elif token in WRAPPERS:
+            i += 1
+            while i < len(tokens) and tokens[i].startswith("-"):
+                i += 1
+        else:
+            break
+    return tokens[i:]
+
+
+def _is_git(token: str) -> bool:
+    return token.replace("\\", "/").rsplit("/", 1)[-1].lower() in {"git", "git.exe"}
+
+
+def _push_arguments(tokens: list[str]) -> tuple[list[str], str | None] | None:
+    """(arguments after `push`, the `-C` directory if any), or None if not a git push."""
+    tokens = _strip_prefixes(tokens)
+    if not tokens or not _is_git(tokens[0]):
         return None
+    directory: str | None = None
     i = 1
     while i < len(tokens) and tokens[i].startswith("-"):
-        i += 2 if tokens[i] in GIT_OPTIONS_WITH_VALUE else 1
+        if tokens[i] in GIT_OPTIONS_WITH_VALUE:
+            if tokens[i] == "-C" and i + 1 < len(tokens):
+                directory = tokens[i + 1]
+            i += 2
+        else:
+            i += 1
     if i >= len(tokens) or tokens[i] != "push":
         return None
-    return tokens[i + 1 :]
+    return tokens[i + 1 :], directory
 
 
-def _destination(refspec: str, current_branch: str | None) -> str | None:
-    """The branch a refspec writes to (None if unknown), e.g. `HEAD:main` -> `main`."""
-    dst = refspec.lstrip("+").split(":")[-1]
-    if dst == "HEAD":
-        dst = current_branch or ""
-    dst = dst.removeprefix("refs/heads/")
-    return dst or None
+def _writes_to_main(refspec: str, current_branch: str | None) -> bool | None:
+    """True if the refspec writes to main, False if not, None if that cannot be known."""
+    spec = refspec.lstrip("+")
+    if spec == ":":  # the "matching" refspec pushes every matching branch, main included
+        return True
+    dst = spec.split(":")[-1]
+    if "*" in dst:
+        return True
+    if dst in {"HEAD", "@"}:
+        if current_branch is None:
+            return None
+        dst = current_branch
+    for prefix in ("refs/", "heads/"):
+        dst = dst.removeprefix(prefix)
+    return dst == PROTECTED_BRANCH
 
 
-def push_to_main_reason(command: str, current_branch: str | None) -> str | None:
-    """Why the command would push to the protected branch, or None if it would not.
+def push_to_main_reason(command: str, branch_of: BranchLookup, cwd: Path) -> str | None:
+    """Why the command would push to main, or None if it would not.
 
-    `current_branch` is the checked-out branch (None if unknown). A push without a
-    refspec pushes the current branch, so it is blocked on `main` or when the
-    branch is unknown (fail closed).
+    `branch_of(directory)` returns the branch checked out there, or None if unknown.
+    It is only called when the answer matters. `cwd` is where the command starts;
+    `cd DIR` and `git -C DIR` are followed.
     """
-    for segment in SEGMENT_SPLIT.split(command):
-        try:
-            tokens = shlex.split(segment)
-        except ValueError:
-            tokens = segment.split()
-        args = _push_arguments(tokens)
-        if args is None:
+    try:
+        commands = simple_commands(command)
+    except ValueError:
+        # Unparseable: fall back to a plain search, failing closed.
+        if re.search(r"\bgit\b.*\bpush\b", command):
+            return PUSH_TO_MAIN_REASON + " (The command could not be parsed.)"
+        return None
+
+    directory: Path | None = cwd
+    for tokens in commands:
+        bare = _strip_prefixes(tokens)
+        if bare and bare[0] == "cd":
+            target = bare[1] if len(bare) > 1 else None
+            if target is None or target == "-" or directory is None:
+                directory = None
+            else:
+                directory = directory / Path(target).expanduser()
             continue
+        parsed = _push_arguments(tokens)
+        if parsed is None:
+            continue
+        args, git_dir = parsed
+        push_dir = directory
+        if git_dir is not None and push_dir is not None:
+            push_dir = push_dir / git_dir
+
+        def branch() -> str | None:
+            return branch_of(push_dir) if push_dir is not None else None  # noqa: B023
+
         positional: list[str] = []
         i = 0
         while i < len(args):
@@ -174,42 +298,61 @@ def push_to_main_reason(command: str, current_branch: str | None) -> str | None:
             i += 1
         refspecs = positional[1:]  # positional[0] is the remote
         if not refspecs:
-            if current_branch is None:
-                return PUSH_TO_MAIN_REASON + " (The current branch could not be determined.)"
-            if current_branch == PROTECTED_BRANCH:
+            current = branch()
+            if current is None:
+                return PUSH_TO_MAIN_REASON + UNKNOWN_BRANCH
+            if current == PROTECTED_BRANCH:
                 return PUSH_TO_MAIN_REASON
             continue
-        if any(_destination(r, current_branch) == PROTECTED_BRANCH for r in refspecs):
-            return PUSH_TO_MAIN_REASON
+        needs_branch = any(r.lstrip("+").split(":")[-1] in {"HEAD", "@"} for r in refspecs)
+        current = branch() if needs_branch else None
+        for refspec in refspecs:
+            verdict = _writes_to_main(refspec, current)
+            if verdict is None:
+                return PUSH_TO_MAIN_REASON + UNKNOWN_BRANCH
+            if verdict:
+                return PUSH_TO_MAIN_REASON
     return None
 
 
-def current_branch(data: dict[str, Any]) -> str | None:
-    """The checked-out branch in the project, or None if git cannot say."""
-    result = run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=project_dir(data), timeout=10
-    )
+def current_branch(directory: Path) -> str | None:
+    """The branch checked out in `directory`, or None if git cannot say (never raises)."""
+    try:
+        result = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=directory, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
     branch = result.stdout.strip()
     return branch if result.returncode == 0 and branch and branch != "HEAD" else None
 
 
-def main() -> int:
-    data = read_input()
+def check(data: dict[str, Any]) -> list[str]:
+    """Every reason to block the command in this hook payload."""
     command = str((data.get("tool_input", {}) or {}).get("command", ""))
     if not command:
-        return OK
-
+        return []
     reasons = [reason for pattern, reason in RULES if pattern.search(command)]
     if recursive_force_rm(command):
         reasons.append("`rm -rf` deletes irreversibly. Delete specific files, or ask the owner.")
     if re.search(r"\bpush\b", command):
-        push_reason = push_to_main_reason(command, current_branch(data))
+        cwd = Path(str(data.get("cwd") or project_dir(data)))
+        push_reason = push_to_main_reason(command, current_branch, cwd)
         if push_reason:
             reasons.append(push_reason)
+    return reasons
 
+
+def main() -> int:
+    data = read_input()
+    try:
+        reasons = check(data)
+    except Exception as exc:  # top-level boundary: a crashed guard must block, not allow
+        return block(
+            f"Blocked: .claude/hooks/guard_bash.py crashed ({type(exc).__name__}: {exc}), "
+            "so it fails closed. Tell the owner; do not work around it."
+        )
     if not reasons:
         return OK
-
+    command = str((data.get("tool_input", {}) or {}).get("command", ""))
     return block(
         "Blocked by .claude/hooks/guard_bash.py.\n"
         + "\n".join(f"- {r}" for r in reasons)
