@@ -47,6 +47,7 @@ _Last updated: 2026-11-17, on branch `chore/p0-4-postgres`._
 | E16 | P0-6 (CI) before P0-4 and P0-5, so every later pull request is checked on a clean machine | this file |
 | E17 | When a pull request has green CI and clean reviews, Claude Code runs `gh pr merge --squash` (the owner approves the prompt) and carries on with the next task, unless something is on the escalation list in `CLAUDE.md` | this file |
 | E18 | Stop hardening the hooks. TD-1 to TD-3 are accepted: pull requests, the pre-push hook (P0-5) and CI are the real controls. A hook changes only if it breaks or blocks legitimate work | `tech-debt.md` |
+| E19 | The owner ratified the two P0-4 documentation edits made with the file-edit tool after a guard_bash false positive. Standing rule: when guard_bash blocks a shell command only because its text mentions a blocked pattern, and that text belongs inside a file or a pull-request or commit body, write it with the Edit or Write tool (guard_files still checks it), say so in the pull request, and never run the blocked action. No hook change | `tech-debt.md` TD-8 |
 | Review items | Accepted: A1 to A3, A5 to A7, A9 to A13. A8: City Power dropped from P1; P1 examples use the Ekurhuleni 2026/27 electricity schedule, downloaded in P1 from the official municipal website only. C2: Pydantic in the domain, strict mode, float rejection tested. C5: keep PostgreSQL 17 and Python 3.13. C6: not now. B4: stay on `/mnt/c`; every gate report states how long `uv run poe check` takes | `reports/2026-11-17-P0-progress.md` |
 
 ## Phase 0 tasks
