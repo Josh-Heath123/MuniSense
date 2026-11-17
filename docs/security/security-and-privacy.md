@@ -15,8 +15,8 @@
 | Control | Phase | Status |
 | --- | --- | --- |
 | Secret scanning (gitleaks) in pre-commit and CI | P0 | planned |
-| Dependency vulnerability audit (pip-audit, `uv run poe audit`) in CI on every run | P0 | task exists (P0-3); CI run planned (P0-6) |
-| Locked dependencies; the lock ignores releases younger than 14 days (`exclude-newer`), as a supply-chain precaution | P0 | built (P0-3) |
+| Dependency vulnerability audit (`uv run poe audit`): pip-audit on the exported lock, every locked package for every platform, hashes required | P0 | task exists (P0-3); CI run planned (P0-6) |
+| Locked, hash-verified dependencies from PyPI only; wheels only (`no-build`, so no package build code runs at install); the lock ignores releases younger than 14 days (`exclude-newer`). Gaps: the cutoff is relative and not recorded as a date in the lock; it does not cover `uvx` tools, GitHub Actions or pre-commit hook environments | P0 | built (P0-3) |
 | guard_bash.py blocks the common forms of `git push` to `main`, and fails closed if it crashes (18 tests in `test_guard_bash.py`). Known gaps: pushes driven only by git configuration, and commands hidden in `bash -c`, `eval` or scripts. A pre-commit pre-push hook (P0-5) is planned to narrow the gap; client-side git hooks can be bypassed (`--no-verify`, `core.hooksPath`). "Changes reach `main` only through a pull request the owner merges" is a process rule, not an enforced control: there is no branch protection | P0 | built (PR #2); pre-push hook planned (P0-5) |
 | Claude Code guard hooks (destructive commands, secrets) | P0 | in starter pack, to be proven in P0-7 |
 | guard_files.py: an ADR is immutable when its number is Accepted on `refs/heads/main` or `refs/remotes/origin/main`; an ADR Accepted only on an unmerged branch may be corrected (deliberately looser than before). Falls back to the working-tree file when git cannot answer; fails closed on a crash (15 tests in `test_guard_files.py`). Known gaps: refs are only as fresh as the last `git fetch`; the guard covers Edit and Write only, so Bash (`sed -i`, scripts) can still change files; the "Superseded by" exemption allows any edit whose new text contains those words; the owner's pull-request review is the backstop | P0 | built (`chore/p0-followups`) |
@@ -37,7 +37,7 @@
 | Secret leakage via commits or logs | gitleaks; guard hooks; log policy |
 | Injection (SQL, template) | ORM parameters; auto-escaping templates; no string-built queries |
 | API abuse | Keys, rate limits, size limits (P5) |
-| Supply-chain compromise | Locked dependencies; pip-audit; owner approval for new packages |
+| Supply-chain compromise | Hash-verified lock; wheels only; 14-day release delay; pip-audit on the whole lock; owner approval for new packages |
 | Claude Code acting destructively | Permission rules, guard hooks (including a block on pushing to `main`), pull requests, CI, the owner approving merges. (GitHub branch protection on private repositories needs a paid plan, so it is not relied on.) |
 | Tampered or swapped source documents | Source PDFs are committed and identified by SHA-256. A deterministic check of citations against the committed file is planned for P2 |
 

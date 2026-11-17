@@ -5,6 +5,7 @@ import pkgutil
 
 import munisense
 
+# Keep in step with the import-linter contracts in pyproject.toml.
 EXPECTED = {
     "munisense.domain",
     "munisense.domain.money",

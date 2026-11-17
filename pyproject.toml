@@ -24,7 +24,12 @@ dev = [
 # package through the `src` paths configured below.
 package = false
 # Supply-chain precaution approved by the owner: ignore releases younger than 14 days.
+# The relative value is stored in uv.lock as `exclude-newer-span`; older uv cannot read it.
 exclude-newer = "14 days"
+required-version = ">=0.13.9"
+# Install wheels only: never run a package's build code at install time. A platform
+# without a matching wheel fails instead of building from source.
+no-build = true
 
 # ---------------------------------------------------------------- tasks (poe)
 
@@ -40,7 +45,7 @@ test = { cmd = "pytest --cov --cov-report=term-missing", help = "Full test suite
 lint-imports = { cmd = "lint-imports", env = { PYTHONPATH = "src" }, help = "Architecture contracts" }
 hook-tests = { cmd = "python -m unittest discover -s .claude/hooks/tests", help = "Tests for the Claude Code hooks" }
 verify = { sequence = ["_format-check", "_lint", "_types", "lint-imports", "test", "hook-tests"], help = "Everything CI runs except the audit (works offline)" }
-audit = { cmd = "pip-audit --strict --progress-spinner off", help = "Dependency vulnerability audit (needs network)" }
+audit = { shell = "uv export --frozen --all-groups --no-emit-project --format requirements-txt | pip-audit --strict --disable-pip --require-hashes --progress-spinner off -r /dev/stdin", help = "Audit every locked package, all platforms (needs network)" }
 
 # ------------------------------------------------------------------- ruff
 
@@ -48,9 +53,12 @@ audit = { cmd = "pip-audit --strict --progress-spinner off", help = "Dependency 
 line-length = 100
 target-version = "py313"
 src = ["src", "tests"]
-# .claude/ needs the owner's approval to change, so it is not formatted or linted by
-# the project-wide run yet (tech-debt TD-5).
+# Python only: ruff 0.17 would otherwise also format Markdown, including Accepted ADRs.
+include = ["*.py", "*.pyi", "**/pyproject.toml"]
+# .claude/ needs the owner's approval to change, so ruff leaves it alone, also when a
+# path is passed explicitly (as the format_lint hook does). See tech-debt TD-5.
 extend-exclude = [".claude"]
+force-exclude = true
 
 [tool.ruff.lint]
 select = [
@@ -73,6 +81,8 @@ strict = true
 mypy_path = "src"
 files = ["src", "tests"]
 warn_unreachable = true
+# Test files in different folders may share a name (tests/unit/test_x.py, tests/property/test_x.py).
+explicit_package_bases = true
 
 # ----------------------------------------------------------------- pytest
 
@@ -80,7 +90,7 @@ warn_unreachable = true
 minversion = "9.0"
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = ["-ra", "--strict-markers", "--strict-config"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
 markers = [
     "slow: slow tests, excluded from `poe check`",
     "db: needs PostgreSQL (docker compose up -d db), excluded from `poe check`",
@@ -101,9 +111,10 @@ show_missing = true
 skip_empty = false
 
 # ---------------------------------------------------- import-linter contracts
-# docs/architecture/overview.md, "Dependency rules". Contracts on third-party
-# packages (for example "only persistence imports SQLAlchemy") are added when
-# those packages arrive.
+# docs/architecture/overview.md, "Dependency rules". Contracts on third-party packages
+# (rule 4, only persistence imports SQLAlchemy; and the third-party half of rule 1)
+# are added when those packages arrive (tech-debt TD-6). When a top-level package is
+# added, update these lists and EXPECTED in tests/unit/test_package.py together.
 
 [tool.importlinter]
 root_package = "munisense"
@@ -137,6 +148,8 @@ layers = [
 name = "Rule 3: interfaces use services and platform only"
 type = "forbidden"
 source_modules = ["munisense.api", "munisense.console", "munisense.mcp"]
+# Interfaces reach the domain and persistence through services; only direct imports break.
+allow_indirect_imports = "true"
 forbidden_modules = [
     "munisense.domain",
     "munisense.catalogue",
