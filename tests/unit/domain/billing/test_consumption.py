@@ -66,6 +66,21 @@ def test_an_invalid_time_of_use_profile_is_refused(buckets: str) -> None:
         PROFILE.validate_json(f'{{"kind": "time_of_use", "kwh_by_bucket": {buckets}}}')
 
 
+def test_the_bucket_limits_are_inclusive() -> None:
+    buckets = ", ".join(f'"b{i}": "1"' for i in range(24))
+    profile = PROFILE.validate_json(f'{{"kind": "time_of_use", "kwh_by_bucket": {{{buckets}}}}}')
+    assert isinstance(profile, TimeOfUseBuckets)
+    assert len(profile.kwh_by_bucket) == 24
+    longest = "a" * 32
+    assert longest in TimeOfUseBuckets(kwh_by_bucket={longest: Decimal("1")}).kwh_by_bucket
+    with pytest.raises(ValidationError):
+        TimeOfUseBuckets(kwh_by_bucket={"a" * 33: Decimal("1")})
+
+
+def test_negative_zero_kwh_becomes_zero() -> None:
+    assert not PeriodTotal(kwh=Decimal("-0")).kwh.is_signed()
+
+
 def test_an_unknown_profile_kind_is_refused() -> None:
     with pytest.raises(ValidationError):
         PROFILE.validate_json('{"kind": "interval", "readings": []}')

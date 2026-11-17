@@ -9,15 +9,21 @@ added without a redesign:
   now, but refused by the engine until time-of-use is built in P4.
 """
 
+from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints
+from pydantic import AfterValidator, Field, StringConstraints
 
 from munisense.domain.base import DomainModel
 from munisense.domain.billing.errors import UnsupportedConsumptionError
 from munisense.domain.money import ExactDecimal
 
-Kwh = Annotated[ExactDecimal, Field(ge=0)]
+
+def _no_negative_zero(value: Decimal) -> Decimal:
+    return value.copy_abs() if value.is_zero() else value
+
+
+Kwh = Annotated[ExactDecimal, Field(ge=0), AfterValidator(_no_negative_zero)]
 BucketName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,31}$")]
 
 

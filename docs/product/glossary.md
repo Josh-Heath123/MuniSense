@@ -19,7 +19,9 @@
 | **SSEG** | Small-scale embedded generation: rooftop solar and similar. May earn export credits |
 | **Prepaid** | Electricity bought in advance as tokens. Block thresholds may reset per calendar month |
 | **Prepaid purchase** | One token purchase: a rand amount paid and the kWh received. The kWh depend on earlier purchases in the same month, because they decide which blocks are already used |
-| **Consumption profile** | How consumption is given to the engine: a monthly kWh total, kWh per time-of-use bucket, or (later) interval data |
+| **Consumption profile** | How consumption is given to the engine: a period kWh total, kWh per time-of-use bucket (from P4), or (later) interval data |
+| **Period total** | The kWh used over a whole billing period (`PeriodTotal`). Called a period total, not a monthly total, because billing periods are not always calendar months |
+| **Billing period** | The dates a bill covers, as a half-open range: from the start date up to, but not including, the end date |
 | **Credit meter** | Conventional metered supply billed in arrears |
 | **NERSA** | National Energy Regulator of South Africa. Approves municipal electricity tariff increases annually |
 | **MFMA** | Municipal Finance Management Act. Section 75 requires budget and tariff documents to be published on the municipal website |

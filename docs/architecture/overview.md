@@ -89,7 +89,7 @@ The database is a deterministic projection of the committed tariff files (ADR-00
 
 1. The service resolves the supplier, tariff and versions covering the period (as of now, or as recorded on a given date).
 2. It splits the period at version boundaries and season boundaries. The allocation of consumption across splits is explicit and reported (pro-rata by days unless the supplier's policy says otherwise).
-3. The pure engine evaluates each component for each split and returns line items with component, quantity, rate, amount, citation and status. Consumption arrives as a **profile** (a monthly total now; time-of-use buckets from P4).
+3. The pure engine evaluates each component for each split and returns line items with component, quantity, rate, amount, citation and status. Consumption arrives as a **profile** (a period total now; time-of-use buckets from P4).
 4. VAT and rounding are applied; totals are computed.
 5. The result includes assumptions (for example "consumption pro-rated by days") and warnings (for example "rounding policy estimated").
 
