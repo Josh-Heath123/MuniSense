@@ -47,7 +47,7 @@ Decide everything else yourself (names, structure inside a module, test design, 
 
 ## Commands
 
-These exist from P0-3, except `docker compose` (P0-4) and `alembic` (P2). Run `uv sync` once after cloning.
+These exist from P0-3, except `docker compose` (P0-4), `pre-commit install` (P0-5) and `alembic` (P2). Run `uv sync` once after cloning.
 
 | Command | What it does |
 | --- | --- |
@@ -55,6 +55,7 @@ These exist from P0-3, except `docker compose` (P0-4) and `alembic` (P2). Run `u
 | `uv run poe check` | Lint, type-check and fast tests (the Stop hook runs this) |
 | `uv run poe test` | Full test suite with coverage |
 | `uv run poe verify` | Everything CI runs, except the audit (works offline) |
+| `uv run pre-commit install` | Install the git hooks once per clone: file checks, ruff, gitleaks; a single-ref push to `main` is refused (see the security document for limits) |
 | `uv run poe audit` | pip-audit dependency vulnerability check (needs network; CI always runs it) |
 | `docker compose up -d db` | Start PostgreSQL |
 | `uv run alembic upgrade head` | Apply migrations (from Phase 2) |

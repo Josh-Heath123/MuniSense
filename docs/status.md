@@ -1,11 +1,11 @@
 # Status
 
-_Last updated: 2026-11-17, on branch `chore/p0-4-postgres`._
+_Last updated: 2026-11-17, on branch `chore/p0-5-pre-commit`._
 
 ## Now
 
-- **Phase:** P0 Foundation (in progress). P0-1, P0-2, P0-3, P0-6 and P0-9 are done; P0-4 is in review.
-- **Next task:** P0-5 pre-commit, then P0-7 hook proof and P0-8 gate report.
+- **Phase:** P0 Foundation (in progress). P0-1, P0-2, P0-3, P0-4, P0-6 and P0-9 are done; P0-5 is in review.
+- **Next task:** P0-7 hook proof, then P0-8 gate report.
 - **Blocked on:** nothing. Pull requests with green CI and clean reviews are merged with `gh pr merge --squash` (the owner approves the prompt).
 
 ## Waiting for the owner
@@ -14,6 +14,7 @@ _Last updated: 2026-11-17, on branch `chore/p0-4-postgres`._
 | --- | --- | --- |
 | W1 | Confirm in GitHub Settings → Billing that the Actions spending limit is $0, so CI can never be charged. The repository uses about 1 minute per run of the 2,000 free minutes a month | Check once; R0 |
 | W2 | Optional, free GitHub settings: require actions pinned to a full commit SHA, and allow only GitHub-owned actions plus `astral-sh/setup-uv`; and/or enable Dependabot version updates for GitHub Actions (TD-7) | Turn on the SHA-pinning requirement; decide Dependabot when TD-7 is paid back. These change account settings, so they are the owner's call |
+| W3 | (a) P0-5's criterion "proven by a blocked push" is met only in part: the hook is tested and git's installed hook exits 1 for `main`, but a real push being aborted is moved to P0-7, run by the owner. (b) The pre-commit pre-push hook only sees the first ref of a push (see the security document). Close the gap with a tracked pre-push script that reads every line git sends (it needs `core.hooksPath` or a per-clone install step), or accept it | Accept for now: pull requests, CI and the owner's merges are the controls (E18) |
 
 ## Decided (owner: Josh Heath, 2026-11-17)
 
@@ -42,12 +43,13 @@ _Last updated: 2026-11-17, on branch `chore/p0-4-postgres`._
 | E11 | Reviewers never modify files or evade hooks (all three agent files); `/review` requires a clean tree and compares `git status --porcelain` before and after, reverting any change and reporting it as BLOCKING | `chore/p0-followups` |
 | E12 | `guard_files.py` treats an ADR as Accepted only when it is Accepted on main (falling back to the working-tree file when git cannot answer), so a branch can correct an ADR before the owner merges it | `chore/p0-followups` |
 | E13 | Prepaid golden case match rule: given each purchase's rand amount and the month's earlier purchases, the computed kWh equals the receipt's kWh at the printed precision | `roadmap.md` |
-| E14 | Dev dependencies approved: ruff, mypy, pytest, pytest-cov, import-linter, poethepoet, pip-audit (P0-3); pre-commit, gitleaks (P0-5); hypothesis (P1). The lock ignores releases younger than 14 days (`exclude-newer`) | `pyproject.toml` |
+| E14 | Dev dependencies approved: ruff, mypy, pytest, pytest-cov, import-linter, poethepoet, pip-audit (P0-3); pre-commit, gitleaks, pre-commit-hooks (P0-5; E20); hypothesis (P1). The lock ignores releases younger than 14 days (`exclude-newer`) | `pyproject.toml` |
 | E15 | Licence policy in `quality/standards.md`: permissive licences (MIT, BSD, Apache-2.0, ISC, PSF) are fine; MPL-2.0 and LGPL are fine for unmodified libraries; GPL and AGPL need an ADR. New dependencies still need the owner's approval. certifi and pathspec (MPL-2.0, transitive, dev-only) accepted | `quality/standards.md` |
 | E16 | P0-6 (CI) before P0-4 and P0-5, so every later pull request is checked on a clean machine | this file |
 | E17 | When a pull request has green CI and clean reviews, Claude Code runs `gh pr merge --squash` (the owner approves the prompt) and carries on with the next task, unless something is on the escalation list in `CLAUDE.md` | this file |
 | E18 | Stop hardening the hooks. TD-1 to TD-3 are accepted: pull requests, the pre-push hook (P0-5) and CI are the real controls. A hook changes only if it breaks or blocks legitimate work | `tech-debt.md` |
 | E19 | The owner ratified the two P0-4 documentation edits made with the file-edit tool after a guard_bash false positive. Standing rule: when guard_bash blocks a shell command only because its text mentions a blocked pattern, and that text belongs inside a file or a pull-request or commit body, write it with the Edit or Write tool (guard_files still checks it), say so in the pull request, and never run the blocked action. No hook change | `tech-debt.md` TD-8 |
+| E20 | pre-commit-hooks (MIT) approved for the basic file checks; gitleaks runs from its official Docker image pinned by digest | `.pre-commit-config.yaml` |
 | Review items | Accepted: A1 to A3, A5 to A7, A9 to A13. A8: City Power dropped from P1; P1 examples use the Ekurhuleni 2026/27 electricity schedule, downloaded in P1 from the official municipal website only. C2: Pydantic in the domain, strict mode, float rejection tested. C5: keep PostgreSQL 17 and Python 3.13. C6: not now. B4: stay on `/mnt/c`; every gate report states how long `uv run poe check` takes | `reports/2026-11-17-P0-progress.md` |
 
 ## Phase 0 tasks
@@ -57,11 +59,11 @@ _Last updated: 2026-11-17, on branch `chore/p0-4-postgres`._
 | P0-1 | Verify the development environment | Versions reported for WSL2, git, uv, Python 3.13, Docker and Compose, gh (authenticated) and the GitHub remote. Confirms the working directory is `/mnt/c/MuniSense/MuniSense` and `UV_PROJECT_ENVIRONMENT` points to a Linux path. Missing items listed with exact install commands. Nothing installed by Claude | **done** |
 | P0-2 | Review the documents and ADRs | Written list of contradictions, gaps, risks and disagreements, with reasons. A view on each decision D1 to D10 | **done** |
 | P0-3 | Python project skeleton | Starts with **one approval request listing every dev dependency and its licence**. `pyproject.toml` (Python 3.13, src layout); package folders as in `architecture/overview.md` (empty modules only); dev tools only, no runtime dependencies yet; poe tasks `fmt`, `check`, `test`, `verify`, and a separate `audit` (pip-audit); ruff, mypy strict, pytest, import-linter contracts; one placeholder test; `uv run poe verify` passes; the coverage threshold for P0 is stated in the pull request | **done** (PR #4, merged before CI existed) |
-| P0-4 | Local PostgreSQL | `docker-compose.yml` with PostgreSQL 17, a healthcheck, a named volume and separate dev and test databases. `.env.example` documents the variables. `docker compose up -d db` gives a healthy database | in review (`chore/p0-4-postgres`) |
-| P0-5 | pre-commit | ruff, gitleaks and basic file checks run on commit, and are proven by a failing example. A **pre-push** hook rejects any push whose remote branch (`PRE_COMMIT_REMOTE_BRANCH`) is `main`, catching pushes that the `guard_bash.py` parser cannot see; proven by a blocked push | todo |
+| P0-4 | Local PostgreSQL | `docker-compose.yml` with PostgreSQL 17, a healthcheck, a named volume and separate dev and test databases. `.env.example` documents the variables. `docker compose up -d db` gives a healthy database | **done** (PR #6) |
+| P0-5 | pre-commit | ruff, gitleaks and basic file checks run on commit, and are proven by a failing example. A **pre-push** hook rejects a push whose remote branch (`PRE_COMMIT_REMOTE_BRANCH`, the first ref of the push) is `main`, catching pushes that the `guard_bash.py` parser cannot see; proven by a blocked push | in review (`chore/p0-5-pre-commit`) |
 | P0-6 | Continuous integration | GitHub Actions on `ubuntu-latest` with a `postgres:17` service and `astral-sh/setup-uv` runs `uv run poe verify` (which includes the hook tests in `.claude/hooks/tests/`) and `uv run poe audit`, with `UV_LOCKED=1` so a stale lock fails instead of being re-resolved on pull requests and on pushes to main. A pull request shows green. The current free Actions allowance is re-checked | **done** (PR #5) |
 | P0-9 | Block pushes to `main` (E6) | `guard_bash.py` blocks `git push` to `main` (explicit refspecs, `HEAD:main`, and a bare `git push` while on `main`); tests show blocked and allowed cases. Needs the owner's approval because it changes `.claude/` | **done** (PR #2) |
-| P0-7 | Prove the hooks inside WSL | Evidence, from a WSL session, that each hook blocks or acts as documented: guard_bash (including the push-to-main rule), guard_files, format_lint, quality_gate, session_context | todo |
+| P0-7 | Prove the hooks inside WSL | Evidence, from a WSL session, that each hook blocks or acts as documented: guard_bash (including the push-to-main rule), the pre-commit pre-push hook aborting a real push to `main` (run by the owner against a throwaway local bare repository, never GitHub), guard_files, format_lint, quality_gate, session_context | todo |
 | P0-8 | Gate report | `/report gate` saved in `docs/reports/`, including how long `uv run poe check` takes | todo |
 
 ## Done
@@ -69,6 +71,7 @@ _Last updated: 2026-11-17, on branch `chore/p0-4-postgres`._
 | Task | Evidence |
 | --- | --- |
 | P0-1 Verify the environment | `reports/2026-11-17-P0-progress.md`, section "P0-1 re-run inside WSL": every item green, run from WSL `Ubuntu` 24.04 |
+| P0-5 pre-commit | `.pre-commit-config.yaml`: every hook runs a locally installed tool. File checks from pre-commit-hooks 6.0.0 and ruff, both in the lock; gitleaks v8.30.1 from the official image pinned by digest, run with `--network none` and a read-only mount; a pre-push hook refusing `refs/heads/main`, which fails closed when the ref is unknown. `uv run pre-commit run --all-files`: all pass. **Failing examples:** a staged file with trailing whitespace, an unused import and a random 40-character key failed trailing-whitespace, ruff check and gitleaks (`generic-api-key`, redacted); the gitleaks hook was re-checked after it moved to the read-only, offline form (`leaks found: 1`). **Pre-push:** `tests/unit/test_pre_push_hook.py` runs the hook's real entry: exit 1 for `refs/heads/main` and for an unknown ref, exit 0 for other branches. git's installed pre-push hook, fed git's stdin for a branch pushed to `refs/heads/main`, exits 1. **Not shown:** a real `git push` being aborted (guard_bash blocks Claude from trying; owner, P0-7). **Known gaps:** deleting `main`, multi-ref pushes and pushes with a stale local view of `main` (see the security document). **gitleaks over the full history:** 26 commits in CI, no leaks, no allowlist needed. CI also fails on in-repository gitleaks allowlists |
 | P0-4 Local PostgreSQL | `docker compose up -d db`: healthy in about 26 s on first start; PostgreSQL 17.12, same image digest as CI. Databases `munisense_dev` and `munisense_test` both exist (init script). Password login over TCP to `127.0.0.1:5432` works and a wrong password is rejected. Data survives `docker compose down` and `up` (named volume `munisense_db-data`). The port is bound to `127.0.0.1` only. The example settings file documents every variable; CI sets the same `MUNISENSE_TEST_DATABASE_URL` |
 | P0-6 Continuous integration | `.github/workflows/ci.yml`: ubuntu-latest, `postgres:17` service pinned by digest (healthy; `pg_isready` step), uv 0.13.9 via `astral-sh/setup-uv`, actions pinned by commit SHA, `UV_LOCKED=1`, read-only token, 15-minute timeout. Green on the final commit ([run](https://github.com/Josh-Heath123/MuniSense/actions/runs/44089672628)) and on `main` after the merge ([run](https://github.com/Josh-Heath123/MuniSense/actions/runs/44090027467)). **Shown to fail** on: a lint error ([run](https://github.com/Josh-Heath123/MuniSense/actions/runs/44085470862), ruff), a type error ([run](https://github.com/Josh-Heath123/MuniSense/actions/runs/44085568527), mypy), a stale lock ([run](https://github.com/Josh-Heath123/MuniSense/actions/runs/44086990624): `The lockfile at uv.lock needs to be updated, but UV_LOCKED=1 was provided`) and a failing test ([run](https://github.com/Josh-Heath123/MuniSense/actions/runs/44087740947): `1 failed`, `Sequence aborted after failed subtask 'test'`). About 1 billed minute per run. Free allowance re-checked on 2026-11-17 against public sources only: [GitHub's pricing page](https://github.com/pricing) still lists 2,000 minutes a month for private repositories on Free; the [2026 pricing change](https://github.com/resources/insights/2026-pricing-changes-for-github-actions) builds a platform charge into hosted-runner rates; the account's own billing page was **not** checked (needs a broader token scope), hence W1 |
 | P0-3 Python project skeleton | `uv run poe verify` passes: ruff format and lint clean, mypy strict clean (15 source files), 5 import-linter contracts kept, and **each contract shown to break** on a deliberate violation (Rule 3 also shown to allow `api -> services -> domain`), 1 test passed, 33 hook tests passed. `uv run poe audit` audits all 46 locked packages for every platform (exported lock, hashes required): no known vulnerabilities. Wheels only (`no-build`). `uv run poe check`: 4.0 to 4.8 s on `/mnt/c`. Licences: no GPL or AGPL; MPL-2.0 for hypothesis (approved) and, transitively and dev-only, certifi and pathspec (accepted, E15); PSF for defusedxml and typing-extensions; the rest MIT, BSD or Apache |
@@ -80,11 +83,11 @@ _Last updated: 2026-11-17, on branch `chore/p0-4-postgres`._
 
 | Phase | Note |
 | --- | --- |
-| P0-5 | gitleaks: run it over the full history and record the result. If it flags the throwaway passwords (`munisense-local-only`, `ci-only-not-a-secret`), allowlist those exact strings only, never whole files or paths. Prove the failing example with a different, high-entropy value |
 | P0-7 | guard_bash blocks the volume-deleting Docker commands: it blocked a P0-4 shell command that merely quoted them (TD-8). P0-7 records this as evidence |
 | P2 | The PDF text-extraction dependency for the citation check must **not** be PyMuPDF (AGPL). pypdf (BSD) or pdfplumber (MIT) are acceptable candidates; the choice still needs the owner's dependency approval |
 | P2 | Database roles: the app and tests connect as a non-superuser role (the local `munisense` user is a superuser); a test fixture refuses to run unless the database name ends in `_test`; settings refuse the published default passwords outside development |
 | P3 | Reviewed tariff drafts must not live only in the Docker volume: committed files are the source of truth (ADR-0003) |
+| P3 | POPIA: pre-commit stashes unstaged changes as patch files in `~/.cache/pre-commit/`; real bills must never be left unstaged in the working tree (keep them in git-ignored `data/private/`) |
 | Before P5 | Add a build backend (owner approval as a dependency) so the application can run outside the test setup (`package = false` today) |
 | P5 | The logging policy also covers PostgreSQL server logs (failed statements are logged with their text); parameterised queries keep values out of them |
 | Before P5 | Document how to install an urgent security fix that is younger than the 14-day `exclude-newer` window (for example a per-package override, `exclude-newer-package`, with the owner's approval and a `tech-debt.md` row) |
@@ -92,10 +95,13 @@ _Last updated: 2026-11-17, on branch `chore/p0-4-postgres`._
 ## Known limitations
 
 - No application code exists yet: the package holds empty modules, so the 100% coverage reported in P0 is vacuous.
-- Hypothesis (approved, MPL-2.0) is added in P1; pre-commit and gitleaks in P0-5.
+- Hypothesis (approved, MPL-2.0) is added in P1.
 - guard_files, format_lint and quality_gate have not yet been seen running inside WSL (P0-7).
 - CI is not a merge gate: there is no branch protection on the free plan, so a red pull request can still be merged by hand. Claude Code merges only on green (E17).
 - PostgreSQL runs locally and in CI from the same image digest; the test connection variable `MUNISENSE_TEST_DATABASE_URL`, the user `munisense` and the database `munisense_test` match, while CI has no development database and its own throwaway password. No test connects to it yet; database tests and a driver dependency arrive in P2.
+- pre-commit hooks must be installed once per clone: `uv run pre-commit install`. Committing needs Docker running (the gitleaks hook blocks the commit otherwise), and the gitleaks hook does not work in a `git worktree`. Docker's Windows credential helper (`credsStore: desktop.exe`) failed once when pre-commit pulled the gitleaks image; a plain `docker pull` of the same pinned image worked.
+- The pre-push hook does not catch deleting `main`, multi-ref pushes or pushes with a stale view of `main`; without branch protection, the owner's review of merges and CI remain the controls (W3).
+- In CI, the large-file check checks nothing (it looks at staged files only).
 - The local database starts with Docker Desktop (`restart: unless-stopped`) until it is stopped with `docker compose stop db`.
 - `ubuntu-latest` is now Ubuntu 26.04, while development runs on Ubuntu 24.04. uv supplies CPython 3.13 on both (the patch level may differ).
 - The tariff facts in `domain/sa-tariffs.md` come from desk research and are not yet verified against primary documents.

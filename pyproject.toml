@@ -8,7 +8,8 @@ requires-python = "==3.13.*"
 dependencies = []
 
 [dependency-groups]
-# Approved by the owner on 2026-11-17 (P0-3). pre-commit is added in P0-5, hypothesis in P1.
+# Approved by the owner on 2026-11-17 (P0-3; pre-commit and pre-commit-hooks in P0-5).
+# hypothesis is added in P1.
 dev = [
     "ruff>=0.15",
     "mypy>=2.0",
@@ -17,6 +18,8 @@ dev = [
     "import-linter>=2.10",
     "poethepoet>=0.40",
     "pip-audit>=2.10",
+    "pre-commit>=4.0",
+    "pre-commit-hooks>=6.0",
 ]
 
 [tool.uv]
