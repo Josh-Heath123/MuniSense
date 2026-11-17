@@ -1,6 +1,6 @@
 # Product requirements: MuniSense MVP
 
-_Status: approved by the owner on 2026-11-17 (decisions D1 to D3 and E2, E5 in `status.md`)._
+_Status: decisions D1 to D3, E2 and E5 approved by the owner on 2026-11-17 (`status.md`); this text is approved when the owner merges the `docs/accept-decisions` pull request._
 
 ## Problem
 
@@ -53,7 +53,7 @@ Buyer interviews (the owner's parallel track) will confirm or change this table 
 
 ## Success measures for the validated MVP (end of P9)
 
-- At least 10 real Ekurhuleni golden cases reproduced to the cent (P3). A prepaid golden case is a whole month of purchases.
+- At least 10 real Ekurhuleni golden cases reproduced (P3). A prepaid golden case is a whole month of purchases, matched by amount to the cent and kWh at the receipt's printed precision.
 - Golden bills passing for every pilot supplier (P8).
 - Pilot users confirm accuracy on their own bills.
 - An intent-to-pay pass mark, agreed with the owner before P9, is met.

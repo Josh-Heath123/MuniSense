@@ -36,7 +36,7 @@
 | API abuse | Keys, rate limits, size limits (P5) |
 | Supply-chain compromise | Locked dependencies; pip-audit; owner approval for new packages |
 | Claude Code acting destructively | Permission rules, guard hooks (including a block on pushing to `main`), pull requests, CI, the owner approving merges. (GitHub branch protection on private repositories needs a paid plan, so it is not relied on.) |
-| Tampered or swapped source documents | Source PDFs are committed and identified by SHA-256; citations are checked against the committed file |
+| Tampered or swapped source documents | Source PDFs are committed and identified by SHA-256. A deterministic check of citations against the committed file is planned for P2 |
 
 ## POPIA register
 
@@ -59,3 +59,4 @@
 - [ ] Terms of service and limitation of liability for calculation errors (Consumer Protection Act and ECTA considerations). Needed before any public calculator (decided at P9).
 - [ ] Tax: VAT registration and invoicing requirements once revenue starts (accountant).
 - [ ] Trademark and domain checks for the product name.
+- [ ] Before the repository is ever made public: review whether the committed municipal and Eskom source PDFs may be republished.

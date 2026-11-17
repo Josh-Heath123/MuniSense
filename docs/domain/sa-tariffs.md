@@ -54,7 +54,7 @@ The Municipal Property Rates Act prohibits rates on the first R15,000 of a resid
 
 | Question | Resolve by | Phase |
 | --- | --- | --- |
-| How each supplier rounds (per line or per bill; cents or rands; VAT per line or on the subtotal) | Real bills | P3 |
+| How each supplier rounds (per line or per bill; cents or rands; VAT per line or on the subtotal) | Real bills. Prepaid receipts show only amount and kWh, so VAT and line rounding need credit bills | P3 |
 | How periods straddling 1 July are pro-rated | Real bills and tariff policies | P3 |
 | When prepaid blocks reset, and how a purchase is split across blocks | Policies and whole months of the owner's prepaid receipts | P3 |
 | Public-holiday treatment in time-of-use calendars | Eskom and municipal schedules | P4 |

@@ -21,7 +21,7 @@ The goal is evidence that MuniSense calculates bills correctly and refuses when 
 - `uv run poe check` runs ruff, mypy and tests not marked `slow` or `db`. This is the fast loop and what the Stop hook runs.
 - `uv run poe test` runs all tests with coverage (needs `docker compose up -d db`).
 - `uv run poe verify` runs everything CI runs except the audit, including import-linter. It works offline.
-- `uv run poe audit` runs pip-audit, which needs network access. CI always runs it.
+- `uv run poe audit` runs pip-audit, which needs network access. CI always runs it, and a finding fails CI. A finding is ignored only with the owner's approval, an ignore entry naming the vulnerability, and a `tech-debt.md` row with a pay-back trigger.
 - Every gate report states how long `uv run poe check` takes (the repository is on `/mnt/c`, which is slower from WSL; ADR-0010).
 - Mutation testing runs at the end of P1 and P4, and before each gate when `domain.billing` changed (slow; not in CI by default).
 

@@ -6,14 +6,15 @@ _Last updated: 2026-11-17, on branch `docs/accept-decisions` (owner's decisions 
 
 - **Phase:** P0 Foundation (in progress). P0-1 and P0-2 are done.
 - **Next task:** P0-3 Python project skeleton, starting with one dependency approval request. It starts after the owner merges the `docs/accept-decisions` pull request.
-- **Blocked on:** the owner merging the `docs/accept-decisions` pull request, and approving the `.claude/` change for P0-9 (see below).
+- **Blocked on:** the owner merging the `docs/accept-decisions` pull request. P0-9 (push guard) waits separately for the owner's approval of a `.claude/` change; P0-3 does not depend on it.
 
 ## Waiting for the owner
 
 | ID | Question | Recommendation |
 | --- | --- | --- |
 | W1 | Merge the `docs/accept-decisions` pull request | Merge. CI does not exist yet (P0-6), so it has no checks |
-| W2 | Approve the `.claude/` change for P0-9: a `guard_bash.py` rule blocking `git push` to `main`, with tests; plus renumbering phases and the `data/sources/` note in `.claude/skills/add-tariff/SKILL.md` | Approve. It is small and can be undone |
+| W2 | Approve `.claude/` changes: (a) P0-9, a `guard_bash.py` rule blocking `git push` to `main`, with tests; (b) bringing skills and agents in line with the decisions: `skills/add-tariff/SKILL.md` (phase numbers, committed sources, stricter `verified`, publish writes the tariff file), `agents/tariff-verifier.md` (stricter `verified`), `skills/verify/SKILL.md` (run `poe audit` separately), `skills/report/SKILL.md` (time `poe check`) | Approve. Small and can be undone |
+| W3 | P3 gate: "at least 10 golden cases" with a prepaid case being a whole month means 10 whole months of receipts, but only about 4 complete months exist under the 2026/27 schedule (from 1 July 2026) | Load the 2025/26 schedule as well in P3 (ADR-0007 already covers history from 2025/26), so earlier months count |
 
 ## Decided (owner: Josh Heath, 2026-11-17)
 
