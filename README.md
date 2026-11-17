@@ -44,7 +44,7 @@ Phase 0 creates these commands:
 cp .env.example .env        # optional: local settings (the defaults work)
 docker compose up -d db     # PostgreSQL 17: databases munisense_dev and munisense_test
 uv sync                     # install locked dependencies
-uv run pre-commit install   # git hooks: file checks, ruff, gitleaks; refuses pushes to main
+uv run pre-commit install   # git hooks: file checks, ruff, gitleaks; refuses a push to main
 uv run poe check            # lint, types, fast tests
 uv run poe verify           # everything CI runs (offline)
 uv run poe audit            # dependency vulnerability audit (needs network)

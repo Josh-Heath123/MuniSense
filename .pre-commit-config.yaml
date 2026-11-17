@@ -2,35 +2,59 @@
 #   uv run pre-commit install
 # That installs both hook types below (pre-commit and pre-push).
 # Run everything by hand:  uv run pre-commit run --all-files
-# External hooks are pinned to a commit SHA or an image digest (tag in the comment).
+#
+# Every hook runs a locally installed tool: pre-commit-hooks and ruff come from the
+# locked dev environment (hash-checked, wheels only, 14-day delay, audited), and
+# gitleaks from its official image pinned by digest. pre-commit downloads nothing.
 default_install_hook_types: [pre-commit, pre-push]
 default_stages: [pre-commit]
 
 repos:
-  # Basic file checks (MIT; approved by the owner for P0-5).
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
-    hooks:
-      # The upstream manifest also enables some of these at push time; fixers must not
-      # change files during a push, so every hook here runs at commit time only.
-      - id: trailing-whitespace
-        args: [--markdown-linebreak-ext=md]
-        stages: [pre-commit]
-      - id: end-of-file-fixer
-        stages: [pre-commit]
-      - id: mixed-line-ending
-        args: [--fix=lf]
-      - id: check-yaml
-      - id: check-toml
-      - id: check-merge-conflict
-      - id: check-added-large-files
-        # Source PDFs are committed (ADR-0006); a tariff schedule can be a few MB.
-        args: [--maxkb=10240]
-        stages: [pre-commit]
-      - id: detect-private-key
-
   - repo: local
     hooks:
+      # Basic file checks: pre-commit-hooks (MIT; owner-approved in P0-5), from the lock.
+      - id: trailing-whitespace
+        name: trim trailing whitespace
+        entry: uv run trailing-whitespace-fixer --markdown-linebreak-ext=md
+        language: system
+        types: [text]
+      - id: end-of-file-fixer
+        name: fix end of files
+        entry: uv run end-of-file-fixer
+        language: system
+        types: [text]
+      - id: mixed-line-ending
+        name: mixed line ending
+        entry: uv run mixed-line-ending --fix=lf
+        language: system
+        types: [text]
+      - id: check-yaml
+        name: check yaml
+        entry: uv run check-yaml
+        language: system
+        types: [yaml]
+      - id: check-toml
+        name: check toml
+        entry: uv run check-toml
+        language: system
+        types: [toml]
+      - id: check-merge-conflict
+        name: check for merge conflicts
+        entry: uv run check-merge-conflict
+        language: system
+        types: [text]
+      - id: check-added-large-files
+        name: check for added large files
+        # Source PDFs are committed (ADR-0006); a tariff schedule can be a few MB.
+        # Checks staged files only, so `run --all-files` (as in CI) checks nothing here.
+        entry: uv run check-added-large-files --maxkb=10240
+        language: system
+      - id: detect-private-key
+        name: detect private key
+        entry: uv run detect-private-key
+        language: system
+        types: [text]
+
       # ruff from the locked dev environment, so the version matches CI exactly.
       - id: ruff-format
         name: ruff format
@@ -43,19 +67,29 @@ repos:
         language: system
         types_or: [python, pyi]
 
-      # Secret scanning (gitleaks, MIT), official image pinned by digest. Scans the staged changes.
+      # Secret scanning (gitleaks, MIT): official image pinned by digest (v8.30.1).
+      # Read-only mount and no network: the container can neither change the repository
+      # nor send anything anywhere. Needs Docker running; fails (blocks the commit) if not.
       - id: gitleaks
         name: gitleaks (staged changes)
-        language: docker_image
-        entry: zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git --pre-commit --redact --staged --verbose
+        language: system
+        entry: >-
+          bash -c 'exec docker run --rm --network none -u "$(id -u):$(id -g)"
+          -v "$PWD:/repo:ro" -w /repo
+          zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git --pre-commit --redact --staged --no-banner'
         pass_filenames: false
 
       # Owner decision: nothing is pushed to main; changes arrive through pull requests.
-      # Catches pushes that guard_bash.py cannot see (for example ones made by hand).
+      # Limits (pre-commit passes only one ref per push): see docs/security/security-and-privacy.md.
+      # Fails closed when the remote branch is unknown.
       - id: no-push-to-main
         name: refuse pushes to main
         stages: [pre-push]
         language: system
-        entry: bash -c 'if [ "${PRE_COMMIT_REMOTE_BRANCH:-}" = "refs/heads/main" ]; then echo "Pushing to main is not allowed. Push a branch and open a pull request." >&2; exit 1; fi'
+        entry: >-
+          bash -c 'branch="${PRE_COMMIT_REMOTE_BRANCH:-}";
+          if [ -z "$branch" ]; then echo "Remote branch unknown; refusing the push." >&2; exit 1; fi;
+          if [ "$branch" = "refs/heads/main" ]; then echo "Pushing to main is not allowed. Push a branch and open a pull request." >&2; exit 1; fi'
         pass_filenames: false
         always_run: true
