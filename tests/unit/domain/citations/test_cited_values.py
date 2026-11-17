@@ -11,8 +11,10 @@ from munisense.domain.citations import (
     Cited,
     Estimated,
     NoStatusesError,
+    ProvidedBy,
     StatusKind,
     TextCheck,
+    UnparameterisedCitedError,
     UserProvided,
     Verified,
     weakest,
@@ -20,27 +22,32 @@ from munisense.domain.citations import (
 from munisense.domain.money import ExactDecimal, Rate, RateUnit
 
 SHA = "a" * 64
+CITATION_FIELDS: dict[str, object] = {
+    "document_sha256": SHA,
+    "page": 7,
+    "locator": "Table 1, row 'Block 1'",
+    "printed_text": "234.67",
+}
 
 
 def citation(**overrides: object) -> Citation:
-    fields: dict[str, object] = {
-        "document_sha256": SHA,
-        "page": 7,
-        "locator": "Table 1, row 'Block 1'",
-        "printed_text": "234.67",
-    }
-    fields.update(overrides)
-    return Citation.model_validate(fields)
+    return Citation.model_validate(CITATION_FIELDS | overrides)
 
 
 VERIFIED = Verified(
     verifier="owner",
+    verifier_kind="human",
     method="compared with the printed page",
     verified_on=date(2026, 11, 17),
     text_check=TextCheck.PASSED,
 )
 ESTIMATED = Estimated(reason="citation check not built until P2")
-USER = UserProvided(provided_by="owner, from a prepaid receipt")
+USER = UserProvided(provided_by=ProvidedBy.OWNER_PREPAID_RECEIPT)
+STATUS_JSON = '{"kind": "estimated", "reason": "fixture"}'
+
+
+def _citation_json() -> str:
+    return citation().model_dump_json()
 
 
 # -------------------------------------------------------------------------- citation
@@ -51,6 +58,10 @@ def test_a_citation_keeps_document_page_locator_and_printed_text() -> None:
     assert (cited.page, cited.printed_text) == (7, "234.67")
 
 
+def test_printed_text_is_kept_exactly_including_newlines() -> None:
+    assert citation(printed_text=" 234.67\n c/kWh").printed_text == " 234.67\n c/kWh"
+
+
 @pytest.mark.parametrize(
     "overrides",
     [
@@ -59,10 +70,17 @@ def test_a_citation_keeps_document_page_locator_and_printed_text() -> None:
         {"page": 0},
         {"page": 1.0},
         {"page": "7"},
+        {"page": True},
         {"locator": ""},
-        {"printed_text": ""},
-        {"printed_text": "x" * 501},
+        {"locator": "   "},
         {"locator": "x" * 201},
+        {"locator": "row\x1b[31m"},
+        {"locator": "row\nforged log line"},
+        {"printed_text": ""},
+        {"printed_text": " "},
+        {"printed_text": "\n"},
+        {"printed_text": "x" * 501},
+        {"printed_text": "1\x00"},
     ],
 )
 def test_an_invalid_citation_is_refused(overrides: dict[str, object]) -> None:
@@ -73,6 +91,12 @@ def test_an_invalid_citation_is_refused(overrides: dict[str, object]) -> None:
 # --------------------------------------------------------------------------- statuses
 
 
+def test_a_valid_status_round_trips_in_python_mode() -> None:
+    # Positive control for the refusals below: the round trip itself is valid.
+    assert Verified.model_validate(VERIFIED.model_dump()) == VERIFIED
+    assert Estimated.model_validate({"kind": "estimated", "reason": "x"}).reason == "x"
+
+
 def test_estimated_needs_a_reason() -> None:
     with pytest.raises(ValidationError):
         Estimated(reason="")
@@ -80,31 +104,46 @@ def test_estimated_needs_a_reason() -> None:
         Estimated(reason="   ")
 
 
-def test_user_provided_needs_who_provided_it() -> None:
-    with pytest.raises(ValidationError):
-        UserProvided(provided_by="")
-
-
-@pytest.mark.parametrize("field", ["verifier", "method"])
-def test_verified_needs_a_verifier_and_a_method(field: str) -> None:
-    fields = VERIFIED.model_dump()
-    fields[field] = ""
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("verifier", ""),
+        ("verifier", "Jane Doe"),  # a handle, never a name
+        ("verifier", "jane@example.org"),
+        ("verifier_kind", "agent"),  # ADR-0006: an agent's check alone is not enough
+        ("method", ""),
+    ],
+)
+def test_verified_needs_a_human_verifier_handle_and_a_method(field: str, value: str) -> None:
+    fields = VERIFIED.model_dump() | {field: value}
     with pytest.raises(ValidationError):
         Verified.model_validate(fields)
 
 
+@pytest.mark.parametrize("provided_by", ["", "Jane Doe, account 1234567", "owner"])
+def test_user_provided_takes_a_source_category_not_free_text(provided_by: str) -> None:
+    with pytest.raises(ValidationError):
+        UserProvided.model_validate({"provided_by": provided_by})
+
+
+def test_fields_of_another_status_kind_are_refused() -> None:
+    with pytest.raises(ValidationError):
+        Estimated.model_validate({"kind": "estimated", "reason": "x", "verifier": "owner"})
+
+
 def test_a_status_is_read_from_json_by_its_kind() -> None:
     cited = Cited[ExactDecimal].model_validate_json(
-        '{"value": "1.5", "citation": null, "status": {"kind": "estimated", "reason": "fixture"}}'
+        f'{{"value": "1.5", "citation": {_citation_json()}, "status": {STATUS_JSON}}}'
     )
     assert isinstance(cited.status, Estimated)
-    assert cited.status.kind is StatusKind.ESTIMATED
+    assert cited.kind is StatusKind.ESTIMATED
 
 
 def test_an_unknown_status_kind_is_refused() -> None:
     with pytest.raises(ValidationError):
         Cited[ExactDecimal].model_validate_json(
-            '{"value": "1.5", "citation": null, "status": {"kind": "guessed", "reason": "x"}}'
+            f'{{"value": "1.5", "citation": {_citation_json()},'
+            ' "status": {"kind": "guessed", "reason": "x"}}'
         )
 
 
@@ -118,23 +157,32 @@ def test_a_cited_value_holds_any_domain_value() -> None:
     assert cited.kind is StatusKind.ESTIMATED
 
 
-def test_a_verified_value_needs_a_citation() -> None:
+@pytest.mark.parametrize("status", [VERIFIED, ESTIMATED, USER])
+def test_every_cited_value_needs_a_citation_whatever_its_status(
+    status: Verified | Estimated | UserProvided,
+) -> None:
+    # ADR-0006: each value has its own citation.
     with pytest.raises(ValidationError):
-        Cited[ExactDecimal](value=Decimal("1"), citation=None, status=VERIFIED)
-
-
-def test_an_estimated_or_user_provided_value_may_lack_a_citation() -> None:
-    # For example a rounding rule inferred from bills, or a figure from a user's receipt.
-    assert Cited[ExactDecimal](value=Decimal("1"), citation=None, status=ESTIMATED).citation is None
-    assert Cited[ExactDecimal](value=Decimal("1"), citation=None, status=USER).citation is None
+        Cited[ExactDecimal].model_validate(
+            {"value": Decimal("1"), "citation": None, "status": status}
+        )
 
 
 def test_a_cited_value_still_refuses_floats() -> None:
     with pytest.raises(ValidationError):
-        Cited[ExactDecimal].model_validate({"value": 1.5, "citation": None, "status": ESTIMATED})
+        Cited[ExactDecimal].model_validate(
+            {"value": 1.5, "citation": citation(), "status": ESTIMATED}
+        )
     with pytest.raises(ValidationError):
         Cited[ExactDecimal].model_validate_json(
-            '{"value": 1.5, "citation": null, "status": {"kind": "estimated", "reason": "x"}}'
+            f'{{"value": 1.5, "citation": {_citation_json()}, "status": {STATUS_JSON}}}'
+        )
+
+
+def test_an_unparameterised_cited_refuses_to_validate() -> None:
+    with pytest.raises(UnparameterisedCitedError):
+        Cited.model_validate_json(
+            f'{{"value": 1.5, "citation": {_citation_json()}, "status": {STATUS_JSON}}}'
         )
 
 
@@ -145,11 +193,8 @@ def test_a_cited_value_round_trips_through_json_exactly() -> None:
 
 
 def test_a_scanned_page_is_recorded_as_such_when_verified() -> None:
-    status = Verified(
-        verifier="owner",
-        method="read the scanned page",
-        verified_on=date(2026, 11, 17),
-        text_check=TextCheck.NO_TEXT_LAYER,
+    status = Verified.model_validate(
+        VERIFIED.model_dump() | {"text_check": TextCheck.NO_TEXT_LAYER}
     )
     assert status.text_check is TextCheck.NO_TEXT_LAYER
 
@@ -161,8 +206,8 @@ def test_a_scanned_page_is_recorded_as_such_when_verified() -> None:
     ("statuses", "expected"),
     [
         ([VERIFIED], StatusKind.VERIFIED),
-        ([VERIFIED, USER], StatusKind.USER_PROVIDED),
-        ([USER, VERIFIED, ESTIMATED], StatusKind.ESTIMATED),
+        ([VERIFIED, ESTIMATED], StatusKind.ESTIMATED),
+        ([ESTIMATED, VERIFIED, USER], StatusKind.USER_PROVIDED),
         ([ESTIMATED, ESTIMATED], StatusKind.ESTIMATED),
     ],
 )
@@ -177,5 +222,5 @@ def test_weakest_of_nothing_is_refused() -> None:
         weakest([])
 
 
-def test_status_order_is_estimated_then_user_provided_then_verified() -> None:
-    assert StatusKind.ESTIMATED.rank < StatusKind.USER_PROVIDED.rank < StatusKind.VERIFIED.rank
+def test_status_order_is_user_provided_then_estimated_then_verified() -> None:
+    assert StatusKind.USER_PROVIDED.rank < StatusKind.ESTIMATED.rank < StatusKind.VERIFIED.rank

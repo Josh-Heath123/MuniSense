@@ -1,10 +1,11 @@
 """Per-value citations and verification statuses (ADR-0006)."""
 
-from munisense.domain.citations.errors import NoStatusesError
+from munisense.domain.citations.errors import NoStatusesError, UnparameterisedCitedError
 from munisense.domain.citations.model import (
     Citation,
     Cited,
     Estimated,
+    ProvidedBy,
     StatusKind,
     TextCheck,
     UserProvided,
@@ -18,8 +19,10 @@ __all__ = [
     "Cited",
     "Estimated",
     "NoStatusesError",
+    "ProvidedBy",
     "StatusKind",
     "TextCheck",
+    "UnparameterisedCitedError",
     "UserProvided",
     "VerificationStatus",
     "Verified",

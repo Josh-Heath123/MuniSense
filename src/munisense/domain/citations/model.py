@@ -1,27 +1,65 @@
 """Per-value provenance: a citation and a verification status for every value (ADR-0006).
 
 `Cited[T]` wraps any domain value (a `Rate`, a block threshold, a VAT rate) with where it
-came from and how sure we are. A component's status is the weakest status of its values
-(ADR-0004), computed with `weakest`.
+is printed and how sure we are. Every cited value has a citation, whatever its status
+(ADR-0006: "each value has its own citation"). A component's status is the weakest status
+of its values (ADR-0004), computed with `weakest`.
 
 These types live in the domain, not in `munisense.provenance`, because the domain may not
 import outside itself and every tariff value needs them. `munisense.provenance` keeps the
 source-document records and the review workflow (P2).
+
+No personal information (ADR-0008): a verifier is a short pseudonymous handle (for example
+`owner`), and a user-provided value records a category of source, never a name, address,
+account or meter number.
 """
 
+import re
 from collections.abc import Iterable
 from datetime import date
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import AfterValidator, Field, StringConstraints, model_validator
 
 from munisense.domain.base import DomainModel
-from munisense.domain.citations.errors import NoStatusesError
+from munisense.domain.citations.errors import NoStatusesError, UnparameterisedCitedError
 
-Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
-PrintedText = Annotated[str, StringConstraints(min_length=1, max_length=500)]
+# C0 and C1 control characters (log forging, terminal escapes). Newlines are allowed only
+# in printed text, which may span lines on the page.
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+_CONTROL_EXCEPT_NEWLINE = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
+
+
+def _no_control_characters(value: str) -> str:
+    if _CONTROL.search(value):
+        msg = "control characters are not allowed"
+        raise ValueError(msg)
+    return value
+
+
+def _printed(value: str) -> str:
+    if _CONTROL_EXCEPT_NEWLINE.search(value):
+        msg = "control characters other than newline are not allowed"
+        raise ValueError(msg)
+    if not value.strip():
+        msg = "printed text must contain something other than whitespace"
+        raise ValueError(msg)
+    return value
+
+
+Text = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=200),
+    AfterValidator(_no_control_characters),
+]
+PrintedText = Annotated[
+    str, StringConstraints(min_length=1, max_length=500), AfterValidator(_printed)
+]
+"""Exactly as printed (not stripped), for the deterministic citation check (P2)."""
 Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+Handle = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]{1,39}$")]
+"""A pseudonymous handle such as `owner` or `reviewer-1`; never a name or email."""
 
 
 class Citation(DomainModel):
@@ -31,35 +69,47 @@ class Citation(DomainModel):
     page: Annotated[int, Field(ge=1)]
     locator: Text
     printed_text: PrintedText
-    """The value exactly as printed, for the deterministic citation check (P2)."""
 
 
 class StatusKind(StrEnum):
-    """Verification status kinds, weakest first."""
+    """Verification status kinds, weakest first.
 
-    ESTIMATED = "estimated"
+    `user_provided` is weakest: it has no official source. `estimated` values in P1 are
+    transcribed from the official schedule but not yet checked (E29). This order is a
+    proposal awaiting the owner's confirmation; results warn on every non-verified value
+    whatever the order, so the order never hides a warning.
+    """
+
     USER_PROVIDED = "user_provided"
+    ESTIMATED = "estimated"
     VERIFIED = "verified"
 
     @property
     def rank(self) -> int:
-        """Higher is stronger. Estimated is weakest; user-provided is weaker than verified."""
-        return list(StatusKind).index(self)
+        """Higher is stronger."""
+        return _RANK[self]
+
+
+_RANK = {StatusKind.USER_PROVIDED: 0, StatusKind.ESTIMATED: 1, StatusKind.VERIFIED: 2}
 
 
 class TextCheck(StrEnum):
-    """Outcome of the deterministic check that the printed text is on the cited page."""
+    """Outcome of the deterministic check that the printed text is on the cited page.
+
+    Until the checker exists (P2) this is declared by the verifier, not computed.
+    """
 
     PASSED = "passed"
     NO_TEXT_LAYER = "no_text_layer"
-    """A scanned page: the check cannot run, so a human check stands in for it."""
+    """A scanned page: the check cannot run, so the human check stands alone."""
 
 
 class Verified(DomainModel):
-    """Checked against the source: a deterministic text check (or a scan) plus a verifier."""
+    """Checked against the source by a human (ADR-0006: an agent's check is not enough)."""
 
     kind: Literal[StatusKind.VERIFIED] = StatusKind.VERIFIED
-    verifier: Text
+    verifier: Handle
+    verifier_kind: Literal["human"]
     method: Text
     verified_on: date
     text_check: TextCheck
@@ -72,11 +122,19 @@ class Estimated(DomainModel):
     reason: Text
 
 
+class ProvidedBy(StrEnum):
+    """Categories of user-supplied source. Deliberately no free text (ADR-0008)."""
+
+    OWNER_PREPAID_RECEIPT = "owner_prepaid_receipt"
+    OWNER_BILL = "owner_bill"
+    PILOT_USER_BILL = "pilot_user_bill"
+
+
 class UserProvided(DomainModel):
-    """Supplied by a user (for example from a bill), not from an official source."""
+    """Supplied by a user (for example from an anonymised bill), not an official source."""
 
     kind: Literal[StatusKind.USER_PROVIDED] = StatusKind.USER_PROVIDED
-    provided_by: Text
+    provided_by: ProvidedBy
 
 
 VerificationStatus = Annotated[Verified | Estimated | UserProvided, Field(discriminator="kind")]
@@ -85,23 +143,26 @@ VerificationStatus = Annotated[Verified | Estimated | UserProvided, Field(discri
 class Cited[T](DomainModel):
     """A value with its own citation and verification status.
 
-    A `verified` value must have a citation. An `estimated` or `user_provided` value may
-    lack one (for example a rounding rule inferred from bills); its status then explains.
+    Use it parameterised (`Cited[Rate]`, `Cited[ExactDecimal]`). The bare class refuses to
+    validate, because an unbound `T` would accept anything, including a float.
     """
 
     value: T
-    citation: Citation | None
+    citation: Citation
     status: VerificationStatus
 
     @model_validator(mode="after")
-    def _verified_needs_a_citation(self) -> Self:
-        if isinstance(self.status, Verified) and self.citation is None:
-            msg = "a verified value must cite its source"
-            raise ValueError(msg)
+    def _refuse_unparameterised(self) -> "Cited[T]":
+        # An "after" validator: a "before" one would make Pydantic re-validate nested JSON
+        # in Python mode, where strict dates refuse strings.
+        if type(self).__pydantic_generic_metadata__["parameters"]:
+            msg = "use a parameterised Cited, for example Cited[Rate]"
+            raise UnparameterisedCitedError(msg)
         return self
 
     @property
     def kind(self) -> StatusKind:
+        """The kind of this value's verification status."""
         return self.status.kind
 
 
