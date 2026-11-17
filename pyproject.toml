@@ -1,0 +1,178 @@
+[project]
+name = "munisense"
+version = "0.0.0"
+description = "Exact, source-cited South African municipal electricity bill calculations."
+readme = "README.md"
+requires-python = "==3.13.*"
+# Runtime dependencies are added only in the phase that needs them (standards.md).
+dependencies = []
+
+[dependency-groups]
+# Approved by the owner on 2026-11-17 (P0-3). pre-commit is added in P0-5, hypothesis in P1.
+dev = [
+    "ruff>=0.15",
+    "mypy>=2.0",
+    "pytest>=9.0",
+    "pytest-cov>=7.0",
+    "import-linter>=2.10",
+    "poethepoet>=0.40",
+    "pip-audit>=2.10",
+]
+
+[tool.uv]
+# No build backend yet (it would be another dependency). Tests and tools find the
+# package through the `src` paths configured below.
+package = false
+# Supply-chain precaution approved by the owner: ignore releases younger than 14 days.
+# The relative value is stored in uv.lock as `exclude-newer-span`; older uv cannot read it.
+exclude-newer = "14 days"
+required-version = ">=0.13.9"
+# Install wheels only: never run a package's build code at install time. A platform
+# without a matching wheel fails instead of building from source.
+no-build = true
+
+# ---------------------------------------------------------------- tasks (poe)
+
+[tool.poe.tasks]
+_format-check = "ruff format --check"
+_lint = "ruff check"
+_types = "mypy"
+_fast-tests = "pytest -q -m 'not slow and not db' --no-cov"
+
+fmt = { sequence = ["ruff format", "ruff check --fix"], default_item_type = "cmd", help = "Format and auto-fix" }
+check = { sequence = ["_format-check", "_lint", "_types", "_fast-tests"], help = "Lint, type-check and fast tests (the Stop hook runs this)" }
+test = { cmd = "pytest --cov --cov-report=term-missing", help = "Full test suite with coverage" }
+lint-imports = { cmd = "lint-imports", env = { PYTHONPATH = "src" }, help = "Architecture contracts" }
+hook-tests = { cmd = "python -m unittest discover -s .claude/hooks/tests", help = "Tests for the Claude Code hooks" }
+verify = { sequence = ["_format-check", "_lint", "_types", "lint-imports", "test", "hook-tests"], help = "Everything CI runs except the audit (works offline)" }
+audit = { shell = "uv export --frozen --all-groups --no-emit-project --format requirements-txt | pip-audit --strict --disable-pip --require-hashes --progress-spinner off -r /dev/stdin", help = "Audit every locked package, all platforms (needs network)" }
+
+# ------------------------------------------------------------------- ruff
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+# Python only: ruff 0.17 would otherwise also format Markdown, including Accepted ADRs.
+include = ["*.py", "*.pyi", "**/pyproject.toml"]
+# .claude/ needs the owner's approval to change, so ruff leaves it alone, also when a
+# path is passed explicitly (as the format_lint hook does). See tech-debt TD-5.
+extend-exclude = [".claude"]
+force-exclude = true
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "SIM", "C4", "RUF",
+    "S",    # security (bandit)
+    "DTZ",  # naive datetimes
+    "T20",  # print
+    "PT",   # pytest style
+    "ERA",  # commented-out code
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert is how pytest works
+
+# ------------------------------------------------------------------- mypy
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+mypy_path = "src"
+files = ["src", "tests"]
+warn_unreachable = true
+# Test files in different folders may share a name (tests/unit/test_x.py, tests/property/test_x.py).
+explicit_package_bases = true
+
+# ----------------------------------------------------------------- pytest
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
+markers = [
+    "slow: slow tests, excluded from `poe check`",
+    "db: needs PostgreSQL (docker compose up -d db), excluded from `poe check`",
+]
+
+# --------------------------------------------------------------- coverage
+
+[tool.coverage.run]
+source = ["munisense"]
+branch = true
+
+[tool.coverage.report]
+# testing-strategy.md: overall line coverage at least 85%. In P0 the package holds only
+# docstrings, which coverage does not count as statements, so the 100% reported in P0 is
+# vacuous. The threshold starts to bite with the first real code in P1.
+fail_under = 85
+show_missing = true
+skip_empty = false
+
+# ---------------------------------------------------- import-linter contracts
+# docs/architecture/overview.md, "Dependency rules". Contracts on third-party packages
+# (rule 4, only persistence imports SQLAlchemy; and the third-party half of rule 1)
+# are added when those packages arrive (tech-debt TD-6). When a top-level package is
+# added, update these lists and EXPECTED in tests/unit/test_package.py together.
+
+[tool.importlinter]
+root_package = "munisense"
+
+[[tool.importlinter.contracts]]
+name = "Rule 1: the domain imports nothing else from munisense"
+type = "forbidden"
+source_modules = ["munisense.domain"]
+forbidden_modules = [
+    "munisense.catalogue",
+    "munisense.provenance",
+    "munisense.ingestion",
+    "munisense.persistence",
+    "munisense.services",
+    "munisense.api",
+    "munisense.console",
+    "munisense.mcp",
+    "munisense.platform",
+]
+
+[[tool.importlinter.contracts]]
+name = "Rule 2: within the domain, billing -> tariffs -> money"
+type = "layers"
+layers = [
+    "munisense.domain.billing",
+    "munisense.domain.tariffs",
+    "munisense.domain.money",
+]
+
+[[tool.importlinter.contracts]]
+name = "Rule 3: interfaces use services and platform only"
+type = "forbidden"
+source_modules = ["munisense.api", "munisense.console", "munisense.mcp"]
+# Interfaces reach the domain and persistence through services; only direct imports break.
+allow_indirect_imports = "true"
+forbidden_modules = [
+    "munisense.domain",
+    "munisense.catalogue",
+    "munisense.provenance",
+    "munisense.ingestion",
+    "munisense.persistence",
+]
+
+[[tool.importlinter.contracts]]
+name = "Rule 5: nothing imports an interface"
+type = "forbidden"
+source_modules = [
+    "munisense.domain",
+    "munisense.catalogue",
+    "munisense.provenance",
+    "munisense.ingestion",
+    "munisense.persistence",
+    "munisense.services",
+    "munisense.platform",
+]
+forbidden_modules = ["munisense.api", "munisense.console", "munisense.mcp"]
+
+[[tool.importlinter.contracts]]
+name = "Rule 5: interfaces are independent of each other"
+type = "independence"
+modules = ["munisense.api", "munisense.console", "munisense.mcp"]
