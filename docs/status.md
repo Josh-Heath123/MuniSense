@@ -5,15 +5,15 @@ _Last updated: 2026-11-17, on branch `docs/p1-task-list`._
 ## Now
 
 - **Phase:** P1 Calculation core. P0 approved by the owner on 2026-11-17 (W4).
-- **Next task:** P1-1 (dependencies), once the owner approves the P1 task list and the P1-1 dependency request.
-- **Blocked on:** the owner's approval of the P1 task list (W6).
+- **Next task:** P1-1 (dependencies).
+- **Blocked on:** nothing.
 - **Design checkpoint:** after P1-9, stop and write `/report progress` on the domain model for the architect (P1-10). P1-11 onwards waits for that review.
 
 ## Waiting for the owner
 
 | ID | Question | Recommendation |
 | --- | --- | --- |
-| W6 | Approve the P1 task list below (order: money, provenance, rounding and VAT, consumption, components, forward engine, Ekurhuleni end to end, then the design checkpoint) | Approve |
+| (none) | | |
 
 ## Decided (owner: Josh Heath, 2026-11-17)
 
@@ -55,6 +55,9 @@ _Last updated: 2026-11-17, on branch `docs/p1-task-list`._
 | E24 | P1: tooling and process are frozen. No work on hooks, CI or review machinery unless something breaks or blocks legitimate work. Effort goes to the calculation core | this file |
 | E25 | P1 order: money types, component model and consumption profile first, then the forward calculation for one Ekurhuleni residential tariff end to end; then a design checkpoint (`/report progress` on the domain model, with a worked Ekurhuleni example) reviewed by the architect before the rest of P1 | this file |
 | E26 | Claude Code may download the Ekurhuleni 2026/27 electricity tariff schedule from the official municipal website when a task needs it, and reports the URL and SHA-256 | ADR-0006 |
+| E27 | W6: P1 task list approved, with one change: P1-9 uses the Ekurhuleni residential tariff that applies to prepaid meters like the owner's, so P1 feeds the P3 pilot. If the schedule does not separate prepaid and credit tariffs, the checkpoint report says so | this file |
+| E28 | P1-1 dependencies approved (option A): Pydantic 2.14.2 (runtime) and mutmut 3.8.1 (dev) with their listed dependencies, provided the licences confirmed at install time fit the licence policy; stop only if one does not | `pyproject.toml` |
+| E29 | P1 Ekurhuleni values are `estimated` with the reason "citation check not built until P2"; the owner will not hand-check them now | this file |
 | Review items | Accepted: A1 to A3, A5 to A7, A9 to A13. A8: City Power dropped from P1; P1 examples use the Ekurhuleni 2026/27 electricity schedule, downloaded in P1 from the official municipal website only. C2: Pydantic in the domain, strict mode, float rejection tested. C5: keep PostgreSQL 17 and Python 3.13. C6: not now. B4: stay on `/mnt/c`; every gate report states how long `uv run poe check` takes | `reports/2026-11-17-P0-progress.md` |
 
 ## Phase 1 tasks
@@ -71,7 +74,7 @@ Each task is one branch and one pull request, about half a day. Unless a task sa
 | P1-6 | Component model and tariff version | `TariffVersion` header (supplier, tariff code, customer class, effective range, prices VAT-exclusive or inclusive, rounding policy, VAT treatment per component) plus an ordered list of typed components with `schema_version`: `FixedCharge`, `FlatEnergy`, `BlockEnergy`. Every value inside a payload is a `CitedValue`; a component's status is the weakest of its values. Refusals: overlapping or unordered blocks, a gap in blocks, a last block that is not open-ended, a negative rate, unknown units. JSON round trip of a version is exact | todo |
 | P1-7 | Forward engine for one period | `domain.billing`: given a tariff version, a billing period inside its effective range and a monthly total, produce line items (each referencing its component and the citations of the values used), VAT and a total, quantised only where the rounding policy says. Every result lists the status of every line and warns when any value or the rounding policy is `estimated`. Refuses a period outside the version's range and a profile it cannot evaluate. Property tests: a bill is never negative; a block bill never falls as consumption rises; VAT equals the rate times the VAT-able subtotal (within the policy's rounding). Fixture tariffs only | todo |
 | P1-8 | Ekurhuleni 2026/27 source document | The 2026/27 electricity tariff schedule downloaded from the official municipal website only (E26), committed under `data/sources/` with URL, retrieval date and SHA-256 (reported to the owner). A short note lists the residential tariffs it contains, their pages, and any document hazards (number formats, units, VAT basis, amendments) | todo |
-| P1-9 | One Ekurhuleni residential tariff end to end | One residential tariff from the schedule (chosen in P1-8, with the reason) transcribed as a tariff fixture with a citation per value (document, page, table, printed text), status `estimated` with the reason "citation check not built until P2" unless the owner hand-checks it. Hand-checked forward examples at several consumption levels, including one that crosses a block threshold, reproduced **to the cent**, with the hand calculation written out in the test. The `tariff-verifier` agent checks every value against the PDF and recalculates the examples. The rounding policy and VAT treatment used are `estimated` and say so | todo |
+| P1-9 | One Ekurhuleni residential tariff end to end | The residential tariff that applies to **prepaid meters** like the owner's (E27; if the schedule does not separate prepaid and credit tariffs, the P1-10 report says so) transcribed as a tariff fixture with a citation per value (document, page, table, printed text), status `estimated` with the reason "citation check not built until P2" (E29). Hand-checked forward examples at several consumption levels, including one that crosses a block threshold, reproduced **to the cent**, with the hand calculation written out in the test. The `tariff-verifier` agent checks every value against the PDF and recalculates the examples. The rounding policy and VAT treatment used are `estimated` and say so | todo |
 | P1-10 | **Design checkpoint** | `/report progress` explaining the domain model: the main types; how a component carries per-value citations and statuses; how rounding policies, seasons, period splitting and the prepaid purchase calculation will plug in; one worked Ekurhuleni example. **Stop**: the architect reviews the model before P1-11 starts | todo |
 | P1-11 | Levy and free basic allocation | `Levy` (per kWh or fixed) and `FreeBasicAllocation` (free kWh for an eligible customer, eligibility passed as an input, never inferred). Refuses eligibility on a tariff without an allocation. Property tests from P1-7 still hold | todo (after P1-10) |
 | P1-12 | Seasonal energy | `SeasonalEnergy` with a season calendar in data (month-day ranges covering the year without gaps or overlaps; refused otherwise). A billing period inside one season. Hand-checked example from Ekurhuleni figures if the schedule has a seasonal tariff, otherwise a fixture | todo (after P1-10) |
