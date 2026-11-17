@@ -5,11 +5,14 @@ description = "Exact, source-cited South African municipal electricity bill calc
 readme = "README.md"
 requires-python = "==3.13.*"
 # Runtime dependencies are added only in the phase that needs them (standards.md).
-dependencies = []
+# pydantic: approved by the owner for P1 (E28); strict mode only inside the domain (ADR-0004).
+dependencies = [
+    "pydantic>=2.14",
+]
 
 [dependency-groups]
-# Approved by the owner on 2026-11-17 (P0-3; pre-commit and pre-commit-hooks in P0-5).
-# hypothesis is added in P1.
+# Approved by the owner on 2026-11-17 (P0-3; pre-commit and pre-commit-hooks in P0-5;
+# hypothesis E14; mutmut E28).
 dev = [
     "ruff>=0.15",
     "mypy>=2.0",
@@ -20,6 +23,8 @@ dev = [
     "pip-audit>=2.10",
     "pre-commit>=4.0",
     "pre-commit-hooks>=6.0",
+    "hypothesis>=6.170",
+    "mutmut>=3.8",
 ]
 
 [tool.uv]
@@ -86,6 +91,12 @@ files = ["src", "tests"]
 warn_unreachable = true
 # Test files in different folders may share a name (tests/unit/test_x.py, tests/property/test_x.py).
 explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 # ----------------------------------------------------------------- pytest
 
@@ -114,9 +125,11 @@ show_missing = true
 skip_empty = false
 
 # ---------------------------------------------------- import-linter contracts
-# docs/architecture/overview.md, "Dependency rules". Contracts on third-party packages
-# (rule 4, only persistence imports SQLAlchemy; and the third-party half of rule 1)
-# are added when those packages arrive (tech-debt TD-6). When a top-level package is
+# docs/architecture/overview.md, "Dependency rules". The third-party half of rule 1
+# (the domain imports only the standard library and Pydantic) is checked by
+# tests/unit/test_domain_purity.py, because import-linter has no allow-list for
+# external packages. Rule 4 (only persistence imports SQLAlchemy) arrives with
+# SQLAlchemy in P2 (tech-debt TD-6). When a top-level package is
 # added, update these lists and EXPECTED in tests/unit/test_package.py together.
 
 [tool.importlinter]
