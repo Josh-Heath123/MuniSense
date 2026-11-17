@@ -41,7 +41,8 @@ Everything runs inside WSL2 (Ubuntu), so local development matches CI and future
 Phase 0 creates these commands:
 
 ```bash
-docker compose up -d db     # PostgreSQL 17
+cp .env.example .env        # optional: local settings (the defaults work)
+docker compose up -d db     # PostgreSQL 17: databases munisense_dev and munisense_test
 uv sync                     # install locked dependencies
 uv run poe check            # lint, types, fast tests
 uv run poe verify           # everything CI runs (offline)

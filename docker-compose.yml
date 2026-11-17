@@ -1,0 +1,33 @@
+# Local PostgreSQL for development and tests (P0-4).
+#   docker compose up -d db      start (data survives restarts in the named volume)
+#   docker compose ps            shows "healthy" once ready
+#   docker compose down          stop; keeps the data (never add -v unless you mean to delete it)
+# Settings come from .env (git-ignored; copy .env.example). Defaults are local-only.
+name: munisense
+
+services:
+  db:
+    # Same image as CI (.github/workflows/ci.yml), pinned by digest: 17.12 on 2026-11-17.
+    image: postgres:17@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac
+    environment:
+      POSTGRES_USER: ${MUNISENSE_DB_USER:-munisense}
+      POSTGRES_PASSWORD: ${MUNISENSE_DB_PASSWORD:-munisense-local-only}
+      POSTGRES_DB: ${MUNISENSE_DB_NAME:-munisense_dev}
+      MUNISENSE_TEST_DB_NAME: ${MUNISENSE_TEST_DB_NAME:-munisense_test}
+    ports:
+      # Bound to localhost only: the database is never reachable from the network.
+      - "127.0.0.1:${MUNISENSE_DB_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Over TCP (-h 127.0.0.1), so the temporary server used during first-time
+      # initialisation never counts as healthy; and only once the test database exists.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" && psql -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${MUNISENSE_TEST_DB_NAME}\" -Atqc 'select 1' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  db-data:
