@@ -22,7 +22,8 @@ MuniSense is a **modular monolith**: one Python 3.13 application, one PostgreSQL
 ```text
 src/munisense/
   domain/
-    money/        Money, Rate, Unit, VatRate, RoundingPolicy (Decimal only)
+    base.py       DomainModel (strict, frozen, no extra fields) and DomainError; every layer may import it
+    money/        ExactDecimal, exact(), Money, Rate, RateUnit, CanonicalUnit, VatRate, RoundingPolicy (Decimal only)
     tariffs/      TariffVersion, component types, TOU calendars, validation
     billing/      calculate(), prepaid purchase, period splitting, consumption profiles,
                   LineItem, BillResult, warnings

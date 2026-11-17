@@ -28,6 +28,7 @@ ALLOWED_STDLIB = frozenset(
         "abc",
         "calendar",
         "collections",
+        "contextlib",
         "copy",
         "dataclasses",
         "datetime",
@@ -53,6 +54,8 @@ FORBIDDEN_BUILTINS |= {"compile", "__import__"}
 # date.today, datetime.now, datetime.utcnow, datetime.today: the clock, called or passed
 # (for example as a Pydantic default_factory).
 CLOCK_ATTRIBUTES = frozenset({"now", "today", "utcnow"})
+# Pydantic methods that build a model without validating it (a float would get through).
+UNVALIDATED_CONSTRUCTORS = frozenset({"model_construct", "model_copy"})
 
 
 def _import_violation(module: str) -> str | None:
@@ -75,6 +78,8 @@ def _name_violation(node: ast.AST) -> str | None:
         return f"uses builtin {node.id}"
     if isinstance(node, ast.Attribute) and node.attr in CLOCK_ATTRIBUTES:
         return f"uses .{node.attr} (reads the clock)"
+    if isinstance(node, ast.Attribute) and node.attr in UNVALIDATED_CONSTRUCTORS:
+        return f"uses .{node.attr} (skips validation)"
     return None
 
 
@@ -124,6 +129,8 @@ def test_domain_modules_are_pure() -> None:
         ("from datetime import datetime\nx = datetime.now()", "reads the clock"),
         ("from datetime import date\nx = date.today()", "reads the clock"),
         ("x = Field(default_factory=datetime.now)", "reads the clock"),
+        ("m = Money.model_construct(rand=1.5)", "skips validation"),
+        ("m = money.model_copy(update={'rand': 1.5})", "skips validation"),
     ],
 )
 def test_a_violation_is_reported(source: str, expected: str) -> None:
