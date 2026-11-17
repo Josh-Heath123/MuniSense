@@ -1,11 +1,11 @@
 # Status
 
-_Last updated: 2026-11-17, on branch `chore/p1-1-dependencies`._
+_Last updated: 2026-11-17, on branch `feat/p1-2-money-and-units`._
 
 ## Now
 
 - **Phase:** P1 Calculation core. P0 approved by the owner on 2026-11-17 (W4).
-- **Next task:** P1-2 (money and units).
+- **Next task:** P1-2 (money and units), in review on `feat/p1-2-money-and-units`.
 - **Blocked on:** nothing.
 - **Design checkpoint:** after P1-9, stop and write `/report progress` on the domain model for the architect (P1-10). P1-11 onwards waits for that review.
 
@@ -66,7 +66,7 @@ Each task is one branch and one pull request, about half a day. Unless a task sa
 
 | ID | Task | Acceptance criteria | Status |
 | --- | --- | --- | --- |
-| P1-1 | Dependencies for P1 | Starts with **one approval request**: Pydantic v2 (runtime, with its transitive packages and licences) and mutmut (dev); hypothesis is already approved (E14). Each version is at least 14 days old. The import-linter contract that the domain imports only the standard library and Pydantic is added (pays back half of TD-6) and **shown to break** on a deliberate violation. `uv run poe verify` and `uv run poe audit` pass | **done** (PR pending) |
+| P1-1 | Dependencies for P1 | Starts with **one approval request**: Pydantic v2 (runtime, with its transitive packages and licences) and mutmut (dev); hypothesis is already approved (E14). Each version is at least 14 days old. The import-linter contract that the domain imports only the standard library and Pydantic is added (pays back half of TD-6) and **shown to break** on a deliberate violation. `uv run poe verify` and `uv run poe audit` pass | **done** (PR #11) |
 | P1-2 | Money and units | `domain.money`: a strict Decimal type that **rejects `float`** (and `str` only where explicitly parsed), with a test per entry point; `Money` in ZAR; `Rate` keeping the printed value and unit (c/kWh, R/kWh, R/day, R/month) and an exact canonical value; unit conversion without quantising. Property tests: conversion round-trips exactly; adding money is associative and exact | todo |
 | P1-3 | Cited values and verification status | `CitedValue` holding a value, a citation (document id, page, table or row, printed text) and a status: `verified` (verifier, method, date), `estimated` (reason) or `user_provided` (who). The weakest-status summary of a set of values. Invalid combinations refused (for example `estimated` without a reason). Lives in the domain because the domain may not import `munisense.provenance`; the PR states why | todo |
 | P1-4 | Rounding policies and the VAT table | `RoundingPolicy` naming each quantisation point of ADR-0005 (line amount, VAT per line or on the subtotal, total, prepaid kWh allocation), each with granularity and rounding mode, or "none"; a policy carries a status. `VatTable` of dated rates: a date outside the table is **refused**, never defaulted. No VAT rate or rounding rule appears in code; tests use fixtures | todo |

@@ -28,6 +28,7 @@ ALLOWED_STDLIB = frozenset(
         "abc",
         "calendar",
         "collections",
+        "contextlib",
         "copy",
         "dataclasses",
         "datetime",
