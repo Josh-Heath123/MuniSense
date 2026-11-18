@@ -34,3 +34,23 @@ class FreeBasicNotOfferedError(DomainError):
 class IncompatibleVersionsError(DomainError):
     """The tariff versions given for a period are empty, overlap, or belong to different
     tariffs."""
+
+
+class PrepaidNotSupportedError(DomainError):
+    """The prepaid purchase needs something not built yet (for example free tokens)."""
+
+
+class PurchaseTooSmallError(DomainError):
+    """The purchase does not cover the fixed charges deducted from it."""
+
+
+class PurchasesNotInOneMonthError(DomainError):
+    """The purchases of a month are not in one calendar month, or not in order."""
+
+
+class InvalidPurchaseError(DomainError):
+    """The purchase's inputs are impossible (a negative amount, kWh with no purchase)."""
+
+
+class PrepaidPrecisionError(DomainError):
+    """The month's kWh so far or a block threshold is finer than the prepaid kWh step."""
