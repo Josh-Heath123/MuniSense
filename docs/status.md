@@ -5,7 +5,7 @@ _Last updated: 2026-11-18, on branch `docs/p1-17-repository-presentation`._
 ## Now
 
 - **Last gate:** P1 Calculation core, approved on 2026-11-18 (E40). P0 approved on 2026-11-17 (W4).
-- **Phase:** P2 Versioned storage (approved, E40). **Next task:** the storage ADR (ADR-0012), drafted as Proposed for the architect's review; nothing is built on it before that.
+- **Phase:** P2 Versioned storage (approved, E40). **Next task:** none until W16. ADR-0012 (storage) is drafted as Proposed for the architect's review; nothing is built on it before it is accepted.
 - **Blocked on:** nothing.
 - **Design checkpoint:** P1-10 report written and reviewed by the architect; decisions E34 to E39 recorded.
 
@@ -13,6 +13,7 @@ _Last updated: 2026-11-18, on branch `docs/p1-17-repository-presentation`._
 
 | ID | Question | Recommendation |
 | --- | --- | --- |
+| W16 | Accept ADR-0012 (tariff files and the database projection), after the architect's review | Review first; nothing in P2 is built on it until it is accepted |
 
 ## Decided (owner: Josh Heath, 2026-11-17)
 
