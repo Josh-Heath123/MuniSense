@@ -41,7 +41,8 @@ tests/
   unit/  property/  integration/  contract/  golden/
 migrations/       Alembic (P2)
 data/
-  drafts/         structured tariff drafts (committed)
+  drafts/         structured tariff drafts (committed; not reviewed or published), including
+                  the cited VAT table (drafts/vat/) and the P1-9 Ekurhuleni transcription
   tariffs/        published tariff files, reviewed and committed: the source of truth
                   (name and layout confirmed by the P2 storage ADR)
   golden/         anonymised golden bills (committed)
