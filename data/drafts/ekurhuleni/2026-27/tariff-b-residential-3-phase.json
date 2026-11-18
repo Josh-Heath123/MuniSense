@@ -87,10 +87,13 @@
       "step": "0.000001",
       "mode": "half_up"
     },
-    "prepaid_kwh": null,
+    "prepaid_kwh": {
+      "step": "0.01",
+      "mode": "half_up"
+    },
     "status": {
       "kind": "estimated",
-      "reason": "not in the schedule; cents, half up, VAT once on the subtotal, and pro-rating factors to millionths, half up, assumed until learnt from real Ekurhuleni bills or receipts (P3)"
+      "reason": "not in the schedule; cents half up, VAT on the subtotal, pro-rating factors to millionths and prepaid kWh to hundredths (both half up) assumed until learnt from real bills or receipts (P3)"
     },
     "evidence": []
   },
@@ -98,9 +101,11 @@
     "name": "ekurhuleni-estimated",
     "pro_rating": "by_days",
     "consumption_split": "by_days",
+    "block_reset": "calendar_month",
+    "prepaid_fixed_charges": "first_purchase_of_month",
     "status": {
       "kind": "estimated",
-      "reason": "scanned page, no text layer; the schedule says only that the cross-over to new tariffs is billed pro rata; pro-rating and kWh sharing by days assumed until real bills show the method (P3)"
+      "reason": "scanned pages; page 1 bills the cross-over to new tariffs pro rata and page 4 charges the basic charge once per month; sharing by days, a monthly block reset and first-purchase recovery assumed (P3)"
     },
     "evidence": [
       {
@@ -108,6 +113,12 @@
         "page": 1,
         "locator": "General, fourth bullet",
         "printed_text": "The cross-over from existing tariffs to new tariffs will be billed pro rata."
+      },
+      {
+        "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+        "page": 4,
+        "locator": "Tariff B (Residential), Basic Charge (Rand/month), R.1",
+        "printed_text": "The amount is charged once per month only per point of supply,"
       }
     ]
   },

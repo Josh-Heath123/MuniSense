@@ -24,12 +24,14 @@ from munisense.domain.tariffs import (
     BillingPolicy,
     Block,
     BlockEnergy,
+    BlockReset,
     Component,
     ConsumptionSplit,
     FixedCharge,
     FlatEnergy,
     FreeBasicAllocation,
     Levy,
+    PrepaidFixedCharges,
     PriceBasis,
     ProRating,
     Season,
@@ -92,11 +94,16 @@ CENTS_HALF_UP = Quantisation(step=Decimal("0.01"), mode=RoundingMode.HALF_UP)
 MILLIONTHS_HALF_UP = Quantisation(step=Decimal("0.000001"), mode=RoundingMode.HALF_UP)
 
 
-def fixture_billing_policy(status: Status = FIXTURE_STATUS) -> BillingPolicy:
+def fixture_billing_policy(
+    status: Status = FIXTURE_STATUS,
+    fixed_charges: PrepaidFixedCharges = PrepaidFixedCharges.FIRST_PURCHASE_OF_MONTH,
+) -> BillingPolicy:
     return BillingPolicy(
         name="fixture-billing",
         pro_rating=ProRating.BY_DAYS,
         consumption_split=ConsumptionSplit.BY_DAYS,
+        block_reset=BlockReset.CALENDAR_MONTH,
+        prepaid_fixed_charges=fixed_charges,
         status=status,
         evidence=() if isinstance(status, Estimated) else (fixture_citation("pro rata"),),
     )
@@ -109,6 +116,7 @@ def fixture_policy(
     vat_amount: Quantisation | None = CENTS_HALF_UP,
     total: Quantisation | None = CENTS_HALF_UP,
     pro_rating: Quantisation | None = MILLIONTHS_HALF_UP,
+    prepaid_kwh: Quantisation | None = None,
     status: Status = FIXTURE_STATUS,
     name: str = "fixture",
 ) -> RoundingPolicy:
@@ -120,7 +128,7 @@ def fixture_policy(
         vat_amount=vat_amount,
         total=total,
         pro_rating=pro_rating,
-        prepaid_kwh=None,
+        prepaid_kwh=prepaid_kwh,
         status=status,
         evidence=() if estimated else (fixture_citation("fixture bill"),),
     )

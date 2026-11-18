@@ -1,9 +1,9 @@
 """Billing policies: how a supplier applies its tariff to a period (E38, ADR-0011).
 
 A billing policy is learnt from bills, like a rounding policy, not printed as a value in a
-schedule, so it carries its own status and evidence. P1-13 builds how a period is split
-and shared; prepaid policies (block reset, how fixed charges are recovered) arrive in
-P1-14.
+schedule, so it carries its own status and evidence. It names how a period is split and
+shared (P1-13) and how prepaid purchases are applied (P1-14): when blocks reset, and how
+monthly fixed charges are recovered from a prepaid customer.
 """
 
 from enum import StrEnum
@@ -30,12 +30,31 @@ class ConsumptionSplit(StrEnum):
     """In proportion to days, as if the kWh were used evenly over the period."""
 
 
+class BlockReset(StrEnum):
+    """Which earlier purchases count towards the blocks of a prepaid purchase."""
+
+    CALENDAR_MONTH = "calendar_month"
+    """kWh bought since the start of the purchase's calendar month count; blocks start
+    again on the first day of each month."""
+
+
+class PrepaidFixedCharges(StrEnum):
+    """How a prepaid customer pays the tariff's monthly fixed charges and levies."""
+
+    FIRST_PURCHASE_OF_MONTH = "first_purchase_of_month"
+    """Deducted, with VAT, from the first purchase of each calendar month."""
+    NOT_FROM_PURCHASES = "not_from_purchases"
+    """Not deducted from purchases (for example billed separately); purchases buy energy."""
+
+
 class BillingPolicy(DomainModel):
     """A supplier's named way of applying its tariff to a billing period."""
 
     name: Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
     pro_rating: ProRating
     consumption_split: ConsumptionSplit
+    block_reset: BlockReset
+    prepaid_fixed_charges: PrepaidFixedCharges
     status: VerificationStatus
     evidence: Annotated[tuple[Citation, ...], Field(max_length=100)]
     """Citations of what the policy rests on: a schedule's own words (for example "billed

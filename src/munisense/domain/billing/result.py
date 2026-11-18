@@ -127,3 +127,51 @@ class PeriodBill(DomainModel):
     rounding_policies: Annotated[tuple[str, ...], Field(min_length=1)]
     rounding_policy_status: StatusKind
     warnings: tuple[BillWarning, ...]
+
+
+class MonthSoFar(DomainModel):
+    """What a prepaid customer has bought earlier in the same calendar month (block reset:
+    calendar month)."""
+
+    purchases: Annotated[int, Field(ge=0)]
+    kwh: Annotated[ExactDecimal, Field(ge=0)]
+
+
+class PurchaseSegment(DomainModel):
+    """The kWh bought between two block thresholds (of any component) of the month, at one
+    price per kWh (every per-kWh rate in force there, with VAT where standard-rated)."""
+
+    from_kwh: ExactDecimal
+    to_kwh: ExactDecimal | None
+    kwh: Annotated[ExactDecimal, Field(ge=0)]
+    """In the last segment: what the rounded purchase leaves after the whole segments."""
+    price_per_kwh: ExactDecimal
+    """Rand per kWh, including VAT where the component is standard-rated."""
+    amount: Money
+    """The money spent in this segment, exact."""
+    sources: Annotated[tuple[Source, ...], Field(min_length=1)]
+    status: StatusKind
+
+
+class Purchase(DomainModel):
+    """A prepaid purchase: the money paid, what was deducted, and the kWh received."""
+
+    day: date
+    amount: Money
+    """As paid, including VAT."""
+    month_kwh_before: ExactDecimal
+    fixed_charges: Money
+    """Monthly fixed charges and levies deducted (with VAT), per the billing policy."""
+    fixed_lines: tuple[LineItem, ...]
+    energy_amount: Money
+    segments: tuple[PurchaseSegment, ...]
+    kwh: ExactDecimal
+    """The kWh received, rounded once at the rounding policy's `prepaid_kwh` point."""
+    month_kwh_after: ExactDecimal
+    vat_rate: VatRate
+    status: StatusKind
+    rounding_policy: str
+    rounding_policy_status: StatusKind
+    billing_policy: str
+    billing_policy_status: StatusKind
+    warnings: tuple[BillWarning, ...]

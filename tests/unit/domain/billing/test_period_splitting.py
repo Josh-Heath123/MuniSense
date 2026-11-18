@@ -24,7 +24,13 @@ from munisense.domain.billing import (
 from munisense.domain.citations import ProvidedBy, StatusKind, UserProvided, Verified
 from munisense.domain.citations.model import TextCheck
 from munisense.domain.money import InexactArithmeticError, Money, RateUnit, VatRate, VatTable
-from munisense.domain.tariffs import BillingPolicy, ConsumptionSplit, ProRating
+from munisense.domain.tariffs import (
+    BillingPolicy,
+    BlockReset,
+    ConsumptionSplit,
+    PrepaidFixedCharges,
+    ProRating,
+)
 from support.builders import (
     cited_date,
     cited_decimal,
@@ -281,6 +287,8 @@ def test_a_billing_policy_that_claims_more_than_estimated_needs_evidence() -> No
             name="claimed",
             pro_rating=ProRating.BY_DAYS,
             consumption_split=ConsumptionSplit.BY_DAYS,
+            block_reset=BlockReset.CALENDAR_MONTH,
+            prepaid_fixed_charges=PrepaidFixedCharges.NOT_FROM_PURCHASES,
             status=claimed,
             evidence=(),
         )
