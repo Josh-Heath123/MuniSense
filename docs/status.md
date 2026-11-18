@@ -1,11 +1,11 @@
 # Status
 
-_Last updated: 2026-11-18, on branch `docs/p1-17-repository-presentation`._
+_Last updated: 2026-11-18, on branch `docs/p2-1-storage-adr`._
 
 ## Now
 
 - **Last gate:** P1 Calculation core, approved on 2026-11-18 (E40). P0 approved on 2026-11-17 (W4).
-- **Phase:** P2 Versioned storage (approved, E40). **Next task:** none until W16. ADR-0012 (storage) is drafted as Proposed for the architect's review; nothing is built on it before it is accepted.
+- **Phase:** P2 Versioned storage (approved, E40). **Next task:** none until W16. ADR-0012 (storage) is revised and still Proposed, for the architect to check the revision; nothing is built on it before it is accepted.
 - **Blocked on:** nothing.
 - **Design checkpoint:** P1-10 report written and reviewed by the architect; decisions E34 to E39 recorded.
 
@@ -13,7 +13,7 @@ _Last updated: 2026-11-18, on branch `docs/p1-17-repository-presentation`._
 
 | ID | Question | Recommendation |
 | --- | --- | --- |
-| W16 | Accept ADR-0012 (tariff files and the database projection), after the architect's review | Review first; nothing in P2 is built on it until it is accepted |
+| W16 | Accept ADR-0012 (tariff files and the database projection), revised after the architect's review (E47) | The architect checks the revision first; nothing in P2 is built on it until it is accepted |
 
 ## Decided (owner: Josh Heath, 2026-11-17)
 
@@ -75,6 +75,7 @@ _Last updated: 2026-11-18, on branch `docs/p1-17-repository-presentation`._
 | E44 | P1-17 decisions: licence stays proprietary (all rights reserved; a LICENSE file and badge say so); Bodoni Moda (OFL) downloaded from google/fonts and outlined with fontTools 4.68.0 run once with `uv run --no-project --with fonttools==4.68.0` (neither enters the project); `librsvg2-bin` installed by the owner to render the social preview PNG | `docs/assets/FONTS.md` |
 | E45 | Design direction for the README now and the P6 console later: Apple-inspired restraint, editorial typography, selective glass; Skeleton Cream `#FDFDFD`, Deep Black `#060606`, Pine Green `#016030` as the only accent (a lighter tint on dark); Pine means verified or important; estimated is a neutral grey; user-provided is one muted warm tone; a Didone serif for the wordmark only, as outlines; glass only on one featured bill card | `docs/brand.md` |
 | E46 | P1-17 approved; W13: the README's "How it's built" wording approved as drafted; W14 and W15: the owner uploads the social preview and sets the About box; no history rewrite for now, visibility decided separately | this file |
+| E47 | Architect's review of ADR-0012: design approved in principle; revisions (canonical form on the JSON text alone; one record of human verification; withdrawals and moved corrections; citation check in P2; 24-hour record-time bound, TD-14; `cited_value` deferred). Dependency approved: **pypdf, for text extraction only**; when added, its licence is confirmed against the policy and it must install with no build step | ADR-0012 |
 | Review items | Accepted: A1 to A3, A5 to A7, A9 to A13. A8: City Power dropped from P1; P1 examples use the Ekurhuleni 2026/27 electricity schedule, downloaded in P1 from the official municipal website only. C2: Pydantic in the domain, strict mode, float rejection tested. C5: keep PostgreSQL 17 and Python 3.13. C6: not now. B4: stay on `/mnt/c`; every gate report states how long `uv run poe check` takes | `reports/2026-11-17-P0-progress.md` |
 
 ## Phase 1 tasks
