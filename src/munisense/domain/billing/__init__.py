@@ -8,6 +8,8 @@ from munisense.domain.billing.consumption import (
 )
 from munisense.domain.billing.engine import calculate_bill
 from munisense.domain.billing.errors import (
+    FreeBasicEligibilityRequiredError,
+    FreeBasicNotOfferedError,
     NonMonthlyPeriodError,
     PeriodOutsideVersionError,
     UnsupportedConsumptionError,
@@ -29,6 +31,8 @@ __all__ = [
     "BillWarning",
     "BillingPeriod",
     "ConsumptionProfile",
+    "FreeBasicEligibilityRequiredError",
+    "FreeBasicNotOfferedError",
     "LineItem",
     "NonMonthlyPeriodError",
     "PeriodOutsideVersionError",

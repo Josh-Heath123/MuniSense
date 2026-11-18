@@ -22,7 +22,13 @@ from munisense.domain.base import DomainModel
 from munisense.domain.citations import Cited, StatusKind, cited_statuses, weakest
 from munisense.domain.money import RoundingPolicy
 from munisense.domain.periods import DateRange
-from munisense.domain.tariffs.components import Component, PrintedLabel
+from munisense.domain.tariffs.components import (
+    BlockEnergy,
+    Component,
+    FlatEnergy,
+    FreeBasicAllocation,
+    PrintedLabel,
+)
 
 Code = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
 
@@ -59,7 +65,36 @@ class TariffVersion(DomainModel):
         if len(set(names)) != len(names):
             msg = "component names must be unique within a version"
             raise ValueError(msg)
+        self._check_free_basic_allocation()
         return self
+
+    def _check_free_basic_allocation(self) -> None:
+        allocations = [c for c in self.components if isinstance(c, FreeBasicAllocation)]
+        if len(allocations) > 1:
+            msg = "a tariff version has at most one free basic allocation"
+            raise ValueError(msg)
+        energy = {c.name: c for c in self.components if isinstance(c, FlatEnergy | BlockEnergy)}
+        for allocation in allocations:
+            target = energy.get(allocation.energy_component)
+            if target is None:
+                msg = (
+                    "a free basic allocation must name an energy component (flat or block) "
+                    "of the same version"
+                )
+                raise ValueError(msg)
+            # The credit removes the energy's own charge, so it must be taxed the same way;
+            # otherwise a zero-rated charge and its standard-rated credit leave negative VAT.
+            if allocation.vat.value is not target.vat.value:
+                msg = "a free basic allocation must have the VAT treatment of its energy"
+                raise ValueError(msg)
+
+    @property
+    def free_basic_allocation(self) -> FreeBasicAllocation | None:
+        """The version's free basic allocation, if it offers one."""
+        for component in self.components:
+            if isinstance(component, FreeBasicAllocation):
+                return component
+        return None
 
     def covers(self, period: DateRange) -> bool:
         """True when the whole period falls inside the version's effective range."""

@@ -6,6 +6,8 @@ from munisense.domain.tariffs.components import (
     Component,
     FixedCharge,
     FlatEnergy,
+    FreeBasicAllocation,
+    Levy,
     VatTreatment,
 )
 from munisense.domain.tariffs.version import PriceBasis, TariffVersion
@@ -16,6 +18,8 @@ __all__ = [
     "Component",
     "FixedCharge",
     "FlatEnergy",
+    "FreeBasicAllocation",
+    "Levy",
     "PriceBasis",
     "TariffVersion",
     "VatTreatment",

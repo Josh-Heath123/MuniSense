@@ -5,8 +5,9 @@ inside it is a `Cited` value with its own citation and status (ADR-0006), includ
 label printed in the schedule. A component's status is the weakest status of all its
 cited values, found by walking its fields (`cited_statuses`), so no value can be left out.
 
-P1 builds `FixedCharge`, `FlatEnergy` and `BlockEnergy`; the other types in ADR-0004
-arrive with the phase that needs them, each with an ADR.
+P1 builds `FixedCharge`, `FlatEnergy`, `BlockEnergy`, `Levy` and `FreeBasicAllocation`
+(all listed in ADR-0004); the other types listed there arrive with the phase that needs
+them. A type not listed in ADR-0004 needs a new ADR.
 
 Block thresholds are kWh per calendar month (how SA tariff schedules print them). How a
 threshold applies to a period that is not one calendar month is a policy decided in P1-13;
@@ -144,4 +145,51 @@ class BlockEnergy(_ComponentBase):
         return result
 
 
-Component = Annotated[FixedCharge | FlatEnergy | BlockEnergy, Field(discriminator="kind")]
+class Levy(_ComponentBase):
+    """A levy imposed by a higher authority (for example an electricity levy that a
+    schedule says is "in addition to" its tariffs), charged per kWh, per day or per month.
+    It is priced and taxed like any other component; it is a separate type so that a bill
+    shows it as a levy and a schedule's levies can be told apart from its own charges."""
+
+    kind: Literal["levy"]
+    rate: Cited[Rate]
+
+    @model_validator(mode="after")
+    def _priced(self) -> Self:
+        allowed = {
+            CanonicalUnit.RAND_PER_KWH,
+            CanonicalUnit.RAND_PER_DAY,
+            CanonicalUnit.RAND_PER_MONTH,
+        }
+        _require_unit(self.rate, allowed, "a levy")
+        return self
+
+
+class FreeBasicAllocation(_ComponentBase):
+    """Free kWh per calendar month for an eligible customer (for example Free Basic
+    Electricity), taken from the bottom of one energy component of the same version.
+
+    Eligibility is an input to the calculation, never inferred from the tariff or the
+    consumption. The first `free_kwh` kWh of the month cost nothing: the engine credits
+    them at the energy component's own rates, block by block, so the credit mirrors the
+    charge exactly. Whether a supplier instead shifts the blocks up is a billing policy
+    question; only the "first kWh are free" reading is built.
+    """
+
+    kind: Literal["free_basic_allocation"]
+    free_kwh: Cited[ExactDecimal]
+    energy_component: ComponentName
+    """The name of the `FlatEnergy` or `BlockEnergy` component whose kWh are free."""
+
+    @model_validator(mode="after")
+    def _positive(self) -> Self:
+        if self.free_kwh.value <= 0:
+            msg = "a free basic allocation must be a positive number of kWh"
+            raise ValueError(msg)
+        return self
+
+
+Component = Annotated[
+    FixedCharge | FlatEnergy | BlockEnergy | Levy | FreeBasicAllocation,
+    Field(discriminator="kind"),
+]

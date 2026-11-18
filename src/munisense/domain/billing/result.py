@@ -28,6 +28,7 @@ class SourceRole(StrEnum):
     UPPER_THRESHOLD = "upper_threshold"
     LABEL = "label"
     VAT_TREATMENT = "vat_treatment"
+    FREE_ALLOWANCE = "free_allowance"
 
 
 class Source(DomainModel):
@@ -39,7 +40,10 @@ class Source(DomainModel):
 
 
 class LineItem(DomainModel):
-    """One charge on the bill, with every value it used and their citations."""
+    """One charge or credit on the bill, with every value it used and their citations.
+
+    A credit (the kWh made free by a free basic allocation) has a negative `amount`, equal to
+    minus `rate` x `quantity`; its `quantity` and `rate` are positive."""
 
     component: str
     label: str
@@ -60,6 +64,7 @@ class LineItem(DomainModel):
 class WarningCode(StrEnum):
     UNVERIFIED_VALUES = "unverified_values"
     UNVERIFIED_ROUNDING_POLICY = "unverified_rounding_policy"
+    ASSUMED_FREE_BASIC_METHOD = "assumed_free_basic_method"
 
 
 class BillWarning(DomainModel):
@@ -90,4 +95,7 @@ class Bill(DomainModel):
     blocks not reached) do not count, because the bill does not depend on them."""
     rounding_policy: str
     rounding_policy_status: StatusKind
+    free_basic_eligible: bool | None
+    """The eligibility input as given (`None` when not given, for a tariff without a free
+    basic allocation)."""
     warnings: tuple[BillWarning, ...]

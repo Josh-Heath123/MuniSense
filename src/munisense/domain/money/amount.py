@@ -47,7 +47,17 @@ class Money(DomainModel):
             return _money(self.rand - other.rand)
 
     def quantised(self, quantisation: Quantisation) -> "Money":
-        """This amount rounded at a quantisation point named by a rounding policy."""
+        """This amount rounded at a quantisation point named by a rounding policy.
+
+        The mode applies to the **magnitude** of the amount: a negative amount (a credit) is
+        rounded as its positive counterpart, then negated. So a credit always cancels the
+        charge it mirrors, in every mode; for half-up, half-even, up and down this is the
+        same as rounding the signed value, and for floor and ceiling it is not (floor
+        rounds a credit towards zero). This is an assumption about how suppliers round
+        credits, recorded in TD-10 and in the bill's warning when credits are produced.
+        """
+        if self.rand < 0:
+            return _money(-quantisation.apply(-self.rand))
         return _money(quantisation.apply(self.rand))
 
     def __mul__(self, factor: Decimal) -> "Money":

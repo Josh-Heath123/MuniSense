@@ -12,8 +12,10 @@ from munisense.domain.money import (
     InexactArithmeticError,
     InvalidArithmeticError,
     Money,
+    Quantisation,
     Rate,
     RateUnit,
+    RoundingMode,
     exact,
 )
 
@@ -200,6 +202,25 @@ def test_money_plus_a_non_money_is_a_type_error() -> None:
         Money(rand=Decimal("1")) + Decimal("1")
     with pytest.raises(TypeError):
         Money(rand=Decimal("1")) - Decimal("1")
+
+
+@pytest.mark.parametrize(
+    ("mode", "positive", "negative"),
+    [
+        (RoundingMode.HALF_UP, "1.24", "-1.24"),
+        (RoundingMode.HALF_EVEN, "1.24", "-1.24"),
+        (RoundingMode.DOWN, "1.23", "-1.23"),
+        (RoundingMode.UP, "1.24", "-1.24"),
+        (RoundingMode.FLOOR, "1.23", "-1.23"),  # signed floor would give -1.24
+        (RoundingMode.CEILING, "1.24", "-1.24"),  # signed ceiling would give -1.23
+    ],
+)
+def test_money_is_rounded_by_its_magnitude(
+    mode: RoundingMode, positive: str, negative: str
+) -> None:
+    cents = Quantisation(step=Decimal("0.01"), mode=mode)
+    assert Money(rand=Decimal("1.235")).quantised(cents).rand == Decimal(positive)
+    assert Money(rand=Decimal("-1.235")).quantised(cents).rand == Decimal(negative)
 
 
 def test_money_keeps_digits_until_a_rounding_policy_quantises() -> None:
