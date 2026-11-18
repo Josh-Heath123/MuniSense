@@ -15,7 +15,7 @@
 
 | Supplier | Residential structure (as reported) | Notes |
 | --- | --- | --- |
-| City of Ekurhuleni | Tariff A (blocks) and Tariff B (flat energy plus a basic charge per phase). Business tariffs have high- and low-demand season energy prices | Reported increase 8.76%. Reported break-even between A and B around 820 kWh a month (unverified). Source: [energybee](https://energybee.co.za/news/ekurhuleni-electricity-tariffs-2026); [2025/26 schedule PDF](https://www.ekurhuleni.gov.za/wp-content/uploads/2025/12/Schedule-2-Electricity-Tariffs-2025-26-Amended.pdf) |
+| City of Ekurhuleni | Tariff A (A.1: 50 free kWh then one rate; A.2: one rate) and Tariff B (seasonal energy, the same R3.3700/kWh in both seasons in 2026/27, plus a basic charge per phase; see `data/sources/ekurhuleni/README.md`). Business tariffs have high- and low-demand season energy prices | Reported increase 8.76%. Reported break-even between A and B around 820 kWh a month (unverified). Source: [energybee](https://energybee.co.za/news/ekurhuleni-electricity-tariffs-2026); [2025/26 schedule PDF](https://www.ekurhuleni.gov.za/wp-content/uploads/2025/12/Schedule-2-Electricity-Tariffs-2025-26-Amended.pdf) |
 | City Power (Johannesburg) | Inclining blocks | [energybee comparison](https://energybee.co.za/news/most-least-expensive-municipal-electricity-tariffs-south-africa-2026) |
 | City of Cape Town | Blocks plus a fixed "service and wires" style charge; a new residential time-of-use tariff for 2026/27 | [Budget annexure](https://www.capetown.gov.za/_documents/resource.capetown.gov.za/documentcentre/Documents/Financial%20documents/Budget-2026-27_Ann04.pdf) |
 | City of Tshwane | Inclining blocks (four reported) | Verify against the tariff book |

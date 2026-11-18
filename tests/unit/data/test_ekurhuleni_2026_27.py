@@ -31,7 +31,7 @@ from munisense.domain.billing import (
 )
 from munisense.domain.citations import Estimated, StatusKind, cited_statuses
 from munisense.domain.money import Money, VatTable
-from munisense.domain.tariffs import FixedCharge, FlatEnergy, TariffVersion
+from munisense.domain.tariffs import FixedCharge, SeasonalEnergy, TariffVersion
 
 ROOT = Path(__file__).resolve().parents[3]
 DRAFTS = ROOT / "data" / "drafts"
@@ -119,12 +119,21 @@ def test_the_transcribed_values_are_the_printed_ones() -> None:
     for phase, basic in (("1-phase", "109.78"), ("3-phase", "203.89")):
         fixed, energy = tariff(phase).components
         assert isinstance(fixed, FixedCharge)
-        assert isinstance(energy, FlatEnergy)
+        assert isinstance(energy, SeasonalEnergy)
         assert fixed.rate.value.value == Decimal(basic)
         assert fixed.rate.citation.printed_text == f"R{basic}"
-        assert energy.rate.value.value == Decimal("3.3700")
-        assert energy.rate.citation.printed_text == "R3.37,00"
-        assert energy.rate.citation.page == 4
+        high, low = energy.seasons
+        for season, expected in ((high, (6, 1, 8, 31)), (low, (9, 1, 5, 31))):
+            dates = season.dates.value
+            assert (dates.start_month, dates.start_day, dates.end_month, dates.end_day) == expected
+        assert high.dates.citation.printed_text.startswith("R.3. High Demand Season")
+        assert low.dates.citation.printed_text.startswith("R.4. Low Demand Season")
+        for season in (high, low):
+            (block,) = season.blocks
+            assert block.up_to_kwh is None
+            assert block.rate.value.value == Decimal("3.3700")
+            assert block.rate.citation.printed_text == "R3.37,00"
+            assert block.rate.citation.page == 4
     one = tariff("1-phase")
     assert vat_table().rates[0].percent.value == Decimal(15)
     assert vat_table().rates[0].start == date(2018, 4, 1)
@@ -181,6 +190,31 @@ def test_tariff_b_bills_are_reproduced_to_the_cent(  # one row of the table
     assert bill.subtotal == rand(subtotal)
     assert bill.vat == rand(vat)
     assert bill.total == rand(total)
+
+
+HIGH, LOW = "R.3. High Demand Season", "R.4. Low Demand Season"
+
+
+@pytest.mark.parametrize(
+    ("period", "season"),
+    [
+        # every bill month above, and the months whose exclusive end is the next season's
+        # first day (August, May)
+        (month(2026, 7), HIGH),
+        (month(2026, 8), HIGH),
+        (month(2026, 10), LOW),
+        (month(2027, 1), LOW),
+        (month(2027, 2), LOW),
+        (month(2027, 5), LOW),
+        (month(2027, 6), HIGH),
+    ],
+)
+def test_each_month_is_priced_from_its_own_season(period: BillingPeriod, season: str) -> None:
+    bill = calculate_bill(tariff("1-phase"), period, PeriodTotal(kwh=Decimal(10)), vat_table())
+    energy = bill.lines[1]
+    cited = [s.citation.printed_text for s in energy.sources if s.role is SourceRole.SEASON]
+    assert len(cited) == 1
+    assert cited[0].startswith(season)
 
 
 def test_a_bill_names_its_sources_and_warns_that_nothing_is_verified() -> None:

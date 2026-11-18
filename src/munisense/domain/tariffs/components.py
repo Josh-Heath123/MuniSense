@@ -5,15 +5,16 @@ inside it is a `Cited` value with its own citation and status (ADR-0006), includ
 label printed in the schedule. A component's status is the weakest status of all its
 cited values, found by walking its fields (`cited_statuses`), so no value can be left out.
 
-P1 builds `FixedCharge`, `FlatEnergy`, `BlockEnergy`, `Levy` and `FreeBasicAllocation`
-(all listed in ADR-0004); the other types listed there arrive with the phase that needs
-them. A type not listed in ADR-0004 needs a new ADR.
+P1 builds `FixedCharge`, `FlatEnergy`, `BlockEnergy`, `SeasonalEnergy`, `Levy` and
+`FreeBasicAllocation` (all listed in ADR-0004); the other types listed there arrive with
+the phase that needs them. A type not listed in ADR-0004 needs a new ADR.
 
 Block thresholds are kWh per calendar month (how SA tariff schedules print them). How a
 threshold applies to a period that is not one calendar month is a policy decided in P1-13;
 until then the engine refuses such periods for block tariffs (P1-7 criterion).
 """
 
+from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Literal, Self
@@ -105,6 +106,22 @@ class Block(DomainModel):
         return self
 
 
+def _check_blocks(blocks: tuple[Block, ...]) -> None:
+    *bounded, last = blocks
+    if last.up_to_kwh is not None:
+        msg = "the last block must be open-ended"
+        raise ValueError(msg)
+    previous = Decimal(0)
+    for item in bounded:
+        if item.up_to_kwh is None:
+            msg = "only the last block may be open-ended"
+            raise ValueError(msg)
+        if item.up_to_kwh.value <= previous:
+            msg = "block thresholds must be positive and strictly increasing"
+            raise ValueError(msg)
+        previous = item.up_to_kwh.value
+
+
 class BlockEnergy(_ComponentBase):
     """Block energy: ordered blocks, the last one open-ended. Rates usually rise (inclining
     blocks) but are not required to."""
@@ -114,19 +131,7 @@ class BlockEnergy(_ComponentBase):
 
     @model_validator(mode="after")
     def _ordered_with_open_last_block(self) -> Self:
-        *bounded, last = self.blocks
-        if last.up_to_kwh is not None:
-            msg = "the last block must be open-ended"
-            raise ValueError(msg)
-        previous = Decimal(0)
-        for item in bounded:
-            if item.up_to_kwh is None:
-                msg = "only the last block may be open-ended"
-                raise ValueError(msg)
-            if item.up_to_kwh.value <= previous:
-                msg = "block thresholds must be positive and strictly increasing"
-                raise ValueError(msg)
-            previous = item.up_to_kwh.value
+        _check_blocks(self.blocks)
         return self
 
     def bounds(self) -> list[tuple[Decimal, Decimal | None]]:
@@ -143,6 +148,104 @@ class BlockEnergy(_ComponentBase):
             if upper is not None:
                 lower = upper
         return result
+
+
+_LEAP_YEAR = 2028  # a calendar year with 29 February, used to check that seasons cover every day
+Month = Annotated[int, Field(ge=1, le=12)]
+Day = Annotated[int, Field(ge=1, le=31)]
+
+
+class SeasonDates(DomainModel):
+    """The days a season covers each year, from the start day to the end day, both
+    inclusive (as schedules print them: "June, July, and August" is 1 June to 31 August).
+    A season may wrap past the new year ("September to May" is 1 September to 31 May)."""
+
+    start_month: Month
+    start_day: Day
+    end_month: Month
+    end_day: Day
+
+    @model_validator(mode="after")
+    def _real_days(self) -> Self:
+        for month, day in ((self.start_month, self.start_day), (self.end_month, self.end_day)):
+            try:
+                date(_LEAP_YEAR, month, day)
+            except ValueError:
+                msg = f"{month:02d}-{day:02d} is not a day of the year"
+                raise ValueError(msg) from None
+        return self
+
+    def contains(self, day: date) -> bool:
+        """True when `day` falls in this season (in any year)."""
+        key = (day.month, day.day)
+        start = (self.start_month, self.start_day)
+        end = (self.end_month, self.end_day)
+        if start <= end:
+            return start <= key <= end
+        return key >= start or key <= end  # wraps past the new year
+
+
+class Season(DomainModel):
+    """One season of a seasonal energy charge: its cited dates and its own cited rates.
+    A flat rate is a single open-ended block."""
+
+    name: ComponentName
+    label: Cited[PrintedLabel]
+    dates: Cited[SeasonDates]
+    blocks: Annotated[tuple[Block, ...], Field(min_length=1, max_length=20)]
+
+    @model_validator(mode="after")
+    def _ordered_with_open_last_block(self) -> Self:
+        _check_blocks(self.blocks)
+        return self
+
+
+class SeasonalEnergy(_ComponentBase):
+    """Energy priced by season. The seasons (a calendar in data) must cover every day of
+    the year exactly once; a gap or an overlap is refused. A billing period is priced with
+    the one season that contains all of it; a period across a season boundary is refused
+    until period splitting exists (P1-13)."""
+
+    kind: Literal["seasonal_energy"]
+    seasons: Annotated[tuple[Season, ...], Field(min_length=1, max_length=12)]
+
+    @model_validator(mode="after")
+    def _a_calendar_covering_the_year_once(self) -> Self:
+        names = [season.name for season in self.seasons]
+        if len(set(names)) != len(names):
+            msg = "season names must be unique within a component"
+            raise ValueError(msg)
+        day = date(_LEAP_YEAR, 1, 1)
+        while day.year == _LEAP_YEAR:
+            covering = sum(season.dates.value.contains(day) for season in self.seasons)
+            if covering != 1:
+                problem = "no season" if covering == 0 else "more than one season"
+                msg = f"the seasons must cover every day once; {day:%d %B} has {problem}"
+                raise ValueError(msg)
+            day += timedelta(days=1)
+        return self
+
+    def season_for(self, first: date, last: date) -> Season | None:
+        """The season containing every day from `first` to `last` (inclusive), or `None`
+        when the days cross a season boundary. A season lasts at most a year, so a span of
+        more than 366 days always crosses (unless one season covers the whole year);
+        otherwise at most 366 days are checked."""
+        if len(self.seasons) == 1:
+            return self.seasons[0]  # it covers every day (checked when built)
+        if (last - first).days >= 366:  # days in the longest year
+            return None
+        for season in self.seasons:
+            if all(
+                season.dates.value.contains(first + timedelta(days=offset))
+                for offset in range((last - first).days + 1)
+            ):
+                return season
+        return None
+
+    @property
+    def has_thresholds(self) -> bool:
+        """True when any season has block thresholds (which are per calendar month)."""
+        return any(len(season.blocks) > 1 for season in self.seasons)
 
 
 class Levy(_ComponentBase):
@@ -179,7 +282,7 @@ class FreeBasicAllocation(_ComponentBase):
     kind: Literal["free_basic_allocation"]
     free_kwh: Cited[ExactDecimal]
     energy_component: ComponentName
-    """The name of the `FlatEnergy` or `BlockEnergy` component whose kWh are free."""
+    """The name of the flat, block or seasonal energy component whose kWh are free."""
 
     @model_validator(mode="after")
     def _positive(self) -> Self:
@@ -190,6 +293,6 @@ class FreeBasicAllocation(_ComponentBase):
 
 
 Component = Annotated[
-    FixedCharge | FlatEnergy | BlockEnergy | Levy | FreeBasicAllocation,
+    FixedCharge | FlatEnergy | BlockEnergy | SeasonalEnergy | Levy | FreeBasicAllocation,
     Field(discriminator="kind"),
 ]

@@ -8,6 +8,9 @@ from munisense.domain.tariffs.components import (
     FlatEnergy,
     FreeBasicAllocation,
     Levy,
+    Season,
+    SeasonalEnergy,
+    SeasonDates,
     VatTreatment,
 )
 from munisense.domain.tariffs.version import PriceBasis, TariffVersion
@@ -21,6 +24,9 @@ __all__ = [
     "FreeBasicAllocation",
     "Levy",
     "PriceBasis",
+    "Season",
+    "SeasonDates",
+    "SeasonalEnergy",
     "TariffVersion",
     "VatTreatment",
 ]

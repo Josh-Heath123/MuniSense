@@ -26,7 +26,7 @@ src/munisense/
     periods/      DateRange (half-open [start, end))
     citations/    Citation, Cited[T] (the "cited value"), VerificationStatus (Verified, Estimated, UserProvided), weakest()
     money/        ExactDecimal, exact(), Money, Rate, RateUnit, CanonicalUnit, VatRate, VatTable, Quantisation, RoundingPolicy (Decimal only)
-    tariffs/      TariffVersion (header + ordered components; PriceBasis), FixedCharge, FlatEnergy, BlockEnergy, Levy, FreeBasicAllocation, VatTreatment; later TOU calendars
+    tariffs/      TariffVersion (header + ordered components; PriceBasis), FixedCharge, FlatEnergy, BlockEnergy, SeasonalEnergy (Season, SeasonDates), Levy, FreeBasicAllocation, VatTreatment; later TOU calendars
     billing/      calculate_bill() -> Bill (LineItem with Sources by role, BillWarning), ConsumptionProfile (PeriodTotal; TimeOfUseBuckets refused until P4), BillingPeriod; later prepaid purchase and period splitting
   catalogue/      suppliers, customer classes, supply areas
   provenance/     SourceDocument records, verification workflow, review log (the per-value Citation and status types live in domain/citations, because the domain may not import this package)
@@ -74,7 +74,7 @@ The database is a deterministic projection of the committed tariff files (ADR-00
 | `source_document` | An official document | URL, title, retrieved_at, SHA-256, approval reference, local path |
 | `citation` | Where a value came from | Document, page, table/row, original text as printed |
 | `vat_rate` | VAT by date | Rate, valid_period, citation |
-| `tou_calendar` | Seasons, day types, public holidays | Versioned like tariffs |
+| `tou_calendar` | Day types and public holidays (P4); seasons for energy live inside each seasonal component since P1-12 (TD-11) | Versioned like tariffs |
 | `review_event` | Who checked or published what, when | Append-only |
 | `organisation`, `api_key`, `usage_event` | P5 only | Key hashes only; see the POPIA register |
 
