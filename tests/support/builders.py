@@ -26,6 +26,8 @@ from munisense.domain.tariffs import (
     Component,
     FixedCharge,
     FlatEnergy,
+    FreeBasicAllocation,
+    Levy,
     PriceBasis,
     TariffVersion,
     VatTreatment,
@@ -151,6 +153,43 @@ def fixture_flat(cents: str, name: str = "energy") -> FlatEnergy:
         label=cited_label("Energy charge"),
         vat=cited_vat(),
         rate=cited_rate(cents, RateUnit.CENTS_PER_KWH),
+    )
+
+
+def fixture_levy(
+    value: str,
+    unit: RateUnit = RateUnit.CENTS_PER_KWH,
+    name: str = "levy",
+    vat: VatTreatment = VatTreatment.STANDARD,
+    status: Status = FIXTURE_STATUS,
+) -> Levy:
+    return Levy(
+        schema_version=1,
+        kind="levy",
+        name=name,
+        label=cited_label("Fixture levy", status),
+        vat=cited_vat(vat, status),
+        rate=cited_rate(value, unit, status),
+    )
+
+
+def fixture_free_basic(
+    free_kwh: str,
+    energy_component: str = "energy",
+    name: str = "free_basic",
+    vat: VatTreatment = VatTreatment.STANDARD,
+    status: Status = FIXTURE_STATUS,
+) -> FreeBasicAllocation:
+    return FreeBasicAllocation(
+        schema_version=1,
+        kind="free_basic_allocation",
+        name=name,
+        label=cited_label("Free basic electricity", status),
+        vat=Cited[VatTreatment](
+            value=vat, citation=fixture_citation("free basic VAT"), status=status
+        ),
+        free_kwh=cited_decimal(free_kwh, status),
+        energy_component=energy_component,
     )
 
 

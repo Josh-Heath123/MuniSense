@@ -23,7 +23,9 @@
 | **Period total** | The kWh used over a whole billing period (`PeriodTotal`). Called a period total, not a monthly total, because billing periods are not always calendar months |
 | **Price basis** | Whether a tariff schedule prints its prices excluding VAT or including VAT. Recorded (and cited) per tariff version |
 | **VAT treatment** | How VAT applies to one component's amount: standard-rated, zero-rated or exempt. Recorded (and cited) per component |
-| **Line item** | One charge on a calculated bill (a fixed charge, flat energy, or one block), with its quantity, printed rate, amount and the citation of every value it used, by role (rate, thresholds, label, VAT treatment) |
+| **Levy** | A charge imposed by a higher authority that a schedule adds to its own tariffs (for example "in addition to this schedule of tariffs"); priced per kWh, per day or per month (`Levy`) |
+| **Free basic allocation** | Free kWh per calendar month for an eligible customer (Free Basic Electricity); eligibility is an input, never inferred. Shown as credit lines at the energy's own rates (`FreeBasicAllocation`) |
+| **Line item** | One charge or credit on a calculated bill (a fixed charge, flat energy, one block, a levy, or a credit for free kWh; a credit has a negative amount, minus rate x quantity), with its quantity, printed rate, amount and the citation of every value it used, by role (rate, thresholds, label, VAT treatment) |
 | **VAT-able subtotal** | The sum of the standard-rated line amounts; zero-rated and exempt lines are left out |
 | **Billing period** | The dates a bill covers, as a half-open range: from the start date up to, but not including, the end date |
 | **Credit meter** | Conventional metered supply billed in arrears |

@@ -28,7 +28,11 @@ from munisense.domain.money.exact import EXACT_PRECISION, MAX_DECIMAL_PLACES, Ex
 
 
 class RoundingMode(StrEnum):
-    """How a value is rounded to its step (Python decimal rounding modes)."""
+    """How a value is rounded to its step (Python decimal rounding modes).
+
+    For money (`Money.quantised`) the mode applies to the magnitude, so a negative amount
+    is rounded as its positive counterpart and negated; `Quantisation.apply` itself rounds
+    the signed value."""
 
     HALF_UP = "half_up"
     HALF_EVEN = "half_even"

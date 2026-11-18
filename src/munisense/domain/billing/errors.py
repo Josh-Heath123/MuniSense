@@ -17,3 +17,11 @@ class NonMonthlyPeriodError(DomainError):
 
 class UnsupportedPriceBasisError(DomainError):
     """The tariff prints prices including VAT, which the engine does not support yet."""
+
+
+class FreeBasicEligibilityRequiredError(DomainError):
+    """The tariff has a free basic allocation but the customer's eligibility was not given."""
+
+
+class FreeBasicNotOfferedError(DomainError):
+    """The customer is marked eligible for a free basic allocation the tariff does not have."""
