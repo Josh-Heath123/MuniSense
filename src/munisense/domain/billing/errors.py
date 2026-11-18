@@ -11,6 +11,10 @@ class PeriodOutsideVersionError(DomainError):
     """The billing period is not wholly inside the tariff version's effective range."""
 
 
+class PeriodCrossesSeasonError(DomainError):
+    """The period crosses a season boundary of a seasonal component (splitting is P1-13)."""
+
+
 class NonMonthlyPeriodError(DomainError):
     """The period is not one calendar month but the tariff has monthly values."""
 

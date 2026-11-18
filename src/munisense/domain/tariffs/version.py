@@ -28,6 +28,7 @@ from munisense.domain.tariffs.components import (
     FlatEnergy,
     FreeBasicAllocation,
     PrintedLabel,
+    SeasonalEnergy,
 )
 
 Code = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
@@ -73,13 +74,17 @@ class TariffVersion(DomainModel):
         if len(allocations) > 1:
             msg = "a tariff version has at most one free basic allocation"
             raise ValueError(msg)
-        energy = {c.name: c for c in self.components if isinstance(c, FlatEnergy | BlockEnergy)}
+        energy = {
+            c.name: c
+            for c in self.components
+            if isinstance(c, FlatEnergy | BlockEnergy | SeasonalEnergy)
+        }
         for allocation in allocations:
             target = energy.get(allocation.energy_component)
             if target is None:
                 msg = (
-                    "a free basic allocation must name an energy component (flat or block) "
-                    "of the same version"
+                    "a free basic allocation must name an energy component (flat, block or "
+                    "seasonal) of the same version"
                 )
                 raise ValueError(msg)
             # The credit removes the energy's own charge, so it must be taxed the same way;

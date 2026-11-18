@@ -29,6 +29,9 @@ from munisense.domain.tariffs import (
     FreeBasicAllocation,
     Levy,
     PriceBasis,
+    Season,
+    SeasonalEnergy,
+    SeasonDates,
     TariffVersion,
     VatTreatment,
 )
@@ -190,6 +193,43 @@ def fixture_free_basic(
         ),
         free_kwh=cited_decimal(free_kwh, status),
         energy_component=energy_component,
+    )
+
+
+def fixture_season(
+    name: str,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    *pairs: tuple[str | None, str],
+    status: Status = FIXTURE_STATUS,
+) -> Season:
+    """A season from `start` to `end` (month, day; inclusive) with blocks as in
+    `fixture_blocks`; one `(None, cents)` pair is a flat rate."""
+    dates = SeasonDates(start_month=start[0], start_day=start[1], end_month=end[0], end_day=end[1])
+    return Season(
+        name=name,
+        label=cited_label(f"{name} season", status),
+        dates=Cited[SeasonDates](
+            value=dates, citation=fixture_citation(f"{name} dates"), status=status
+        ),
+        blocks=tuple(
+            Block(
+                up_to_kwh=None if up_to is None else cited_decimal(up_to, status),
+                rate=cited_rate(cents, RateUnit.CENTS_PER_KWH, status),
+            )
+            for up_to, cents in pairs
+        ),
+    )
+
+
+def fixture_seasonal(*seasons: Season, name: str = "energy") -> SeasonalEnergy:
+    return SeasonalEnergy(
+        schema_version=1,
+        kind="seasonal_energy",
+        name=name,
+        label=cited_label("Energy charge"),
+        vat=cited_vat(),
+        seasons=seasons,
     )
 
 

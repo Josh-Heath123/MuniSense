@@ -29,6 +29,8 @@ class SourceRole(StrEnum):
     LABEL = "label"
     VAT_TREATMENT = "vat_treatment"
     FREE_ALLOWANCE = "free_allowance"
+    SEASON = "season"
+    SEASON_LABEL = "season_label"
 
 
 class Source(DomainModel):

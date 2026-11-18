@@ -5,8 +5,10 @@ Steps (architecture overview, "How a calculation works", for a single version):
 1. Refuse what cannot be calculated: an unsupported profile, a period outside the version,
    a period that is not one calendar month when a value is monthly (block thresholds,
    monthly charges and levies, a free allocation that applies; pro-rating is P1-13),
-   prices printed including VAT (not built yet), a period without one VAT rate, and an
-   eligible customer on a tariff without a free basic allocation.
+   prices printed including VAT (not built yet), a period without one VAT rate, an
+   eligible customer on a tariff without a free basic allocation, a missing eligibility
+   input where one is needed, and a period across a season boundary of a seasonal
+   component (splitting is P1-13).
 2. Evaluate each component into line items, exactly, then quantise each line if the
    policy names a line-amount point. A free basic allocation, for an eligible customer,
    becomes credit lines that mirror the energy lines of the kWh it makes free.
@@ -18,10 +20,12 @@ All arithmetic is exact (`Rate.charge`, `Money`, `exact()`); rounding happens on
 the version's rounding policy. A negative amount (a credit) is rounded as the positive
 amount it mirrors, then negated (`Money.quantised`), so a credit cancels its charge
 exactly whatever the rounding mode. The work done grows with the number of components
-and blocks, never with the number of days or kWh.
+and blocks, never with kWh; days count only through the season lookup, which checks at
+most 366 days per seasonal component, whatever the length of the period.
 """
 
 from collections.abc import Iterator
+from datetime import timedelta
 from decimal import Decimal
 
 from munisense.domain.billing.consumption import (
@@ -33,6 +37,7 @@ from munisense.domain.billing.errors import (
     FreeBasicEligibilityRequiredError,
     FreeBasicNotOfferedError,
     NonMonthlyPeriodError,
+    PeriodCrossesSeasonError,
     PeriodOutsideVersionError,
     UnsupportedPriceBasisError,
 )
@@ -60,6 +65,7 @@ from munisense.domain.money import (
 )
 from munisense.domain.periods import DateRange
 from munisense.domain.tariffs import (
+    Block,
     BlockEnergy,
     Component,
     FixedCharge,
@@ -67,6 +73,8 @@ from munisense.domain.tariffs import (
     FreeBasicAllocation,
     Levy,
     PriceBasis,
+    Season,
+    SeasonalEnergy,
     TariffVersion,
     VatTreatment,
 )
@@ -88,15 +96,20 @@ def calculate_bill(
     """
     total_kwh = require_period_total(consumption).kwh
     _check_calculable(version, period, free_basic_eligible=free_basic_eligible)
+    seasons = _seasons(version, period)
     eligible = bool(free_basic_eligible)
     vat_rate = vat_table.rate_for(period)
     policy = version.rounding_policy
-    energy = {c.name: c for c in version.components if isinstance(c, FlatEnergy | BlockEnergy)}
+    energy = {
+        c.name: c
+        for c in version.components
+        if isinstance(c, FlatEnergy | BlockEnergy | SeasonalEnergy)
+    }
 
     lines = [
         _quantise_line(line, policy.line_amount)
         for component in version.components
-        for line in _evaluate(component, period, total_kwh, energy, eligible)
+        for line in _evaluate(component, period, total_kwh, energy, seasons, eligible)
     ]
     lines, vat = _apply_vat(lines, vat_rate, policy)
     subtotal = Money.sum(line.amount for line in lines)
@@ -170,9 +183,29 @@ def _check_calculable(
         raise NonMonthlyPeriodError(msg)
 
 
+def _seasons(version: TariffVersion, period: DateRange) -> dict[str, Season]:
+    """The season each seasonal component uses for the period; refuses a period that
+    crosses a season boundary (splitting is P1-13)."""
+    last_day = period.end - timedelta(days=1)
+    seasons: dict[str, Season] = {}
+    for component in version.components:
+        if isinstance(component, SeasonalEnergy):
+            season = component.season_for(period.start, last_day)
+            if season is None:
+                msg = (
+                    f"the billing period crosses a season boundary of '{component.name}'; "
+                    "splitting a period into seasons is not built yet"
+                )
+                raise PeriodCrossesSeasonError(msg)
+            seasons[component.name] = season
+    return seasons
+
+
 def _is_monthly(component: Component, free_basic_eligible: bool) -> bool:
     if isinstance(component, BlockEnergy):
         return True
+    if isinstance(component, SeasonalEnergy):
+        return component.has_thresholds
     if isinstance(component, FreeBasicAllocation):
         return free_basic_eligible  # only applies, and so only matters, when eligible
     return (
@@ -188,7 +221,8 @@ def _evaluate(
     component: Component,
     period: DateRange,
     kwh: Decimal,
-    energy: dict[str, FlatEnergy | BlockEnergy],
+    energy: dict[str, FlatEnergy | BlockEnergy | SeasonalEnergy],
+    seasons: dict[str, Season],
     free_basic_eligible: bool,
 ) -> Iterator[LineItem]:
     if isinstance(component, FixedCharge):
@@ -200,26 +234,51 @@ def _evaluate(
             yield _line(component, "all kWh", kwh, QuantityUnit.KWH, component.rate)
     elif isinstance(component, FreeBasicAllocation):
         if free_basic_eligible:
-            yield from _free_basic(component, energy[component.energy_component], kwh)
+            target = energy[component.energy_component]
+            yield from _free_basic(component, target, kwh, seasons)
     else:
-        yield from _energy(component, kwh)
+        yield from _energy(component, kwh, seasons)
 
 
-def _energy(component: FlatEnergy | BlockEnergy, kwh: Decimal) -> Iterator[LineItem]:
+def _energy(
+    component: FlatEnergy | BlockEnergy | SeasonalEnergy,
+    kwh: Decimal,
+    seasons: dict[str, Season],
+) -> Iterator[LineItem]:
     if isinstance(component, BlockEnergy):
-        yield from _blocks(component, kwh)
+        yield from _blocks(component, component.blocks, kwh)
+    elif isinstance(component, SeasonalEnergy):
+        yield from _seasonal(component, seasons[component.name], kwh)
     elif kwh > 0:
         yield _line(component, "all kWh", kwh, QuantityUnit.KWH, component.rate)
 
 
+def _seasonal(component: SeasonalEnergy, season: Season, kwh: Decimal) -> Iterator[LineItem]:
+    dates, label = season.dates, season.label
+    extra = (
+        Source(role=SourceRole.SEASON, citation=dates.citation, status=dates.kind),
+        Source(role=SourceRole.SEASON_LABEL, citation=label.citation, status=label.kind),
+    )
+    prefix = f"{season.label.value}: "
+    if len(season.blocks) == 1:  # one open block: a flat rate for the season
+        if kwh > 0:
+            rate = season.blocks[0].rate
+            yield _line(component, f"{prefix}all kWh", kwh, QuantityUnit.KWH, rate, extra=extra)
+    else:
+        yield from _blocks(component, season.blocks, kwh, prefix=prefix, extra=extra)
+
+
 def _free_basic(
-    allocation: FreeBasicAllocation, target: FlatEnergy | BlockEnergy, kwh: Decimal
+    allocation: FreeBasicAllocation,
+    target: FlatEnergy | BlockEnergy | SeasonalEnergy,
+    kwh: Decimal,
+    seasons: dict[str, Season],
 ) -> Iterator[LineItem]:
     """Credit lines for the free kWh: the target's lines for the first `free` kWh, negated,
     citing the allocation's label, VAT treatment and free kWh as well as the target's rate
     and thresholds."""
     free = min(kwh, allocation.free_kwh.value)
-    for charge in _energy(target, free):
+    for charge in _energy(target, free, seasons):
         sources = (
             *(
                 s
@@ -264,10 +323,17 @@ def _fixed(component: FixedCharge | Levy, period: DateRange) -> LineItem:
     return _line(component, "1 month", Decimal(1), QuantityUnit.MONTH, component.rate)
 
 
-def _blocks(component: BlockEnergy, kwh: Decimal) -> Iterator[LineItem]:
+def _blocks(
+    component: BlockEnergy | SeasonalEnergy,
+    blocks: tuple[Block, ...],
+    kwh: Decimal,
+    *,
+    prefix: str = "",
+    extra: tuple[Source, ...] = (),
+) -> Iterator[LineItem]:
     previous: Cited[ExactDecimal] | None = None
     lower = Decimal(0)
-    for number, block in enumerate(component.blocks, start=1):
+    for number, block in enumerate(blocks, start=1):
         upper = None if block.up_to_kwh is None else block.up_to_kwh.value
         with exact():
             used = max(Decimal(0), (kwh if upper is None else min(kwh, upper)) - lower)
@@ -275,12 +341,13 @@ def _blocks(component: BlockEnergy, kwh: Decimal) -> Iterator[LineItem]:
             span = f"above {lower:f} kWh" if upper is None else f"{lower:f} to {upper:f} kWh"
             yield _line(
                 component,
-                f"block {number}: {span}",
+                f"{prefix}block {number}: {span}",
                 used,
                 QuantityUnit.KWH,
                 block.rate,
                 lower_threshold=previous,
                 upper_threshold=block.up_to_kwh,
+                extra=extra,
             )
         previous = block.up_to_kwh
         lower = upper if upper is not None else lower
@@ -295,6 +362,7 @@ def _line(
     *,
     lower_threshold: Cited[ExactDecimal] | None = None,
     upper_threshold: Cited[ExactDecimal] | None = None,
+    extra: tuple[Source, ...] = (),
 ) -> LineItem:
     roles = [
         (SourceRole.RATE, rate.citation, rate.kind),
@@ -307,7 +375,7 @@ def _line(
     ):
         if threshold is not None:
             roles.append((role, threshold.citation, threshold.kind))
-    sources = tuple(Source(role=r, citation=c, status=k) for r, c, k in roles)
+    sources = (*(Source(role=r, citation=c, status=k) for r, c, k in roles), *extra)
     return LineItem(
         component=component.name,
         label=component.label.value,

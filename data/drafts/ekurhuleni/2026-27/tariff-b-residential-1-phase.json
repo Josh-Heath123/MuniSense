@@ -140,7 +140,7 @@
     },
     {
       "schema_version": 1,
-      "kind": "flat_energy",
+      "kind": "seasonal_energy",
       "name": "energy",
       "label": {
         "value": "Energy charge",
@@ -168,22 +168,118 @@
           "reason": "citation check not built until P2; scanned page, no text layer; standard rating inferred: the schedule says only that VAT is excluded"
         }
       },
-      "rate": {
-        "value": {
-          "value": "3.3700",
-          "unit": "R/kWh"
+      "seasons": [
+        {
+          "name": "high_demand",
+          "label": {
+            "value": "High Demand Season",
+            "citation": {
+              "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+              "page": 4,
+              "locator": "Energy Charge (R/kWh), R.3",
+              "printed_text": "R.3. High Demand Season (June, July, and August)"
+            },
+            "status": {
+              "kind": "estimated",
+              "reason": "citation check not built until P2; scanned page, no text layer"
+            }
+          },
+          "dates": {
+            "value": {
+              "start_month": 6,
+              "start_day": 1,
+              "end_month": 8,
+              "end_day": 31
+            },
+            "citation": {
+              "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+              "page": 4,
+              "locator": "Energy Charge (R/kWh), R.3",
+              "printed_text": "R.3. High Demand Season (June, July, and August)"
+            },
+            "status": {
+              "kind": "estimated",
+              "reason": "citation check not built until P2; scanned page, no text layer; season named by months; read as whole months, first to last day"
+            }
+          },
+          "blocks": [
+            {
+              "up_to_kwh": null,
+              "rate": {
+                "value": {
+                  "value": "3.3700",
+                  "unit": "R/kWh"
+                },
+                "citation": {
+                  "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+                  "page": 4,
+                  "locator": "Energy Charge (R/kWh), R.3, rate",
+                  "printed_text": "R3.37,00"
+                },
+                "status": {
+                  "kind": "estimated",
+                  "reason": "citation check not built until P2; scanned page, no text layer; R3.37,00 read as R3.3700 from format and magnitude; confirm against a vending receipt"
+                }
+              }
+            }
+          ]
         },
-        "citation": {
-          "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
-          "page": 4,
-          "locator": "Energy Charge (R/kWh), R.3 High Demand Season and R.4 Low Demand Season: the same value in both (one flat rate until P1-12)",
-          "printed_text": "R3.37,00"
-        },
-        "status": {
-          "kind": "estimated",
-          "reason": "citation check not built until P2; scanned page, no text layer; R3.37,00 read as R3.3700 from format and magnitude; confirm against a vending receipt"
+        {
+          "name": "low_demand",
+          "label": {
+            "value": "Low Demand Season",
+            "citation": {
+              "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+              "page": 4,
+              "locator": "Energy Charge (R/kWh), R.4",
+              "printed_text": "R.4. Low Demand Season (September to May)"
+            },
+            "status": {
+              "kind": "estimated",
+              "reason": "citation check not built until P2; scanned page, no text layer"
+            }
+          },
+          "dates": {
+            "value": {
+              "start_month": 9,
+              "start_day": 1,
+              "end_month": 5,
+              "end_day": 31
+            },
+            "citation": {
+              "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+              "page": 4,
+              "locator": "Energy Charge (R/kWh), R.4",
+              "printed_text": "R.4. Low Demand Season (September to May)"
+            },
+            "status": {
+              "kind": "estimated",
+              "reason": "citation check not built until P2; scanned page, no text layer; season named by months; read as whole months, first to last day"
+            }
+          },
+          "blocks": [
+            {
+              "up_to_kwh": null,
+              "rate": {
+                "value": {
+                  "value": "3.3700",
+                  "unit": "R/kWh"
+                },
+                "citation": {
+                  "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+                  "page": 4,
+                  "locator": "Energy Charge (R/kWh), R.4, rate",
+                  "printed_text": "R3.37,00"
+                },
+                "status": {
+                  "kind": "estimated",
+                  "reason": "citation check not built until P2; scanned page, no text layer; R3.37,00 read as R3.3700 from format and magnitude; confirm against a vending receipt"
+                }
+              }
+            }
+          ]
         }
-      }
+      ]
     }
   ]
 }

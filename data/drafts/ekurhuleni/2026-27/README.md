@@ -12,7 +12,7 @@ Tariff B was chosen as the Ekurhuleni example tariff for P1 (E32). It was first 
 ## Transcription choices
 
 1. **One version per supply phase.** The printed tariff has one basic charge per phase; a customer has one or the other, so each is a version with its own tariff code.
-2. **Energy as one flat rate.** The schedule prints a high-demand (June to August) and a low-demand (September to May) value; both are `R3.37,00`. Until seasonal energy exists (P1-12), the rate is one flat rate whose citation names both cells. Bills in both seasons therefore use the same value through the same code path; seasonal behaviour is untested until P1-12, when this becomes a seasonal component with two citations.
+2. **Energy by season (since P1-12).** The schedule prints a high-demand (R.3, June to August) and a low-demand (R.4, September to May) value; both are `R3.37,00` in 2026/27. The energy is a seasonal component with one season per printed cell, each with its own cited dates and rate. The dates are read as whole months (1 June to 31 August; 1 September to 31 May), recorded in the status reason. Each bill cites the season it used.
 3. **`R3.37,00` read as R3.3700.** Inferred from the format and magnitude (P1-8 hazard 2); recorded in the status reason. Confirm against an **Ekurhuleni** vending receipt before `verified` (the owner's receipts are not Ekurhuleni, E34).
 4. **End date.** Printed "30 JUNE 2027" (the last day); stored as the exclusive end 2027-07-01, because periods are half-open.
 5. **VAT treatment `standard`.** The schedule says only "All tariffs listed below, show VAT excluded." Standard rating is an inference, stated in the status reason.
