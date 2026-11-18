@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "kind": "prepaid_purchases",
+  "provided_by": "owner_prepaid_receipt",
+  "supplier": null,
+  "tariff": null,
+  "note": "Figures only. Supplier and tariff unknown. Not tariff data and not evidence about any named supplier (E34, E39).",
+  "purchases": [
+    {"date": "2026-09-10", "order_in_day": 1, "channel": "bank_app", "rand": "60.00", "kwh": "14.89"},
+    {"date": "2026-09-10", "order_in_day": 2, "channel": "bank_app", "rand": "160.00", "kwh": "39.70"},
+    {"date": "2026-10-18", "order_in_day": 1, "channel": "bank_app", "rand": "200.00", "kwh": "49.63"},
+    {"date": "2026-11-15", "order_in_day": 1, "channel": "bank_app", "rand": "200.00", "kwh": "49.63"}
+  ]
+}

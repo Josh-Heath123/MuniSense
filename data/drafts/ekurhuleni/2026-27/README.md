@@ -7,13 +7,13 @@ Transcribed by Claude Code in P1-9 from the signed Schedule 2 (`data/sources/eku
 | `tariff-b-residential-1-phase.json` | Tariff B (Residential), single-phase | R109.78 per point of supply per month (R1.1, page 4) | R3.3700 per kWh (R.3 and R.4, page 4) |
 | `tariff-b-residential-3-phase.json` | Tariff B (Residential), three-phase | R203.89 per point of supply per month (R1.2, page 4) | R3.3700 per kWh |
 
-Tariff B is the tariff of the owner's prepaid meter (E32).
+Tariff B was chosen as the Ekurhuleni example tariff for P1 (E32). It was first described as the tariff of the owner's prepaid meter; that was wrong (E34): the owner's meter is not in Ekurhuleni and its supplier and tariff are unknown.
 
 ## Transcription choices
 
 1. **One version per supply phase.** The printed tariff has one basic charge per phase; a customer has one or the other, so each is a version with its own tariff code.
 2. **Energy as one flat rate.** The schedule prints a high-demand (June to August) and a low-demand (September to May) value; both are `R3.37,00`. Until seasonal energy exists (P1-12), the rate is one flat rate whose citation names both cells. Bills in both seasons therefore use the same value through the same code path; seasonal behaviour is untested until P1-12, when this becomes a seasonal component with two citations.
-3. **`R3.37,00` read as R3.3700.** Inferred from the format and magnitude (P1-8 hazard 2); recorded in the status reason. Confirm against a vending receipt before `verified`.
+3. **`R3.37,00` read as R3.3700.** Inferred from the format and magnitude (P1-8 hazard 2); recorded in the status reason. Confirm against an **Ekurhuleni** vending receipt before `verified` (the owner's receipts are not Ekurhuleni, E34).
 4. **End date.** Printed "30 JUNE 2027" (the last day); stored as the exclusive end 2027-07-01, because periods are half-open.
 5. **VAT treatment `standard`.** The schedule says only "All tariffs listed below, show VAT excluded." Standard rating is an inference, stated in the status reason.
 6. **Rounding policy `ekurhuleni-estimated`.** Not in the schedule. Lines, VAT (once on the subtotal) and total to cents, half up, until learnt from real bills or receipts (P3).

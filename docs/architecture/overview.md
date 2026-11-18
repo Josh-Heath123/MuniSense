@@ -46,6 +46,7 @@ data/
   tariffs/        published tariff files, reviewed and committed: the source of truth
                   (name and layout confirmed by the P2 storage ADR)
   golden/         anonymised golden bills (committed)
+  observations/   user-provided figures that are not tariff data (committed; figures only)
   sources/        source PDFs (committed; identified by SHA-256)
   private/        un-anonymised bills (git-ignored; never committed)
 ```

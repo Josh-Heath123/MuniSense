@@ -1,9 +1,10 @@
 """P1-9: City of Ekurhuleni Tariff B (Residential), 2026/27, end to end.
 
-The tariff of the owner's prepaid meter (E32), transcribed from the signed schedule in
-`data/sources/ekurhuleni/` into the drafts `data/drafts/ekurhuleni/2026-27/` (not reviewed or
-published; P3), with the VAT rate from SARS (`data/sources/sars/`, `data/drafts/vat/`).
-Every value is `estimated` (E29) until the citation check (P2) and a human check exist.
+The Ekurhuleni example tariff for P1 (E32; not the owner's meter, E34), transcribed from
+the signed schedule in `data/sources/ekurhuleni/` into the drafts
+`data/drafts/ekurhuleni/2026-27/` (not reviewed or published; P3), with the VAT rate from
+SARS (`data/sources/sars/`, `data/drafts/vat/`). Every value is `estimated` (E29) until
+the citation check (P2) and a human check exist.
 
 Hand calculations use only the printed values:
 
