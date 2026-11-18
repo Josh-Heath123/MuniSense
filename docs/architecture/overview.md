@@ -1,6 +1,6 @@
 # Architecture overview
 
-_Status: binding. Decided in ADR-0002 to ADR-0010, accepted by the owner on 2026-11-17._
+_Status: binding. Decided in ADR-0002 to ADR-0011, accepted by the owner on 2026-11-17 (ADR-0011 on 2026-11-18)._
 
 ## Shape
 
@@ -32,7 +32,8 @@ src/munisense/
   provenance/     SourceDocument records, verification workflow, review log (the per-value Citation and status types live in domain/citations, because the domain may not import this package)
   ingestion/      draft format, parsers/helpers, validator, review-and-publish
   persistence/    SQLAlchemy models, repositories, Alembic migrations, as-of queries
-  services/       use cases: calculate_bill, compare_tariffs, publish_version, ...
+  services/       use cases: calculate_bill, compare_tariffs, publish_version, ... (from P2). Today only
+                  demo.py: the `poe demo` entry point, which reads the Ekurhuleni drafts directly (TD-13)
   api/            FastAPI routers, schemas, auth, errors (P5)
   console/        Jinja2 + HTMX pages (P6)
   mcp/            MCP server (P7)
