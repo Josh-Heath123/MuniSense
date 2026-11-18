@@ -168,11 +168,16 @@ class Cited[T](DomainModel):
 
 def weakest(statuses: Iterable[Verified | Estimated | UserProvided]) -> StatusKind:
     """The weakest status kind in a non-empty set; refuses an empty one."""
-    kinds = [status.kind for status in statuses]
-    if not kinds:
+    return weakest_kind(status.kind for status in statuses)
+
+
+def weakest_kind(kinds: Iterable[StatusKind]) -> StatusKind:
+    """The weakest of some status kinds; the one place the order is applied (W8)."""
+    collected = list(kinds)
+    if not collected:
         msg = "cannot summarise the status of no values"
         raise NoStatusesError(msg)
-    return min(kinds, key=lambda kind: kind.rank)
+    return min(collected, key=lambda kind: kind.rank)
 
 
 def cited_statuses(item: object) -> list[Verified | Estimated | UserProvided]:

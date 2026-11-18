@@ -13,6 +13,7 @@ from munisense.domain.citations.model import (
     Verified,
     cited_statuses,
     weakest,
+    weakest_kind,
 )
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     "Verified",
     "cited_statuses",
     "weakest",
+    "weakest_kind",
 ]
