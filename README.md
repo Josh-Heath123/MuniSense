@@ -126,7 +126,6 @@ The live tracker is [`docs/status.md`](docs/status.md); the phases and their pro
 
 ## How it's built
 
-<!-- Draft wording, waiting for the owner's approval (W13). -->
 MuniSense is built by Claude Code, working under the direction of the owner, Josh Heath. The owner makes the product decisions, accepts the architecture decision records and approves each phase gate. Claude Code plans, implements, tests and documents.
 
 Every pull request is reviewed by an independent code-review agent before it is merged. When tariff data changes, a tariff-verifier agent also recalculates each value and compares it with the source page. An agent's check never makes a value verified; that takes a person.
