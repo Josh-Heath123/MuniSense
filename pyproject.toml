@@ -53,6 +53,7 @@ test = { cmd = "pytest --cov --cov-report=term-missing", help = "Full test suite
 lint-imports = { cmd = "lint-imports", env = { PYTHONPATH = "src" }, help = "Architecture contracts" }
 hook-tests = { cmd = "python -m unittest discover -s .claude/hooks/tests", help = "Tests for the Claude Code hooks" }
 verify = { sequence = ["_format-check", "_lint", "_types", "lint-imports", "test", "hook-tests"], help = "Everything CI runs except the audit (works offline)" }
+demo = { cmd = "python -m munisense.services.demo", env = { PYTHONPATH = "src" }, help = "Print the README's example bill: Ekurhuleni Tariff B, July 2026, 350 kWh, from the real data and engine" }
 audit = { shell = "uv export --frozen --all-groups --no-emit-project --format requirements-txt | pip-audit --strict --disable-pip --require-hashes --progress-spinner off -r /dev/stdin", help = "Audit every locked package, all platforms (needs network)" }
 
 # ------------------------------------------------------------------- ruff

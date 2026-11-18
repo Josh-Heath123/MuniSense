@@ -1,0 +1,14 @@
+Copyright (c) 2026 Josh Heath. All rights reserved.
+
+This repository and its contents are proprietary. No licence is granted to use,
+copy, modify, distribute or create derivative works from any part of it, except
+with the written permission of the copyright holder.
+
+Third-party material in this repository remains under its own terms:
+
+- Tariff schedules and other official documents in data/sources/ belong to their
+  publishers (for example the City of Ekurhuleni and the South African Revenue
+  Service). They are kept only so that every tariff value can be cited to its
+  source.
+- The wordmark in docs/assets/ is drawn from Bodoni Moda, licensed under the SIL
+  Open Font License 1.1 (see docs/assets/FONTS.md).

@@ -7,7 +7,7 @@ The goal is evidence that MuniSense calculates bills correctly and refuses when 
 | Layer | Folder | Tools | What it proves | Target |
 | --- | --- | --- | --- | --- |
 | Unit | `tests/unit/` | pytest | Each function and component behaves as specified, including edge cases | Fast (whole layer under about 30 seconds) |
-| Property | `tests/property/` | Hypothesis | Invariants hold for any input: bills never negative; block bills never decrease as consumption rises; splitting a period changes totals by no more than rounding; VAT equals rate times VAT-able subtotal | Engine: 95% branch coverage across unit and property tests |
+| Property | `tests/property/` (the slowest are marked `slow`, so `poe check` skips them; `poe verify` and CI run all, E43) | Hypothesis | Invariants hold for any input: bills never negative; block bills never decrease as consumption rises; splitting a period changes totals by no more than rounding; VAT equals rate times VAT-able subtotal | Engine: 95% branch coverage across unit and property tests |
 | Golden bills | `tests/golden/` + `data/golden/` | pytest | Real (anonymised) or official example bills reproduce to the cent. A prepaid golden case is a whole month of purchases | Every published tariff has at least one, or is flagged unverified |
 | Integration | `tests/integration/` | pytest + real PostgreSQL | Migrations up and down; constraints; repositories; "as recorded on" queries; rebuilding the database from tariff files is deterministic | Every migration and query path |
 | Contract | `tests/contract/` | Schemathesis + OpenAPI snapshot | The API matches its spec; no accidental breaking changes | All endpoints (from P5) |

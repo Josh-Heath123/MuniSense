@@ -1,6 +1,6 @@
 # ADR-0005: Use Decimal money and explicit, per-supplier rounding policies
 
-- **Status:** Accepted
+- **Status:** Accepted. Its list of quantisation points only: Superseded by ADR-0011 (which adds the `pro_rating` point); everything else in this ADR stands.
 - **Date:** 2026-11-17 (proposed); 2026-11-17 (accepted by the owner)
 - **Deciders:** Josh Heath (owner)
 

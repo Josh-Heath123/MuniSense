@@ -69,3 +69,5 @@
 - [ ] Trademark and domain checks for the product name.
 - [ ] POPIA: whether dated purchase figures linkable to a named person (the owner's observations, `data/observations/`) are personal information, and whether they may stay in git history.
 - [ ] Before the repository is ever made public: review whether the committed municipal and Eskom source PDFs may be republished.
+- [ ] Before the repository is ever made public: whether the source PDFs (City of Ekurhuleni, SARS) may be redistributed inside a proprietary repository under `LICENSE`, and whether the OFL reading recorded in `docs/assets/FONTS.md` (artwork made with Bodoni Moda is outside the licence's distribution conditions) holds.
+- [ ] Before the repository is ever made public: commit metadata shows the owner's private email address on about 87 earlier commits and the owner's names; removing them needs a history rewrite (P1-17 publication-readiness check, `docs/reports/2026-11-18-P1-17-publication-readiness.md`).

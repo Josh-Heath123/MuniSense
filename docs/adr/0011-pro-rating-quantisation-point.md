@@ -1,7 +1,7 @@
 # ADR-0011: Add a named pro-rating rounding point and a billing policy for period splitting
 
-- **Status:** Proposed
-- **Date:** 2026-11-18 (proposed)
+- **Status:** Accepted
+- **Date:** 2026-11-18 (proposed); 2026-11-18 (accepted by the owner at the P1 gate, W12)
 - **Deciders:** Josh Heath (owner)
 
 ## Context
