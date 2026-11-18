@@ -266,3 +266,14 @@ def test_a_seasonal_tariff_survives_a_json_round_trip() -> None:
     again = TariffVersion.model_validate_json(tariff.model_dump_json())
     assert again == tariff
     assert isinstance(again.components[1], SeasonalEnergy)
+
+
+def test_a_period_whose_last_day_starts_a_new_season_crosses_it() -> None:
+    # 20 August to 2 September: the last day, 1 September, is in the low season.
+    with pytest.raises(PeriodCrossesSeasonError):
+        calculate_bill(
+            fixture_version(DAILY, FLAT_SEASONS),
+            period(date(2026, 8, 20), date(2026, 9, 2)),
+            kwh("10"),
+            VAT,
+        )

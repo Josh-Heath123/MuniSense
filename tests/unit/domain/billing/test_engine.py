@@ -56,6 +56,7 @@ from support.builders import (
     fixture_blocks,
     fixture_fixed,
     fixture_flat,
+    fixture_levy,
     fixture_policy,
     fixture_vat_table,
     fixture_version,
@@ -510,3 +511,26 @@ def test_an_unverified_rounding_policy_alone_gives_only_its_warning() -> None:
     assert bill.status is StatusKind.VERIFIED
     assert bill.rounding_policy_status is StatusKind.USER_PROVIDED
     assert {w.code for w in bill.warnings} == {WarningCode.UNVERIFIED_ROUNDING_POLICY}
+
+
+def test_a_whole_month_of_a_monthly_charge_is_one_month() -> None:
+    bill = calculate_bill(fixture_version(BASIC), JULY, PeriodTotal(kwh=Decimal(0)), VAT)
+    assert bill.lines[0].description == "1 month"
+    assert bill.lines[0].quantity == Decimal(1)
+
+
+def test_a_flat_energy_line_says_all_kwh() -> None:
+    bill = calculate_bill(
+        fixture_version(fixture_flat("100.00")), JULY, PeriodTotal(kwh=Decimal(10)), VAT
+    )
+    assert bill.lines[0].description == "all kWh"
+
+
+def test_a_per_kwh_levy_line_says_all_kwh() -> None:
+    bill = calculate_bill(
+        fixture_version(fixture_flat("100.00"), fixture_levy("2.5")),
+        JULY,
+        PeriodTotal(kwh=Decimal(10)),
+        VAT,
+    )
+    assert bill.lines[1].description == "all kWh"

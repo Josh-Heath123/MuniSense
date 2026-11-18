@@ -26,7 +26,7 @@ from munisense.domain.billing import (
     calculate_month,
     calculate_purchase,
 )
-from munisense.domain.citations import StatusKind, Verified
+from munisense.domain.citations import Cited, ProvidedBy, StatusKind, UserProvided, Verified
 from munisense.domain.citations.model import TextCheck
 from munisense.domain.money import (
     InexactArithmeticError,
@@ -42,12 +42,15 @@ from munisense.domain.tariffs import (
     BillingPolicy,
     Component,
     PrepaidFixedCharges,
+    Season,
+    SeasonDates,
     TariffVersion,
     VatTreatment,
 )
 from support.builders import (
     cited_date,
     cited_decimal,
+    cited_label,
     fixture_billing_policy,
     fixture_blocks,
     fixture_fixed,
@@ -454,3 +457,124 @@ def test_fixed_charges_in_a_month_with_a_vat_change_are_refused() -> None:
     version = tariff(fixture_fixed("100.00"), BLOCKS)
     with pytest.raises(VatRateChangesError):
         calculate_purchase(version, date(2026, 7, 20), rand("200.00"), NOTHING_YET, table)
+
+
+@pytest.mark.parametrize("weak_part", ["label", "dates"])
+def test_a_weaker_season_value_weakens_a_seasonal_purchase(weak_part: str) -> None:
+    weak = UserProvided(provided_by=ProvidedBy.OWNER_BILL)
+    base = fixture_season("high", (6, 1), (8, 31), (None, "300.00"))
+    label = cited_label("high season", weak) if weak_part == "label" else base.label
+    dates = base.dates
+    if weak_part == "dates":
+        dates = Cited[SeasonDates](
+            value=base.dates.value, citation=base.dates.citation, status=weak
+        )
+    high = Season(name=base.name, label=label, dates=dates, blocks=base.blocks)
+    low = fixture_season("low", (9, 1), (5, 31), (None, "200.00"))
+    version = tariff(fixture_seasonal(high, low), billing=NOT_FROM_PURCHASES)
+    july = calculate_purchase(version, date(2026, 7, 5), rand("33.75"), NOTHING_YET, VAT)
+    october = calculate_purchase(version, date(2026, 10, 5), rand("33.75"), NOTHING_YET, VAT)
+    assert july.status is StatusKind.USER_PROVIDED
+    assert october.status is StatusKind.ESTIMATED
+    roles = [source.role for source in july.segments[0].sources]
+    assert SourceRole.SEASON in roles
+    assert SourceRole.SEASON_LABEL in roles
+
+
+def test_a_purchase_on_the_last_day_of_the_version_is_priced() -> None:
+    version = tariff(fixture_flat("100.00"), billing=NOT_FROM_PURCHASES)  # to 1 July 2027
+    purchase = calculate_purchase(version, date(2027, 6, 30), rand("11.25"), NOTHING_YET, VAT)
+    assert purchase.kwh == Decimal("10.00")
+
+
+def test_fixed_charges_on_a_tariff_with_an_allocation_use_the_stated_eligibility() -> None:
+    version = tariff(fixture_fixed("100.00"), fixture_flat("100.00"), fixture_free_basic("50"))
+    purchases = calculate_month(
+        version,
+        [(date(2026, 7, 1), rand("123.75")), (date(2026, 7, 5), rand("11.25"))],
+        VAT,
+        free_basic_eligible=False,
+    )
+    assert [p.fixed_charges for p in purchases] == [rand("112.50"), Money.zero()]
+    assert [p.kwh for p in purchases] == [Decimal("10.00"), Decimal("10.00")]
+
+
+def test_a_weaker_header_or_vat_value_weakens_a_purchase() -> None:
+    weak = UserProvided(provided_by=ProvidedBy.OWNER_BILL)
+    version = fixture_version(
+        fixture_flat("100.00"),
+        policy=fixture_policy(prepaid_kwh=HUNDREDTHS_UP),
+        billing=NOT_FROM_PURCHASES,
+    )
+    weak_header = version.model_validate(
+        version.model_dump() | {"printed_name": cited_label("Fixture tariff", weak).model_dump()}
+    )
+    by_header = calculate_purchase(weak_header, date(2026, 7, 1), rand("11.25"), NOTHING_YET, VAT)
+    by_vat = calculate_purchase(
+        version, date(2026, 7, 1), rand("11.25"), NOTHING_YET, fixture_vat_table(status=weak)
+    )
+    assert by_header.status is StatusKind.USER_PROVIDED
+    assert by_vat.status is StatusKind.USER_PROVIDED
+
+
+def test_less_than_one_kwh_with_no_earlier_purchase_is_refused() -> None:
+    with pytest.raises(InvalidPurchaseError):
+        calculate_purchase(
+            tariff(BLOCKS),
+            date(2026, 7, 10),
+            rand("200.00"),
+            MonthSoFar(purchases=0, kwh=Decimal("0.5")),
+            VAT,
+        )
+
+
+def test_a_monthly_levy_alone_is_a_fixed_charge_for_prepaid() -> None:
+    # R20.00 a month (standard) + VAT 2.50 = R22.50 from the first purchase.
+    levy = fixture_levy("20.00", RateUnit.RAND_PER_MONTH)
+    version = tariff(fixture_flat("100.00"), levy)
+    purchase = calculate_purchase(version, date(2026, 7, 1), rand("33.75"), NOTHING_YET, VAT)
+    assert purchase.fixed_charges == rand("22.50")
+    assert purchase.kwh == Decimal("10.00")
+
+
+def test_nothing_spent_on_free_energy_buys_nothing() -> None:
+    version = tariff(fixture_flat("0"), billing=NOT_FROM_PURCHASES)
+    purchase = calculate_purchase(version, date(2026, 7, 1), Money.zero(), NOTHING_YET, VAT)
+    assert purchase.kwh == Decimal("0.00")
+
+
+def test_the_open_last_block_cites_its_lower_threshold_only() -> None:
+    version = tariff(BLOCKS, billing=NOT_FROM_PURCHASES)
+    so_far = MonthSoFar(purchases=1, kwh=Decimal(400))
+    purchase = calculate_purchase(version, date(2026, 7, 10), rand("10.00"), so_far, VAT)
+    (segment,) = purchase.segments
+    thresholds = [
+        (s.role, s.citation.printed_text)
+        for s in segment.sources
+        if s.role in {SourceRole.LOWER_THRESHOLD, SourceRole.UPPER_THRESHOLD}
+    ]
+    assert thresholds == [(SourceRole.LOWER_THRESHOLD, "350")]
+
+
+def test_nothing_spent_without_a_prepaid_point_buys_exactly_nothing() -> None:
+    version = fixture_version(
+        fixture_flat("100.00"), billing=NOT_FROM_PURCHASES, policy=fixture_policy()
+    )
+    purchase = calculate_purchase(version, date(2026, 7, 1), Money.zero(), NOTHING_YET, VAT)
+    assert purchase.kwh == Decimal(0)
+
+
+def test_a_free_first_block_is_reached_even_with_nothing_spent() -> None:
+    # kWh priced at zero cost nothing: R0.00 reaches the end of a free 50 kWh block (and a
+    # later purchase starts from 50, so the block is not given twice).
+    version = tariff(fixture_blocks(("50", "0"), (None, "200.00")), billing=NOT_FROM_PURCHASES)
+    purchase = calculate_purchase(version, date(2026, 7, 1), Money.zero(), NOTHING_YET, VAT)
+    assert purchase.kwh == Decimal(50)
+    assert [(s.from_kwh, s.to_kwh, s.amount) for s in purchase.segments] == [
+        (Decimal(0), Decimal(50), Money.zero())
+    ]
+    month = calculate_month(
+        version, [(date(2026, 7, 1), Money.zero()), (date(2026, 7, 2), Money.zero())], VAT
+    )
+    assert [p.kwh for p in month] == [Decimal(50), Decimal("0.00")]
+    assert month[1].month_kwh_before == Decimal(50)

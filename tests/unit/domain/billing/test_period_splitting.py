@@ -526,3 +526,83 @@ def test_a_scaled_allowance_spanning_two_scaled_blocks_credits_each_block() -> N
     assert july_credits == [rand("-41.78"), rand("-11.03")]
     assert august_credits == [rand("-34.41"), rand("-9.08")]
     assert (july.total, august.total, bill.total) == (rand("49.62"), rand("40.87"), rand("90.49"))
+
+
+# ------------------------------------------------- gaps found by mutation testing (P1-15)
+
+
+def test_a_reading_period_across_the_year_end_splits_at_1_january() -> None:
+    # 15 December 2026 to 15 January 2027: December 17/31 -> 0.548387 (213.45 -> 117.05),
+    # January 14/31 -> 0.451613 (96.40).
+    period = BillingPeriod(start=date(2026, 12, 15), end=date(2027, 1, 15))
+    bill = calculate_period([fixture_version(BASIC)], period, kwh("0"), VAT)
+    assert [part.period.start for part in bill.parts] == [date(2026, 12, 15), date(2027, 1, 1)]
+    assert [part.lines[0].amount for part in bill.parts] == [rand("117.05"), rand("96.40")]
+
+
+def test_a_free_allowance_on_a_flat_tariff_is_scaled_for_a_part_month() -> None:
+    # Flat 100c, 50 free kWh a month, eligible, 60 kWh, 15 July to 15 August. The only
+    # monthly value is the allowance, so it alone makes the parts pro-rated.
+    # July: 32.90322 kWh -> 32.90; free 27.41935 -> -27.42; subtotal 5.48; VAT 0.685 -> 0.69;
+    #   total 6.17. August: 27.09678 -> 27.10; free 22.58065 -> -22.58; 4.52; VAT 0.565 ->
+    #   0.57; total 5.09. Period 11.26 (unscaled, everything would be free).
+    bill = calculate_period(
+        [fixture_version(fixture_flat("100.00"), fixture_free_basic("50"))],
+        MID_JULY,
+        kwh("60"),
+        VAT,
+        free_basic_eligible=True,
+    )
+    assert [part.month_fraction for part in bill.parts] == [
+        Decimal("0.548387"),
+        Decimal("0.451613"),
+    ]
+    assert (bill.parts[0].total, bill.parts[1].total, bill.total) == (
+        rand("6.17"),
+        rand("5.09"),
+        rand("11.26"),
+    )
+
+
+def test_a_version_change_without_monthly_values_is_still_a_split() -> None:
+    daily = fixture_fixed("1.00", RateUnit.RAND_PER_DAY)
+    old = fixture_version(daily, start=date(2025, 7, 1), end=date(2026, 7, 1))
+    new = fixture_version(daily, start=date(2026, 7, 1), end=None)
+    period = BillingPeriod(start=date(2026, 6, 20), end=date(2026, 7, 10))
+    bill = calculate_period([old, new], period, kwh("0"), VAT)
+    assert len(bill.parts) == 2
+    assert all(part.month_fraction is None for part in bill.parts)
+    assert bill.split is True
+
+
+def test_a_version_ending_on_the_period_start_is_ignored() -> None:
+    older = fixture_version(BASIC, BLOCKS, start=date(2025, 7, 1), end=date(2026, 7, 1))
+    current = fixture_version(BASIC, BLOCKS, start=date(2026, 7, 1), end=None)
+    bill = calculate_period([older, current], JULY, kwh("412.3"), VAT)
+    assert bill.total == rand("1185.35")
+
+
+def test_season_starts_of_a_version_stop_where_the_version_ends() -> None:
+    # The old version (to 1 September) is seasonal with a season starting 15 September;
+    # the new one is flat. 15 September must not cut the new version's days.
+    seasonal = fixture_seasonal(
+        fixture_season("a", (9, 15), (12, 31), (None, "100.00")),
+        fixture_season("b", (1, 1), (9, 14), (None, "100.00")),
+    )
+    daily = fixture_fixed("1.00", RateUnit.RAND_PER_DAY)
+    old = fixture_version(daily, seasonal, start=date(2025, 7, 1), end=date(2026, 9, 1))
+    new = fixture_version(daily, fixture_flat("100.00"), start=date(2026, 9, 1), end=None)
+    period = BillingPeriod(start=date(2026, 8, 20), end=date(2026, 9, 25))
+    bill = calculate_period([old, new], period, kwh("10"), VAT)
+    assert [part.period.start for part in bill.parts] == [date(2026, 8, 20), date(2026, 9, 1)]
+
+
+def test_a_seasonal_period_ending_in_the_last_year_of_the_calendar_is_split() -> None:
+    seasonal = fixture_seasonal(
+        fixture_season("high", (6, 1), (8, 31), (None, "300.00")),
+        fixture_season("low", (9, 1), (5, 31), (None, "200.00")),
+    )
+    tariff = fixture_version(seasonal, start=date(9999, 1, 1), end=None)
+    period = BillingPeriod(start=date(9999, 8, 15), end=date(9999, 9, 15))
+    bill = calculate_period([tariff], period, kwh("1"), fixture_vat_table())
+    assert [part.period.start for part in bill.parts] == [date(9999, 8, 15), date(9999, 9, 1)]

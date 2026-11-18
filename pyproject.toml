@@ -238,3 +238,18 @@ forbidden_modules = ["munisense.api", "munisense.console", "munisense.mcp"]
 name = "Rule 5: interfaces are independent of each other"
 type = "independence"
 modules = ["munisense.api", "munisense.console", "munisense.mcp"]
+
+# ----------------------------------------------------------------- mutmut (P1-15, E28)
+[tool.mutmut]
+source_paths = ["src"]
+only_mutate = ["src/munisense/domain/billing/*"]
+# Only the tests that exercise the domain. The repository checks (domain purity, package,
+# pre-push hook) inspect files rather than behaviour: inside mutmut's copy the purity test
+# would read the instrumented sources and fail on every mutant, inflating the score. They
+# still run in `poe verify` and CI.
+pytest_add_cli_args_test_selection = [
+    "tests/unit/domain/",
+    "tests/property/domain/",
+    "tests/unit/data/",
+]
+also_copy = ["tests/", "data/", "pyproject.toml"]
