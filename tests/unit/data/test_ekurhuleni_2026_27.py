@@ -29,6 +29,7 @@ from munisense.domain.billing import (
     SourceRole,
     WarningCode,
     calculate_bill,
+    calculate_month,
     calculate_period,
 )
 from munisense.domain.citations import Estimated, StatusKind, cited_statuses
@@ -285,3 +286,48 @@ def test_a_period_starting_before_2026_27_is_refused_without_the_old_schedule() 
     period = BillingPeriod(start=date(2026, 6, 15), end=date(2026, 7, 15))
     with pytest.raises(PeriodOutsideVersionError):
         calculate_period([tariff("1-phase")], period, PeriodTotal(kwh=Decimal(1)), vat_table())
+
+
+# ---------------------------------------------------- prepaid purchases, from P1-15
+# The estimated billing policy takes the month's basic charge, with VAT, from the first
+# purchase; blocks reset monthly (Tariff B has none); kWh rounded once per purchase to
+# hundredths, half up. One kWh costs R3.3700 x 1.15 = R3.8755 in both seasons.
+# A cent amount can only buy kWh with an exact third decimal when the kWh are whole
+# (R3.8755 x n/1000 is a whole number of cents only when n is a multiple of 20,000), so no
+# Ekurhuleni purchase lands on a half-hundredth: the rounding mode is proven by fixtures.
+
+
+def test_a_month_of_prepaid_purchases_on_tariff_b_1_phase() -> None:
+    # 1 July 2026 R500.00: basic 109.78 + VAT 16.467 -> 16.47 = R126.25 deducted;
+    #   R373.75 / 3.8755 = 96.4391... -> 96.44 kWh
+    # 15 July 2026 R300.00: nothing deducted; 300 / 3.8755 = 77.4093... -> 77.41 kWh
+    # Month: 173.85 kWh
+    purchases = calculate_month(
+        tariff("1-phase"),
+        [(date(2026, 7, 1), rand("500.00")), (date(2026, 7, 15), rand("300.00"))],
+        vat_table(),
+    )
+    assert [p.fixed_charges for p in purchases] == [rand("126.25"), Money.zero()]
+    assert [p.kwh for p in purchases] == [Decimal("96.44"), Decimal("77.41")]
+    assert purchases[-1].month_kwh_after == Decimal("173.85")
+    assert purchases[0].segments[0].price_per_kwh == Decimal("3.875500")
+    codes = {w.code for w in purchases[0].warnings}
+    assert {WarningCode.UNVERIFIED_ROUNDING_POLICY, WarningCode.UNVERIFIED_BILLING_POLICY} <= codes
+
+
+def test_a_month_of_prepaid_purchases_on_tariff_b_3_phase_in_the_low_season() -> None:
+    # 2 October 2026 R1,000.00: basic 203.89 + VAT 30.5835 -> 30.58 = R234.47 deducted;
+    #   R765.53 / 3.8755 = 197.5306... -> 197.53 kWh (low-demand season, R.4)
+    # 20 October 2026 R250.00: 250 / 3.8755 = 64.5077... -> 64.51 kWh
+    purchases = calculate_month(
+        tariff("3-phase"),
+        [(date(2026, 10, 2), rand("1000.00")), (date(2026, 10, 20), rand("250.00"))],
+        vat_table(),
+    )
+    assert purchases[0].fixed_charges == rand("234.47")
+    assert [p.kwh for p in purchases] == [Decimal("197.53"), Decimal("64.51")]
+    sources = purchases[0].segments[0].sources
+    assert [x.citation.printed_text for x in sources if x.role is SourceRole.RATE] == ["R3.37,00"]
+    season = [x.citation.printed_text for x in sources if x.role is SourceRole.SEASON]
+    assert len(season) == 1
+    assert season[0].startswith("R.4. Low Demand Season")

@@ -13,6 +13,7 @@ Each fact lives in exactly one place. Other documents link to it rather than rep
 | [`adr/`](adr/) | Decisions and their reasons. Never edited once Accepted | New ADR via `/adr`; the owner accepts |
 | [`quality/standards.md`](quality/standards.md) | Coding standards | Changes only with the owner's approval |
 | [`quality/testing-strategy.md`](quality/testing-strategy.md) | Test layers, tools, targets | Claude Code, with a note in the report |
+| [`quality/mutation-p1-15.md`](quality/mutation-p1-15.md) | The latest mutation-testing result for `domain.billing`, with every surviving mutant classified | Claude Code, whenever mutation testing is re-run |
 | [`quality/definition-of-done.md`](quality/definition-of-done.md) | When a task is done | Changes only with the owner's approval |
 | [`security/security-and-privacy.md`](security/security-and-privacy.md) | Controls, threats, POPIA register, legal items needing formal verification | Claude Code, when a change affects security or privacy |
 | [`tech-debt.md`](tech-debt.md) | Deferred work, with reasons | Claude Code |

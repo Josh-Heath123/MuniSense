@@ -247,7 +247,7 @@ def _buy(
     version: TariffVersion, day: date, before: Decimal, money: Decimal, vat_rate: VatRate
 ) -> tuple[list[PurchaseSegment], Decimal]:
     priced = _per_kwh_components(version, day)
-    cuts = sorted({t for _, _, blocks in priced for t in _thresholds(blocks)})
+    cuts = sorted({t for _, _, blocks, _ in priced for t in _thresholds(blocks)})
     point = version.rounding_policy.prepaid_kwh
     if point is not None:
         _check_whole_steps(point, before, cuts)
@@ -344,7 +344,8 @@ def _segment(  # one segment's figures
     )
 
 
-type _Priced = tuple[Component, VatTreatment, tuple[Block, ...]]
+type _Priced = tuple[Component, VatTreatment, tuple[Block, ...], tuple[Source, ...]]
+"""A per-kWh component, its VAT treatment, its blocks, and extra sources (the season)."""
 
 
 def _per_kwh_components(version: TariffVersion, day: date) -> list[_Priced]:
@@ -352,17 +353,21 @@ def _per_kwh_components(version: TariffVersion, day: date) -> list[_Priced]:
     priced: list[_Priced] = []
     for component in version.components:
         if isinstance(component, BlockEnergy):
-            priced.append((component, component.vat.value, component.blocks))
+            priced.append((component, component.vat.value, component.blocks, ()))
         elif isinstance(component, SeasonalEnergy):
             season = next(s for s in component.seasons if s.dates.value.contains(day))
-            priced.append((component, component.vat.value, season.blocks))
+            dates, label = season.dates, season.label
+            season_sources = (
+                Source(role=SourceRole.SEASON, citation=dates.citation, status=dates.kind),
+                Source(role=SourceRole.SEASON_LABEL, citation=label.citation, status=label.kind),
+            )
+            priced.append((component, component.vat.value, season.blocks, season_sources))
         elif isinstance(component, FlatEnergy) or (
             isinstance(component, Levy)
             and component.rate.value.canonical_unit is CanonicalUnit.RAND_PER_KWH
         ):
-            priced.append(
-                (component, component.vat.value, (Block(up_to_kwh=None, rate=component.rate),))
-            )
+            flat = (Block(up_to_kwh=None, rate=component.rate),)
+            priced.append((component, component.vat.value, flat, ()))
     return priced
 
 
@@ -377,7 +382,7 @@ def _price(
     component is standard-rated), and the sources of every value it used."""
     price = Decimal(0)
     sources: list[Source] = []
-    for component, vat, blocks in priced:
+    for component, vat, blocks, extra in priced:
         rate, used = _block_at(blocks, low)
         with exact():
             unit = rate.value.canonical_value
@@ -385,6 +390,7 @@ def _price(
                 unit = unit * (1 + vat_rate.fraction)
             price += unit
         sources.extend(_sources(component, rate, used, blocks))
+        sources.extend(extra)
     return price, tuple(sources)
 
 

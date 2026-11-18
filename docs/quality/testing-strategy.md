@@ -13,7 +13,7 @@ The goal is evidence that MuniSense calculates bills correctly and refuses when 
 | Contract | `tests/contract/` | Schemathesis + OpenAPI snapshot | The API matches its spec; no accidental breaking changes | All endpoints (from P5) |
 | End-to-end | `tests/e2e/` | pytest + HTTP client | Review-and-publish and staff calculator flows work through the real app | Key flows (from P6) |
 | Agent evaluation | `tests/eval/` | Scripted questions | The MCP tool improves answer accuracy against golden answers | P7 |
-| Mutation | n/a | mutmut on `domain.billing` | Tests catch injected bugs | At least 80% killed; survivors reviewed |
+| Mutation | n/a | mutmut on `domain.billing` (`[tool.mutmut]` in `pyproject.toml`; last result in [mutation-p1-15.md](mutation-p1-15.md)) | Tests catch injected bugs | At least 80% killed; survivors reviewed |
 | Architecture | n/a | import-linter | Dependency rules hold | All contracts pass |
 
 ## Markers and commands
