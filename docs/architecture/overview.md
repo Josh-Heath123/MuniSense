@@ -26,8 +26,8 @@ src/munisense/
     periods/      DateRange (half-open [start, end))
     citations/    Citation, Cited[T] (the "cited value"), VerificationStatus (Verified, Estimated, UserProvided), weakest()
     money/        ExactDecimal, exact(), Money, Rate, RateUnit, CanonicalUnit, VatRate, VatTable, Quantisation, RoundingPolicy (Decimal only)
-    tariffs/      TariffVersion (header + ordered components; PriceBasis), FixedCharge, FlatEnergy, BlockEnergy, SeasonalEnergy (Season, SeasonDates), Levy, FreeBasicAllocation, VatTreatment; later TOU calendars
-    billing/      calculate_bill() -> Bill (LineItem with Sources by role, BillWarning), ConsumptionProfile (PeriodTotal; TimeOfUseBuckets refused until P4), BillingPeriod; later prepaid purchase and period splitting
+    tariffs/      TariffVersion (header + ordered components; PriceBasis), FixedCharge, FlatEnergy, BlockEnergy, SeasonalEnergy (Season, SeasonDates), Levy, FreeBasicAllocation, VatTreatment, BillingPolicy; later TOU calendars
+    billing/      calculate_bill() -> Bill (LineItem with Sources by role, BillWarning); calculate_period() -> PeriodBill (split at months, versions, seasons and VAT changes; ADR-0011); ConsumptionProfile (PeriodTotal; TimeOfUseBuckets refused until P4), BillingPeriod; later prepaid purchase
   catalogue/      suppliers, customer classes, supply areas
   provenance/     SourceDocument records, verification workflow, review log (the per-value Citation and status types live in domain/citations, because the domain may not import this package)
   ingestion/      draft format, parsers/helpers, validator, review-and-publish

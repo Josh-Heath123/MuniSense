@@ -136,14 +136,13 @@ class VatApplication(StrEnum):
 
 
 class RoundingPolicy(DomainModel):
-    """A supplier's named quantisation points (ADR-0005), with its own status and evidence.
+    """A supplier's named quantisation points (ADR-0005, ADR-0011), with its own status and
+    evidence.
 
     A rounding policy is learnt from bills rather than printed in a tariff schedule. Its
     evidence is a list of citations of the (anonymised) bills or receipts it was derived
     from. A `verified` or `user_provided` policy must cite at least one; an `estimated`
-    policy may have none, and its reason says why. Whether ADR-0006's "each value has its
-    own citation" should also require evidence for an estimated policy is waiting for the
-    owner (W7).
+    policy may have none, and its reason says why (W7, decided by E37).
     """
 
     name: Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
@@ -151,6 +150,10 @@ class RoundingPolicy(DomainModel):
     vat_application: VatApplication
     vat_amount: Quantisation | None
     total: Quantisation | None
+    pro_rating: Quantisation | None
+    """Rounds the apportioning factors when a period is split (ADR-0011): days in a part /
+    days in its month for monthly values, and cumulative days / period days for kWh.
+    `None` refuses a split whose factors do not terminate."""
     prepaid_kwh: Quantisation | None
     status: VerificationStatus
     evidence: Annotated[tuple[Citation, ...], Field(max_length=100)]

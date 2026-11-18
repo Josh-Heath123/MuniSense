@@ -32,6 +32,7 @@ from support.builders import (
     cited_label,
     cited_rate,
     cited_vat,
+    fixture_billing_policy,
 )
 
 COMPONENT = TypeAdapter[Component](Component)
@@ -42,6 +43,7 @@ POLICY = RoundingPolicy(
     vat_application=VatApplication.PER_LINE,
     vat_amount=CENTS,
     total=CENTS,
+    pro_rating=None,
     prepaid_kwh=None,
     status=FIXTURE_STATUS,
     evidence=(),
@@ -108,6 +110,7 @@ def version(*components: Component, end: date | None = None) -> TariffVersion:
         effective_to=None if end is None else cited_date(end),
         price_basis=cited_basis(),
         rounding_policy=POLICY,
+        billing_policy=fixture_billing_policy(),
         components=components,
     )
 
@@ -276,6 +279,7 @@ def verified_version(weak: str | None) -> TariffVersion:
         effective_to=cited_date(date(2027, 7, 1), status("effective_to")),
         price_basis=cited_basis(status=status("price_basis")),
         rounding_policy=POLICY,
+        billing_policy=fixture_billing_policy(),
         components=(basic, energy, network),
     )
 

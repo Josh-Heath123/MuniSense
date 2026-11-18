@@ -27,7 +27,9 @@ from munisense.domain.billing import (
     PeriodOutsideVersionError,
     PeriodTotal,
     SourceRole,
+    WarningCode,
     calculate_bill,
+    calculate_period,
 )
 from munisense.domain.citations import Estimated, StatusKind, cited_statuses
 from munisense.domain.money import Money, VatTable
@@ -249,7 +251,37 @@ def test_a_period_before_the_2026_27_year_is_refused() -> None:
         calculate_bill(tariff("1-phase"), month(2026, 6), PeriodTotal(kwh=Decimal(1)), vat_table())
 
 
-def test_a_part_month_is_refused_until_pro_rating_exists() -> None:
+def test_calculate_bill_refuses_a_part_month_which_calculate_period_splits() -> None:
     period = BillingPeriod(start=date(2026, 8, 15), end=date(2026, 9, 15))
     with pytest.raises(NonMonthlyPeriodError):
         calculate_bill(tariff("1-phase"), period, PeriodTotal(kwh=Decimal(1)), vat_table())
+
+
+def test_a_reading_period_across_two_months_is_split_and_pro_rated() -> None:
+    # 15 July to 15 August 2026 (31 days), 1-phase, 300 kWh; billing policy and pro-rating
+    # point estimated (by days; factors to millionths, half up).
+    # Factors 17/31 -> 0.548387 and 14/31 -> 0.451613; kWh 164.5161 and 135.4839.
+    # July part: basic 109.78 x 0.548387 = 60.20192486 -> 60.20;
+    #   energy 164.5161 x 3.3700 = 554.419257 -> 554.42; subtotal 614.62;
+    #   VAT 15% = 92.193 -> 92.19; total 706.81
+    # August part: basic 49.57807514 -> 49.58; energy 135.4839 x 3.3700 = 456.580743
+    #   -> 456.58; subtotal 506.16; VAT 75.924 -> 75.92; total 582.08
+    # Period total 1288.89
+    period = BillingPeriod(start=date(2026, 7, 15), end=date(2026, 8, 15))
+    bill = calculate_period([tariff("1-phase")], period, PeriodTotal(kwh=Decimal(300)), vat_table())
+    july, august = bill.parts
+    assert [line.amount for line in july.lines] == [rand("60.20"), rand("554.42")]
+    assert july.total == rand("706.81")
+    assert [line.amount for line in august.lines] == [rand("49.58"), rand("456.58")]
+    assert august.total == rand("582.08")
+    assert bill.total == rand("1288.89")
+    assert bill.billing_policies == ("ekurhuleni-estimated",)
+    assert WarningCode.UNVERIFIED_BILLING_POLICY in {w.code for w in bill.warnings}
+
+
+def test_a_period_starting_before_2026_27_is_refused_without_the_old_schedule() -> None:
+    # The 2025/26 schedule is not transcribed, so the cross-over from 1 July 2026, which
+    # the schedule says is billed pro rata, cannot be priced yet.
+    period = BillingPeriod(start=date(2026, 6, 15), end=date(2026, 7, 15))
+    with pytest.raises(PeriodOutsideVersionError):
+        calculate_period([tariff("1-phase")], period, PeriodTotal(kwh=Decimal(1)), vat_table())

@@ -29,3 +29,8 @@ class FreeBasicEligibilityRequiredError(DomainError):
 
 class FreeBasicNotOfferedError(DomainError):
     """The customer is marked eligible for a free basic allocation the tariff does not have."""
+
+
+class IncompatibleVersionsError(DomainError):
+    """The tariff versions given for a period are empty, overlap, or belong to different
+    tariffs."""

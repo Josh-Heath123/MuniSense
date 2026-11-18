@@ -67,6 +67,7 @@ class WarningCode(StrEnum):
     UNVERIFIED_VALUES = "unverified_values"
     UNVERIFIED_ROUNDING_POLICY = "unverified_rounding_policy"
     ASSUMED_FREE_BASIC_METHOD = "assumed_free_basic_method"
+    UNVERIFIED_BILLING_POLICY = "unverified_billing_policy"
 
 
 class BillWarning(DomainModel):
@@ -100,4 +101,29 @@ class Bill(DomainModel):
     free_basic_eligible: bool | None
     """The eligibility input as given (`None` when not given, for a tariff without a free
     basic allocation)."""
+    month_fraction: ExactDecimal | None
+    """For part of a calendar month priced by period splitting: the fraction of a month
+    that every monthly value was scaled by (ADR-0011). `None` for a whole month."""
+    warnings: tuple[BillWarning, ...]
+
+
+class PeriodBill(DomainModel):
+    """A billing period priced part by part (period splitting, ADR-0011). Each part is a
+    `Bill` for one version, season, VAT rate and calendar month (or part of one); the
+    period's subtotal, VAT and total are the sums of the parts'."""
+
+    period: DateRange
+    consumption_kwh: ExactDecimal
+    parts: Annotated[tuple[Bill, ...], Field(min_length=1)]
+    subtotal: Money
+    vat: Money
+    total: Money
+    status: StatusKind
+    """The weakest status of every part."""
+    split: bool
+    """True when the period was split into several parts or any part was pro-rated."""
+    billing_policies: Annotated[tuple[str, ...], Field(min_length=1)]
+    billing_policy_status: StatusKind
+    rounding_policies: Annotated[tuple[str, ...], Field(min_length=1)]
+    rounding_policy_status: StatusKind
     warnings: tuple[BillWarning, ...]

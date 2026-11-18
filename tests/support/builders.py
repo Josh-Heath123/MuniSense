@@ -21,14 +21,17 @@ from munisense.domain.money import (
     VatTable,
 )
 from munisense.domain.tariffs import (
+    BillingPolicy,
     Block,
     BlockEnergy,
     Component,
+    ConsumptionSplit,
     FixedCharge,
     FlatEnergy,
     FreeBasicAllocation,
     Levy,
     PriceBasis,
+    ProRating,
     Season,
     SeasonalEnergy,
     SeasonDates,
@@ -86,6 +89,17 @@ def cited_basis(
 
 
 CENTS_HALF_UP = Quantisation(step=Decimal("0.01"), mode=RoundingMode.HALF_UP)
+MILLIONTHS_HALF_UP = Quantisation(step=Decimal("0.000001"), mode=RoundingMode.HALF_UP)
+
+
+def fixture_billing_policy(status: Status = FIXTURE_STATUS) -> BillingPolicy:
+    return BillingPolicy(
+        name="fixture-billing",
+        pro_rating=ProRating.BY_DAYS,
+        consumption_split=ConsumptionSplit.BY_DAYS,
+        status=status,
+        evidence=() if isinstance(status, Estimated) else (fixture_citation("pro rata"),),
+    )
 
 
 def fixture_policy(
@@ -94,15 +108,18 @@ def fixture_policy(
     vat_application: VatApplication = VatApplication.ON_SUBTOTAL,
     vat_amount: Quantisation | None = CENTS_HALF_UP,
     total: Quantisation | None = CENTS_HALF_UP,
+    pro_rating: Quantisation | None = MILLIONTHS_HALF_UP,
     status: Status = FIXTURE_STATUS,
+    name: str = "fixture",
 ) -> RoundingPolicy:
     estimated = isinstance(status, Estimated)
     return RoundingPolicy(
-        name="fixture",
+        name=name,
         line_amount=line_amount,
         vat_application=vat_application,
         vat_amount=vat_amount,
         total=total,
+        pro_rating=pro_rating,
         prepaid_kwh=None,
         status=status,
         evidence=() if estimated else (fixture_citation("fixture bill"),),
@@ -240,11 +257,13 @@ def fixture_version(
     policy: RoundingPolicy | None = None,
     basis: PriceBasis = PriceBasis.EXCLUDING_VAT,
     status: Status = FIXTURE_STATUS,
+    billing: BillingPolicy | None = None,
+    tariff_code: str = "fixture-a",
 ) -> TariffVersion:
     return TariffVersion(
         schema_version=1,
         supplier="fixture-metro",
-        tariff_code="fixture-a",
+        tariff_code=tariff_code,
         customer_class="residential",
         printed_name=cited_label("Fixture tariff", status),
         applies_to=cited_label("Fixture customers", status),
@@ -252,6 +271,7 @@ def fixture_version(
         effective_to=None if end is None else cited_date(end, status),
         price_basis=cited_basis(basis, status),
         rounding_policy=policy or fixture_policy(status=status),
+        billing_policy=billing or fixture_billing_policy(status=status),
         components=components,
     )
 
