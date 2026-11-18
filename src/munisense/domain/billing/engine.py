@@ -13,7 +13,8 @@ Steps (architecture overview, "How a calculation works", for a single version):
 5. Report the weakest status of every value used and warn about anything not verified.
 
 All arithmetic is exact (`Rate.charge`, `Money`, `exact()`); rounding happens only through
-the version's rounding policy.
+the version's rounding policy. The work done grows with the number of components and
+blocks, never with the number of days or kWh.
 """
 
 from collections.abc import Iterator
@@ -34,15 +35,11 @@ from munisense.domain.billing.result import (
     BillWarning,
     LineItem,
     QuantityUnit,
+    Source,
+    SourceRole,
     WarningCode,
 )
-from munisense.domain.citations import (
-    Citation,
-    Cited,
-    StatusKind,
-    cited_statuses,
-    weakest,
-)
+from munisense.domain.citations import Cited, StatusKind, cited_statuses, weakest_kind
 from munisense.domain.money import (
     CanonicalUnit,
     ExactDecimal,
@@ -88,13 +85,18 @@ def calculate_bill(
     subtotal = Money.sum(line.amount for line in lines)
     total = _quantised(subtotal + vat, policy.total)
 
-    header = [version.effective_from, version.price_basis, version.printed_name]
-    statuses = [line.status for line in lines]
-    statuses += [s.kind for s in cited_statuses(header) + cited_statuses(vat_rate)]
-    status = min(statuses, key=lambda kind: kind.rank)
+    status = weakest_kind(
+        [line.status for line in lines]
+        + [s.kind for s in cited_statuses(_header_values(version))]
+        + [s.kind for s in cited_statuses(vat_rate)]
+    )
+    end = version.effective_to
     return Bill(
         supplier=version.supplier,
         tariff_code=version.tariff_code,
+        tariff_name=version.printed_name.value,
+        version_effective_from=version.effective_from.value,
+        version_effective_to=None if end is None else end.value,
         period=period,
         consumption_kwh=total_kwh,
         lines=tuple(lines),
@@ -107,6 +109,11 @@ def calculate_bill(
         rounding_policy_status=policy.status.kind,
         warnings=_warnings(status, policy),
     )
+
+
+def _header_values(version: TariffVersion) -> list[object]:
+    """Every field of the version except its components, so no header value is missed."""
+    return [getattr(version, name) for name in type(version).model_fields if name != "components"]
 
 
 # ----------------------------------------------------------------------------- checks
@@ -144,22 +151,16 @@ def _evaluate(component: Component, period: DateRange, kwh: Decimal) -> Iterator
         yield _fixed(component, period)
     elif isinstance(component, FlatEnergy):
         if kwh > 0:
-            yield _line(component, "all kWh", kwh, QuantityUnit.KWH, component.rate, [])
+            yield _line(component, "all kWh", kwh, QuantityUnit.KWH, component.rate)
     else:
         yield from _blocks(component, kwh)
 
 
 def _fixed(component: FixedCharge, period: DateRange) -> LineItem:
     if component.rate.value.canonical_unit is CanonicalUnit.RAND_PER_DAY:
-        return _line(
-            component,
-            f"{period.days} days",
-            Decimal(period.days),
-            QuantityUnit.DAY,
-            component.rate,
-            [],
-        )
-    return _line(component, "1 month", Decimal(1), QuantityUnit.MONTH, component.rate, [])
+        days = Decimal(period.days)
+        return _line(component, f"{period.days} days", days, QuantityUnit.DAY, component.rate)
+    return _line(component, "1 month", Decimal(1), QuantityUnit.MONTH, component.rate)
 
 
 def _blocks(component: BlockEnergy, kwh: Decimal) -> Iterator[LineItem]:
@@ -170,17 +171,18 @@ def _blocks(component: BlockEnergy, kwh: Decimal) -> Iterator[LineItem]:
         with exact():
             used = max(Decimal(0), (kwh if upper is None else min(kwh, upper)) - lower)
         if used > 0:
-            span = f"above {lower} kWh" if upper is None else f"{lower} to {upper} kWh"
-            thresholds = [t for t in (previous, block.up_to_kwh) if t is not None]
+            span = f"above {lower:f} kWh" if upper is None else f"{lower:f} to {upper:f} kWh"
             yield _line(
                 component,
                 f"block {number}: {span}",
                 used,
                 QuantityUnit.KWH,
                 block.rate,
-                thresholds,
+                lower_threshold=previous,
+                upper_threshold=block.up_to_kwh,
             )
-        previous, lower = block.up_to_kwh, upper if upper is not None else lower
+        previous = block.up_to_kwh
+        lower = upper if upper is not None else lower
 
 
 def _line(
@@ -189,11 +191,22 @@ def _line(
     quantity: Decimal,
     unit: QuantityUnit,
     rate: Cited[Rate],
-    thresholds: list[Cited[ExactDecimal]],
+    *,
+    lower_threshold: Cited[ExactDecimal] | None = None,
+    upper_threshold: Cited[ExactDecimal] | None = None,
 ) -> LineItem:
-    citations = [component.label.citation, component.vat.citation, rate.citation]
-    citations += [threshold.citation for threshold in thresholds]
-    statuses = cited_statuses([component.label, component.vat, rate, *thresholds])
+    roles = [
+        (SourceRole.RATE, rate.citation, rate.kind),
+        (SourceRole.LABEL, component.label.citation, component.label.kind),
+        (SourceRole.VAT_TREATMENT, component.vat.citation, component.vat.kind),
+    ]
+    for role, threshold in (
+        (SourceRole.LOWER_THRESHOLD, lower_threshold),
+        (SourceRole.UPPER_THRESHOLD, upper_threshold),
+    ):
+        if threshold is not None:
+            roles.append((role, threshold.citation, threshold.kind))
+    sources = tuple(Source(role=r, citation=c, status=k) for r, c, k in roles)
     return LineItem(
         component=component.name,
         label=component.label.value,
@@ -204,17 +217,9 @@ def _line(
         amount=rate.value.charge(quantity),
         vat_treatment=component.vat.value,
         vat=None,
-        sources=tuple(_unique(citations)),
-        status=weakest(statuses),
+        sources=sources,
+        status=weakest_kind(source.status for source in sources),
     )
-
-
-def _unique(citations: list[Citation]) -> list[Citation]:
-    seen: list[Citation] = []
-    for citation in citations:
-        if citation not in seen:
-            seen.append(citation)
-    return seen
 
 
 # ------------------------------------------------------------------- rounding and VAT
@@ -238,14 +243,15 @@ def _apply_vat(
         with_vat = [
             LineItem.model_validate(
                 line.model_dump()
-                | {"vat": _quantised(line.amount * vat_rate.fraction, policy.vat_amount)}
+                | {
+                    "vat": _quantised(line.amount * vat_rate.fraction, policy.vat_amount)
+                    if is_taxable
+                    else Money.zero()
+                }
             )
-            if is_taxable
-            else line
             for line, is_taxable in zip(lines, taxable, strict=True)
         ]
-        vat = Money.sum(line.vat for line in with_vat if line.vat is not None)
-        return with_vat, vat
+        return with_vat, Money.sum(line.vat or Money.zero() for line in with_vat)
     base = Money.sum(
         line.amount for line, is_taxable in zip(lines, taxable, strict=True) if is_taxable
     )

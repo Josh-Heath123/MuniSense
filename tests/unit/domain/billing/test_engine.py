@@ -8,22 +8,50 @@ from decimal import Decimal
 
 import pytest
 
+from munisense.domain.base import DomainError
 from munisense.domain.billing import (
+    Bill,
     BillingPeriod,
+    LineItem,
     NonMonthlyPeriodError,
     PeriodOutsideVersionError,
     PeriodTotal,
+    SourceRole,
     TimeOfUseBuckets,
     UnsupportedConsumptionError,
     UnsupportedPriceBasisError,
     WarningCode,
     calculate_bill,
 )
-from munisense.domain.citations import StatusKind, TextCheck, Verified
-from munisense.domain.money import Money, NoVatRateError, RateUnit, VatApplication
-from munisense.domain.tariffs import PriceBasis, VatTreatment
+from munisense.domain.citations import ProvidedBy, StatusKind, TextCheck, UserProvided, Verified
+from munisense.domain.money import (
+    Money,
+    NoVatRateError,
+    Quantisation,
+    Rate,
+    RateUnit,
+    RoundingMode,
+    RoundingPolicy,
+    VatApplication,
+    VatRate,
+    VatTable,
+)
+from munisense.domain.tariffs import (
+    Block,
+    BlockEnergy,
+    Component,
+    PriceBasis,
+    TariffVersion,
+    VatTreatment,
+)
 from support.builders import (
     CENTS_HALF_UP,
+    cited_basis,
+    cited_date,
+    cited_decimal,
+    cited_label,
+    cited_rate,
+    cited_vat,
     fixture_blocks,
     fixture_fixed,
     fixture_flat,
@@ -89,6 +117,60 @@ def test_vat_per_line_is_rounded_on_each_line() -> None:
     assert bill.total == rand("1185.34")
 
 
+# Each rounding point has its own step and mode, so using one point's quantisation at
+# another changes the result: lines 0.01 half-even, VAT 0.01 ceiling, total 0.1 half-up.
+def distinct_points(vat_application: VatApplication) -> RoundingPolicy:
+    return fixture_policy(
+        line_amount=Quantisation(step=Decimal("0.01"), mode=RoundingMode.HALF_EVEN),
+        vat_application=vat_application,
+        vat_amount=Quantisation(step=Decimal("0.01"), mode=RoundingMode.CEILING),
+        total=Quantisation(step=Decimal("0.1"), mode=RoundingMode.HALF_UP),
+    )
+
+
+def test_each_rounding_point_uses_its_own_quantisation_on_the_subtotal() -> None:
+    # 412.3 kWh, as above, with the distinct points:
+    #   basic 213.45; block 1 76.185 -> 76.18 (half-even keeps the even 8; half-up gives
+    #   76.19); block 2 603.33; block 3 160.66547 -> 160.67
+    #   subtotal 213.45 + 76.18 + 603.33 + 160.67 = 1053.63
+    #   VAT 12.5% x 1053.63 = 131.70375 -> 131.71 (ceiling; half-up gives 131.70)
+    #   total 1053.63 + 131.71 = 1185.34 -> 1185.3 (0.1 half-up)
+    policy = distinct_points(VatApplication.ON_SUBTOTAL)
+    bill = calculate_bill(
+        fixture_version(BASIC, BLOCKS, policy=policy), JULY, PeriodTotal(kwh=Decimal("412.3")), VAT
+    )
+    assert [line.amount for line in bill.lines] == [
+        rand("213.45"),
+        rand("76.18"),
+        rand("603.33"),
+        rand("160.67"),
+    ]
+    assert bill.subtotal == rand("1053.63")
+    assert bill.vat == rand("131.71")
+    assert bill.total == rand("1185.3")
+
+
+def test_each_rounding_point_uses_its_own_quantisation_per_line() -> None:
+    # Same lines; VAT per line at 0.01 ceiling (half-even would give 26.68, 9.52, 75.42,
+    # 20.08):
+    #   213.45 x 12.5% = 26.68125 -> 26.69     76.18 x 12.5% = 9.5225 -> 9.53
+    #   603.33 x 12.5% = 75.41625 -> 75.42     160.67 x 12.5% = 20.08375 -> 20.09
+    #   VAT 26.69 + 9.53 + 75.42 + 20.09 = 131.73
+    #   total 1053.63 + 131.73 = 1185.36 -> 1185.4 (0.1 half-up)
+    policy = distinct_points(VatApplication.PER_LINE)
+    bill = calculate_bill(
+        fixture_version(BASIC, BLOCKS, policy=policy), JULY, PeriodTotal(kwh=Decimal("412.3")), VAT
+    )
+    assert [line.vat for line in bill.lines] == [
+        rand("26.69"),
+        rand("9.53"),
+        rand("75.42"),
+        rand("20.09"),
+    ]
+    assert bill.vat == rand("131.73")
+    assert bill.total == rand("1185.4")
+
+
 def test_without_line_rounding_amounts_stay_exact_until_the_total() -> None:
     # 76.185 + 603.33 + 160.66547 + 213.45 = 1053.63047; VAT 131.70380875 -> 131.70;
     # total 1053.63047 + 131.70 = 1185.33047 -> 1185.33
@@ -137,17 +219,38 @@ def test_zero_rated_and_exempt_lines_carry_no_vat() -> None:
 # ------------------------------------------------------------------------- provenance
 
 
-def test_every_line_cites_the_values_it_used() -> None:
+def _roles(line: LineItem) -> dict[SourceRole, str]:
+    return {source.role: source.citation.printed_text for source in line.sources}
+
+
+def test_every_line_cites_each_value_it_used_by_role() -> None:
     bill = calculate_bill(
         fixture_version(BASIC, BLOCKS), JULY, PeriodTotal(kwh=Decimal("412.3")), VAT
     )
-    block_2 = bill.lines[2]
-    printed = {citation.printed_text for citation in block_2.sources}
-    # the rate, both thresholds that bound the block, the label and the VAT treatment
-    assert {"201.11", "50", "350", "Energy charge"} <= printed
-    assert block_2.status is StatusKind.ESTIMATED
-    assert all(line.sources for line in bill.lines)
+    basic, block_1, block_2, block_3 = bill.lines
+    common = {SourceRole.LABEL, SourceRole.VAT_TREATMENT}
+    assert _roles(basic).keys() == {SourceRole.RATE} | common
+    assert _roles(basic)[SourceRole.RATE] == "213.45"
+    assert _roles(block_1) == {
+        SourceRole.RATE: "152.37",
+        SourceRole.UPPER_THRESHOLD: "50",
+        SourceRole.LABEL: "Energy charge",
+        SourceRole.VAT_TREATMENT: "fixture",
+    }
+    assert _roles(block_2)[SourceRole.LOWER_THRESHOLD] == "50"
+    assert _roles(block_2)[SourceRole.UPPER_THRESHOLD] == "350"
+    assert _roles(block_3)[SourceRole.LOWER_THRESHOLD] == "350"
+    assert SourceRole.UPPER_THRESHOLD not in _roles(block_3)
     assert bill.vat_rate.percent.value == Decimal("12.5")
+
+
+def test_the_bill_names_the_version_it_used() -> None:
+    bill = calculate_bill(fixture_version(BLOCKS), JULY, PeriodTotal(kwh=Decimal("1")), VAT)
+    assert (bill.tariff_name, bill.version_effective_from, bill.version_effective_to) == (
+        "Fixture tariff",
+        date(2026, 7, 1),
+        date(2027, 7, 1),
+    )
 
 
 def test_every_result_warns_about_unverified_values_and_rounding() -> None:
@@ -187,15 +290,10 @@ def test_a_period_outside_the_version_is_refused(start: date, end: date) -> None
 
 
 @pytest.mark.parametrize("component", [BLOCKS, BASIC])
-def test_monthly_values_refuse_a_period_that_is_not_a_calendar_month(component: object) -> None:
+def test_monthly_values_refuse_a_period_that_is_not_a_calendar_month(component: Component) -> None:
     period = BillingPeriod(start=date(2026, 7, 10), end=date(2026, 8, 12))
     with pytest.raises(NonMonthlyPeriodError):
-        calculate_bill(
-            fixture_version(component),  # type: ignore[arg-type]  # both are components
-            period,
-            PeriodTotal(kwh=Decimal("1")),
-            VAT,
-        )
+        calculate_bill(fixture_version(component), period, PeriodTotal(kwh=Decimal("1")), VAT)
 
 
 def test_prices_including_vat_are_refused_until_supported() -> None:
@@ -234,31 +332,179 @@ def test_flat_energy_at_zero_consumption_has_no_energy_line() -> None:
     assert [line.component for line in bill.lines] == ["basic"]
 
 
-def test_a_citation_shared_by_two_values_is_listed_once() -> None:
-    # The fixture label and VAT treatment are both printed as "Energy charge"/"fixture";
-    # a block whose threshold prints the same text as its rate shares one citation.
-    shared = fixture_blocks(("100", "100"), (None, "100"))
-    bill = calculate_bill(fixture_version(shared), JULY, PeriodTotal(kwh=Decimal("150")), VAT)
-    sources = bill.lines[1].sources
-    assert len(sources) == len(set(sources))
-    assert [c.printed_text for c in sources].count("100") == 1
-
-
-def test_a_fully_verified_bill_carries_no_warnings() -> None:
-    verified = Verified(
-        verifier="owner",
-        verifier_kind="human",
-        method="fixture",
-        verified_on=date(2026, 11, 17),
-        text_check=TextCheck.PASSED,
+def test_per_line_vat_is_zero_on_zero_rated_and_exempt_lines() -> None:
+    free = fixture_blocks((None, "100.00"), name="levy", vat=VatTreatment.ZERO_RATED)
+    exempt = fixture_blocks((None, "100.00"), name="exempt", vat=VatTreatment.EXEMPT)
+    policy = fixture_policy(vat_application=VatApplication.PER_LINE)
+    bill = calculate_bill(
+        fixture_version(fixture_flat("100.00"), free, exempt, policy=policy),
+        JULY,
+        PeriodTotal(kwh=Decimal("10")),
+        VAT,
     )
+    assert [line.vat for line in bill.lines] == [rand("1.25"), Money.zero(), Money.zero()]
+    assert bill.vat == rand("1.25")
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "days"),
+    [
+        (date(2028, 2, 1), date(2028, 3, 1), 29),  # leap-year February
+        (date(2026, 12, 1), date(2027, 1, 1), 31),  # December into January
+    ],
+)
+def test_calendar_month_edge_cases(start: date, end: date, days: int) -> None:
+    tariff = fixture_version(fixture_fixed("1.00", RateUnit.RAND_PER_DAY), BLOCKS, end=None)
+    bill = calculate_bill(
+        tariff, BillingPeriod(start=start, end=end), PeriodTotal(kwh=Decimal("60")), VAT
+    )
+    assert bill.lines[0].quantity == Decimal(days)
+
+
+def test_a_flat_energy_tariff_at_zero_consumption_has_no_lines() -> None:
+    bill = calculate_bill(
+        fixture_version(fixture_flat("180.00")), JULY, PeriodTotal(kwh=Decimal(0)), VAT
+    )
+    assert bill.lines == ()
+    assert bill.total == Money.zero()
+
+
+def test_a_very_long_period_costs_no_more_work_than_a_short_one() -> None:
+    # Work grows with components and blocks, not days: 7,000 years is one line per component.
     tariff = fixture_version(
-        fixture_fixed("213.45", status=verified),
-        fixture_blocks(("50", "152.37"), (None, "201.11"), status=verified),
-        status=verified,
+        fixture_fixed("1.00", RateUnit.RAND_PER_DAY), fixture_flat("100.00"), end=None
     )
-    vat = fixture_vat_table(status=verified)
-    bill = calculate_bill(tariff, JULY, PeriodTotal(kwh=Decimal("412.3")), vat)
+    period = BillingPeriod(start=date(2026, 7, 1), end=date(9000, 1, 1))
+    bill = calculate_bill(tariff, period, PeriodTotal(kwh=Decimal("5")), VAT)
+    assert bill.lines[0].quantity == Decimal(period.days)
+    assert len(bill.lines) == 2
+
+
+def test_an_amount_too_wide_to_hold_exactly_is_a_domain_error() -> None:
+    # Each value is in range (Python mode allows 60 digits), but the product is not: the
+    # engine must refuse with a domain error, never a validation error.
+    tariff = fixture_version(
+        fixture_flat("1E+40"), policy=fixture_policy(line_amount=None, vat_amount=None, total=None)
+    )
+    with pytest.raises(DomainError):
+        calculate_bill(tariff, JULY, PeriodTotal(kwh=Decimal("1E+30")), VAT)
+    with pytest.raises(DomainError):
+        Rate(value=Decimal("1E-40"), unit=RateUnit.CENTS_PER_KWH).charge(Decimal("1E-30"))
+
+
+@pytest.mark.parametrize("exponent", [-59, -60])
+def test_a_rate_at_the_low_edge_of_the_exact_range_is_a_domain_error(exponent: int) -> None:
+    # The rate is valid as printed, but in rand per kWh (cents shifted by -2) it is
+    # narrower than an exact amount can hold.
+    tariff = fixture_version(fixture_flat(f"1E{exponent}"))
+    with pytest.raises(DomainError):
+        calculate_bill(tariff, JULY, PeriodTotal(kwh=Decimal(1)), VAT)
+
+
+# ------------------------------------------------------- one weaker source at a time
+
+VERIFIED = Verified(
+    verifier="owner",
+    verifier_kind="human",
+    method="fixture",
+    verified_on=date(2026, 11, 17),
+    text_check=TextCheck.PASSED,
+)
+USER = UserProvided(provided_by=ProvidedBy.OWNER_BILL)
+
+
+def _bill_with_one_weak(weak: str | None) -> Bill:
+    def status(position: str) -> Verified | UserProvided:
+        return USER if position == weak else VERIFIED
+
+    energy = BlockEnergy(
+        schema_version=1,
+        kind="block_energy",
+        name="energy",
+        label=cited_label("Energy charge", status("label")),
+        vat=cited_vat(status=status("vat_treatment")),
+        blocks=(
+            Block(
+                up_to_kwh=cited_decimal("50", status("threshold")),
+                rate=cited_rate("150", RateUnit.CENTS_PER_KWH, status("rate_1")),
+            ),
+            Block(up_to_kwh=None, rate=cited_rate("250", RateUnit.CENTS_PER_KWH, status("rate_2"))),
+        ),
+    )
+    tariff = TariffVersion(
+        schema_version=1,
+        supplier="fixture-metro",
+        tariff_code="fixture-a",
+        customer_class="residential",
+        printed_name=cited_label("Fixture tariff", status("printed_name")),
+        applies_to=cited_label("Fixture customers", status("applies_to")),
+        effective_from=cited_date(date(2026, 7, 1), status("effective_from")),
+        effective_to=cited_date(date(2027, 7, 1), status("effective_to")),
+        price_basis=cited_basis(status=status("price_basis")),
+        rounding_policy=fixture_policy(status=status("policy")),
+        components=(energy,),
+    )
+    vat = VatTable(
+        rates=(
+            VatRate(
+                start_cited=cited_date(date(2000, 1, 1), status("vat_start")),
+                end_cited=None,
+                percent=cited_decimal("12.5", status("vat_percent")),
+            ),
+        )
+    )
+    return calculate_bill(tariff, JULY, PeriodTotal(kwh=Decimal("100")), vat)
+
+
+VALUE_POSITIONS = [
+    "label",
+    "vat_treatment",
+    "threshold",
+    "rate_1",
+    "rate_2",
+    "printed_name",
+    "applies_to",
+    "effective_from",
+    "effective_to",
+    "price_basis",
+    "vat_start",
+    "vat_percent",
+]
+
+
+def test_a_fully_verified_bill_has_no_warnings_and_verified_lines() -> None:
+    bill = _bill_with_one_weak(None)
     assert bill.status is StatusKind.VERIFIED
-    assert bill.rounding_policy_status is StatusKind.VERIFIED
+    assert all(line.status is StatusKind.VERIFIED for line in bill.lines)
     assert bill.warnings == ()
+
+
+@pytest.mark.parametrize("weak", VALUE_POSITIONS)
+def test_one_weaker_value_makes_the_bill_warn(weak: str) -> None:
+    bill = _bill_with_one_weak(weak)
+    assert bill.status is StatusKind.USER_PROVIDED
+    assert {w.code for w in bill.warnings} == {WarningCode.UNVERIFIED_VALUES}
+
+
+@pytest.mark.parametrize(
+    ("weak", "weak_lines"),
+    [
+        ("label", [0, 1]),
+        ("vat_treatment", [0, 1]),
+        ("threshold", [0, 1]),  # upper bound of block 1, lower bound of block 2
+        ("rate_1", [0]),
+        ("rate_2", [1]),
+        ("printed_name", []),
+    ],
+)
+def test_a_line_is_as_weak_as_the_values_it_used(weak: str, weak_lines: list[int]) -> None:
+    bill = _bill_with_one_weak(weak)
+    actual = [i for i, line in enumerate(bill.lines) if line.status is StatusKind.USER_PROVIDED]
+    assert actual == weak_lines
+
+
+def test_an_unverified_rounding_policy_alone_gives_only_its_warning() -> None:
+    bill = _bill_with_one_weak("policy")
+    assert bill.status is StatusKind.VERIFIED
+    assert bill.rounding_policy_status is StatusKind.USER_PROVIDED
+    assert {w.code for w in bill.warnings} == {WarningCode.UNVERIFIED_ROUNDING_POLICY}

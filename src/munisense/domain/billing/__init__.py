@@ -18,6 +18,8 @@ from munisense.domain.billing.result import (
     BillWarning,
     LineItem,
     QuantityUnit,
+    Source,
+    SourceRole,
     WarningCode,
 )
 from munisense.domain.periods import DateRange as BillingPeriod
@@ -32,6 +34,8 @@ __all__ = [
     "PeriodOutsideVersionError",
     "PeriodTotal",
     "QuantityUnit",
+    "Source",
+    "SourceRole",
     "TimeOfUseBuckets",
     "UnsupportedConsumptionError",
     "UnsupportedPriceBasisError",

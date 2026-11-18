@@ -23,6 +23,8 @@
 | **Period total** | The kWh used over a whole billing period (`PeriodTotal`). Called a period total, not a monthly total, because billing periods are not always calendar months |
 | **Price basis** | Whether a tariff schedule prints its prices excluding VAT or including VAT. Recorded (and cited) per tariff version |
 | **VAT treatment** | How VAT applies to one component's amount: standard-rated, zero-rated or exempt. Recorded (and cited) per component |
+| **Line item** | One charge on a calculated bill (a fixed charge, flat energy, or one block), with its quantity, printed rate, amount and the citation of every value it used, by role (rate, thresholds, label, VAT treatment) |
+| **VAT-able subtotal** | The sum of the standard-rated line amounts; zero-rated and exempt lines are left out |
 | **Billing period** | The dates a bill covers, as a half-open range: from the start date up to, but not including, the end date |
 | **Credit meter** | Conventional metered supply billed in arrears |
 | **NERSA** | National Energy Regulator of South Africa. Approves municipal electricity tariff increases annually |

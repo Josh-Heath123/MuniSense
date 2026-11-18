@@ -62,4 +62,5 @@ class Rate(DomainModel):
         The engine uses this instead of multiplying Decimals itself, so that no charge can
         be rounded by the default decimal context.
         """
-        return Money(rand=self.canonical_value) * quantity
+        with exact():
+            return Money.of(self.canonical_value * quantity)

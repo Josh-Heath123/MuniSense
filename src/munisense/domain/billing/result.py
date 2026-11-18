@@ -1,5 +1,7 @@
-"""What the engine returns: line items that cite their sources, VAT, totals and warnings."""
+"""What the engine returns: line items that cite their sources by role, VAT, totals and
+warnings."""
 
+from datetime import date
 from enum import StrEnum
 from typing import Annotated
 
@@ -18,6 +20,24 @@ class QuantityUnit(StrEnum):
     MONTH = "month"
 
 
+class SourceRole(StrEnum):
+    """Which value of the tariff a citation backs on a line."""
+
+    RATE = "rate"
+    LOWER_THRESHOLD = "lower_threshold"
+    UPPER_THRESHOLD = "upper_threshold"
+    LABEL = "label"
+    VAT_TREATMENT = "vat_treatment"
+
+
+class Source(DomainModel):
+    """One cited value used on a line, and the role it played."""
+
+    role: SourceRole
+    citation: Citation
+    status: StatusKind
+
+
 class LineItem(DomainModel):
     """One charge on the bill, with every value it used and their citations."""
 
@@ -31,8 +51,9 @@ class LineItem(DomainModel):
     """Quantised at the policy's line-amount point, if it has one; exact otherwise."""
     vat_treatment: VatTreatment
     vat: Money | None
-    """VAT on this line when the policy applies VAT per line; otherwise `None`."""
-    sources: Annotated[tuple[Citation, ...], Field(min_length=1)]
+    """With VAT per line: this line's VAT (zero for zero-rated and exempt lines). With VAT
+    on the subtotal: `None`, because VAT is not calculated per line."""
+    sources: Annotated[tuple[Source, ...], Field(min_length=1)]
     status: StatusKind
 
 
@@ -51,6 +72,10 @@ class Bill(DomainModel):
 
     supplier: str
     tariff_code: str
+    tariff_name: str
+    """The version's printed name."""
+    version_effective_from: date
+    version_effective_to: date | None
     period: DateRange
     consumption_kwh: ExactDecimal
     lines: tuple[LineItem, ...]
@@ -59,7 +84,10 @@ class Bill(DomainModel):
     vat: Money
     total: Money
     status: StatusKind
-    """The weakest status of every value used: lines, the version header and the VAT rate."""
+    """The weakest status of every value the calculation relied on: each line's values,
+    every header value of the version, and the VAT rate (percentage and dates). Values of
+    components that produced no line (for example energy rates at zero consumption, or
+    blocks not reached) do not count, because the bill does not depend on them."""
     rounding_policy: str
     rounding_policy_status: StatusKind
     warnings: tuple[BillWarning, ...]
