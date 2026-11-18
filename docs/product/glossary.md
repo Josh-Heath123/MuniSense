@@ -24,6 +24,9 @@
 | **Price basis** | Whether a tariff schedule prints its prices excluding VAT or including VAT. Recorded (and cited) per tariff version |
 | **VAT treatment** | How VAT applies to one component's amount: standard-rated, zero-rated or exempt. Recorded (and cited) per component |
 | **Season** | Part of the year with its own energy rates (for example a high-demand season June to August). Seasons are a calendar in data with cited dates that must cover every day once (`SeasonalEnergy`) |
+| **Billing policy** | A supplier's named way of applying its tariff to a period: how monthly values are pro-rated for part of a month and how kWh are shared when a period is split (`BillingPolicy`, ADR-0011). Learnt from bills, with its own status |
+| **Period splitting** | Pricing a billing period that spans calendar months, tariff versions, seasons or VAT rates as parts, each priced on its own and then added up (`calculate_period`) |
+| **Pro-rating** | Scaling a monthly value (a basic charge, a block threshold, a free allocation) for part of a month, by days in the part / days in the month, with the factor rounded at the policy's `pro_rating` point |
 | **Levy** | A charge imposed by a higher authority that a schedule adds to its own tariffs (for example "in addition to this schedule of tariffs"); priced per kWh, per day or per month (`Levy`) |
 | **Free basic allocation** | Free kWh per calendar month for an eligible customer (Free Basic Electricity); eligibility is an input, never inferred. Shown as credit lines at the energy's own rates (`FreeBasicAllocation`) |
 | **Line item** | One charge or credit on a calculated bill (a fixed charge, flat energy, one block, a levy, or a credit for free kWh; a credit has a negative amount, minus rate x quantity), with its quantity, printed rate, amount and the citation of every value it used, by role (rate, lower and upper threshold, label, VAT treatment, free allowance, season dates, season label) |

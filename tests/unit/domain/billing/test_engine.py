@@ -52,6 +52,7 @@ from support.builders import (
     cited_label,
     cited_rate,
     cited_vat,
+    fixture_billing_policy,
     fixture_blocks,
     fixture_fixed,
     fixture_flat,
@@ -442,6 +443,7 @@ def _bill_with_one_weak(weak: str | None) -> Bill:
         effective_to=cited_date(date(2027, 7, 1), status("effective_to")),
         price_basis=cited_basis(status=status("price_basis")),
         rounding_policy=fixture_policy(status=status("policy")),
+        billing_policy=fixture_billing_policy(),
         components=(energy,),
     )
     vat = VatTable(

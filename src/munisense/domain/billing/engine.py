@@ -96,8 +96,34 @@ def calculate_bill(
     """
     total_kwh = require_period_total(consumption).kwh
     _check_calculable(version, period, free_basic_eligible=free_basic_eligible)
+    return price_part(
+        version,
+        period,
+        total_kwh,
+        vat_table,
+        free_basic_eligible=free_basic_eligible,
+        month_fraction=None,
+    )
+
+
+def price_part(
+    version: TariffVersion,
+    period: DateRange,
+    total_kwh: Decimal,
+    vat_table: VatTable,
+    *,
+    free_basic_eligible: bool | None,
+    month_fraction: Decimal | None,
+) -> Bill:
+    """Price one part of a period with one version (used by `calculate_bill` and by period
+    splitting). `month_fraction` scales every monthly value (monthly charges and levies,
+    block thresholds, a free monthly allocation) for a part of a calendar month; `None`
+    means a whole month (or no monthly values). The caller has checked the inputs, except
+    for the season, the VAT rate and the eligibility, which are checked here."""
+    _check_eligibility(version, free_basic_eligible)
     seasons = _seasons(version, period)
     eligible = bool(free_basic_eligible)
+    scale = Decimal(1) if month_fraction is None else month_fraction
     vat_rate = vat_table.rate_for(period)
     policy = version.rounding_policy
     energy = {
@@ -109,7 +135,7 @@ def calculate_bill(
     lines = [
         _quantise_line(line, policy.line_amount)
         for component in version.components
-        for line in _evaluate(component, period, total_kwh, energy, seasons, eligible)
+        for line in _evaluate(component, period, total_kwh, energy, seasons, eligible, scale)
     ]
     lines, vat = _apply_vat(lines, vat_rate, policy)
     subtotal = Money.sum(line.amount for line in lines)
@@ -138,6 +164,7 @@ def calculate_bill(
         rounding_policy=policy.name,
         rounding_policy_status=policy.status.kind,
         free_basic_eligible=free_basic_eligible,
+        month_fraction=month_fraction,
         warnings=_warnings(status, policy, credited=_credited(version, lines)),
     )
 
@@ -158,6 +185,35 @@ def _header_values(version: TariffVersion) -> list[object]:
 def _check_calculable(
     version: TariffVersion, period: DateRange, *, free_basic_eligible: bool | None
 ) -> None:
+    _check_eligibility(version, free_basic_eligible)
+    if not version.covers(period):
+        msg = "the billing period is not wholly inside the tariff version's effective range"
+        raise PeriodOutsideVersionError(msg)
+    check_price_basis(version)
+    monthly = has_monthly_values(version, eligible=bool(free_basic_eligible))
+    if monthly and not period.is_whole_calendar_month:
+        msg = (
+            "this tariff has monthly values (block thresholds, monthly charges or levies, or "
+            "a free monthly allocation); a period that is not one calendar month must be "
+            "split and pro-rated with calculate_period"
+        )
+        raise NonMonthlyPeriodError(msg)
+
+
+def has_monthly_values(version: TariffVersion, *, eligible: bool) -> bool:
+    """True when the version has a value given per calendar month for this customer: a
+    block threshold, a monthly charge or levy, or a free allocation that applies."""
+    return any(_is_monthly(c, eligible) for c in version.components)
+
+
+def check_price_basis(version: TariffVersion) -> None:
+    """Refuse prices printed including VAT, which the engine does not support yet."""
+    if version.price_basis.value is not PriceBasis.EXCLUDING_VAT:
+        msg = "prices printed including VAT are not supported yet"
+        raise UnsupportedPriceBasisError(msg)
+
+
+def _check_eligibility(version: TariffVersion, free_basic_eligible: bool | None) -> None:
     if free_basic_eligible and version.free_basic_allocation is None:
         msg = "the customer is marked eligible for a free basic allocation this tariff lacks"
         raise FreeBasicNotOfferedError(msg)
@@ -167,25 +223,11 @@ def _check_calculable(
             "(free_basic_eligible=True or False); it is never assumed"
         )
         raise FreeBasicEligibilityRequiredError(msg)
-    if not version.covers(period):
-        msg = "the billing period is not wholly inside the tariff version's effective range"
-        raise PeriodOutsideVersionError(msg)
-    if version.price_basis.value is not PriceBasis.EXCLUDING_VAT:
-        msg = "prices printed including VAT are not supported yet"
-        raise UnsupportedPriceBasisError(msg)
-    monthly = any(_is_monthly(c, bool(free_basic_eligible)) for c in version.components)
-    if monthly and not period.is_whole_calendar_month:
-        msg = (
-            "this tariff has monthly values (block thresholds, monthly charges or levies, or "
-            "a free monthly allocation); a period that is not one calendar month needs a "
-            "pro-rating policy, which is not built yet"
-        )
-        raise NonMonthlyPeriodError(msg)
 
 
 def _seasons(version: TariffVersion, period: DateRange) -> dict[str, Season]:
     """The season each seasonal component uses for the period; refuses a period that
-    crosses a season boundary (splitting is P1-13)."""
+    crosses a season boundary (`calculate_period` splits such periods first)."""
     last_day = period.end - timedelta(days=1)
     seasons: dict[str, Season] = {}
     for component in version.components:
@@ -224,36 +266,40 @@ def _evaluate(
     energy: dict[str, FlatEnergy | BlockEnergy | SeasonalEnergy],
     seasons: dict[str, Season],
     free_basic_eligible: bool,
+    scale: Decimal,
 ) -> Iterator[LineItem]:
     if isinstance(component, FixedCharge):
-        yield _fixed(component, period)
+        yield _fixed(component, period, scale)
     elif isinstance(component, Levy):
         if component.rate.value.canonical_unit is not CanonicalUnit.RAND_PER_KWH:
-            yield _fixed(component, period)
+            yield _fixed(component, period, scale)
         elif kwh > 0:
             yield _line(component, "all kWh", kwh, QuantityUnit.KWH, component.rate)
     elif isinstance(component, FreeBasicAllocation):
         if free_basic_eligible:
             target = energy[component.energy_component]
-            yield from _free_basic(component, target, kwh, seasons)
+            yield from _free_basic(component, target, kwh, seasons, scale)
     else:
-        yield from _energy(component, kwh, seasons)
+        yield from _energy(component, kwh, seasons, scale)
 
 
 def _energy(
     component: FlatEnergy | BlockEnergy | SeasonalEnergy,
     kwh: Decimal,
     seasons: dict[str, Season],
+    scale: Decimal,
 ) -> Iterator[LineItem]:
     if isinstance(component, BlockEnergy):
-        yield from _blocks(component, component.blocks, kwh)
+        yield from _blocks(component, component.blocks, kwh, scale=scale)
     elif isinstance(component, SeasonalEnergy):
-        yield from _seasonal(component, seasons[component.name], kwh)
+        yield from _seasonal(component, seasons[component.name], kwh, scale)
     elif kwh > 0:
         yield _line(component, "all kWh", kwh, QuantityUnit.KWH, component.rate)
 
 
-def _seasonal(component: SeasonalEnergy, season: Season, kwh: Decimal) -> Iterator[LineItem]:
+def _seasonal(
+    component: SeasonalEnergy, season: Season, kwh: Decimal, scale: Decimal
+) -> Iterator[LineItem]:
     dates, label = season.dates, season.label
     extra = (
         Source(role=SourceRole.SEASON, citation=dates.citation, status=dates.kind),
@@ -265,7 +311,7 @@ def _seasonal(component: SeasonalEnergy, season: Season, kwh: Decimal) -> Iterat
             rate = season.blocks[0].rate
             yield _line(component, f"{prefix}all kWh", kwh, QuantityUnit.KWH, rate, extra=extra)
     else:
-        yield from _blocks(component, season.blocks, kwh, prefix=prefix, extra=extra)
+        yield from _blocks(component, season.blocks, kwh, prefix=prefix, extra=extra, scale=scale)
 
 
 def _free_basic(
@@ -273,12 +319,14 @@ def _free_basic(
     target: FlatEnergy | BlockEnergy | SeasonalEnergy,
     kwh: Decimal,
     seasons: dict[str, Season],
+    scale: Decimal,
 ) -> Iterator[LineItem]:
     """Credit lines for the free kWh: the target's lines for the first `free` kWh, negated,
     citing the allocation's label, VAT treatment and free kWh as well as the target's rate
     and thresholds."""
-    free = min(kwh, allocation.free_kwh.value)
-    for charge in _energy(target, free, seasons):
+    with exact():
+        free = min(kwh, allocation.free_kwh.value * scale)
+    for charge in _energy(target, free, seasons, scale):
         sources = (
             *(
                 s
@@ -316,11 +364,14 @@ def _free_basic(
         )
 
 
-def _fixed(component: FixedCharge | Levy, period: DateRange) -> LineItem:
+def _fixed(component: FixedCharge | Levy, period: DateRange, scale: Decimal) -> LineItem:
     if component.rate.value.canonical_unit is CanonicalUnit.RAND_PER_DAY:
         days = Decimal(period.days)
         return _line(component, f"{period.days} days", days, QuantityUnit.DAY, component.rate)
-    return _line(component, "1 month", Decimal(1), QuantityUnit.MONTH, component.rate)
+    if scale == 1:
+        return _line(component, "1 month", Decimal(1), QuantityUnit.MONTH, component.rate)
+    description = f"{period.days} days of the month, pro-rated: {scale:f} of a month"
+    return _line(component, description, scale, QuantityUnit.MONTH, component.rate)
 
 
 def _blocks(
@@ -330,12 +381,15 @@ def _blocks(
     *,
     prefix: str = "",
     extra: tuple[Source, ...] = (),
+    scale: Decimal,
 ) -> Iterator[LineItem]:
+    """Lines for the blocks used; thresholds are per calendar month, so for part of a month
+    they are scaled by the month fraction (`scale`)."""
     previous: Cited[ExactDecimal] | None = None
     lower = Decimal(0)
     for number, block in enumerate(blocks, start=1):
-        upper = None if block.up_to_kwh is None else block.up_to_kwh.value
         with exact():
+            upper = None if block.up_to_kwh is None else block.up_to_kwh.value * scale
             used = max(Decimal(0), (kwh if upper is None else min(kwh, upper)) - lower)
         if used > 0:
             span = f"above {lower:f} kWh" if upper is None else f"{lower:f} to {upper:f} kWh"

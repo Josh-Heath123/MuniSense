@@ -83,12 +83,33 @@
       "step": "0.01",
       "mode": "half_up"
     },
+    "pro_rating": {
+      "step": "0.000001",
+      "mode": "half_up"
+    },
     "prepaid_kwh": null,
     "status": {
       "kind": "estimated",
-      "reason": "not in the schedule; cents, half up, VAT once on the subtotal assumed until learnt from real Ekurhuleni bills or receipts (P3)"
+      "reason": "not in the schedule; cents, half up, VAT once on the subtotal, and pro-rating factors to millionths, half up, assumed until learnt from real Ekurhuleni bills or receipts (P3)"
     },
     "evidence": []
+  },
+  "billing_policy": {
+    "name": "ekurhuleni-estimated",
+    "pro_rating": "by_days",
+    "consumption_split": "by_days",
+    "status": {
+      "kind": "estimated",
+      "reason": "scanned page, no text layer; the schedule says only that the cross-over to new tariffs is billed pro rata; pro-rating and kWh sharing by days assumed until real bills show the method (P3)"
+    },
+    "evidence": [
+      {
+        "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+        "page": 1,
+        "locator": "General, fourth bullet",
+        "printed_text": "The cross-over from existing tariffs to new tariffs will be billed pro rata."
+      }
+    ]
   },
   "components": [
     {

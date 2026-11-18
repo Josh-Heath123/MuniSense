@@ -30,6 +30,7 @@ from munisense.domain.tariffs.components import (
     PrintedLabel,
     SeasonalEnergy,
 )
+from munisense.domain.tariffs.policy import BillingPolicy
 
 Code = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
 
@@ -55,6 +56,7 @@ class TariffVersion(DomainModel):
     effective_to: Cited[date] | None
     price_basis: Cited[PriceBasis]
     rounding_policy: RoundingPolicy
+    billing_policy: BillingPolicy
     components: Annotated[tuple[Component, ...], Field(min_length=1, max_length=30)]
 
     @model_validator(mode="after")

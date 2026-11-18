@@ -10,6 +10,7 @@ from munisense.domain.billing.engine import calculate_bill
 from munisense.domain.billing.errors import (
     FreeBasicEligibilityRequiredError,
     FreeBasicNotOfferedError,
+    IncompatibleVersionsError,
     NonMonthlyPeriodError,
     PeriodCrossesSeasonError,
     PeriodOutsideVersionError,
@@ -20,11 +21,13 @@ from munisense.domain.billing.result import (
     Bill,
     BillWarning,
     LineItem,
+    PeriodBill,
     QuantityUnit,
     Source,
     SourceRole,
     WarningCode,
 )
+from munisense.domain.billing.splitting import calculate_period
 from munisense.domain.periods import DateRange as BillingPeriod
 
 __all__ = [
@@ -34,8 +37,10 @@ __all__ = [
     "ConsumptionProfile",
     "FreeBasicEligibilityRequiredError",
     "FreeBasicNotOfferedError",
+    "IncompatibleVersionsError",
     "LineItem",
     "NonMonthlyPeriodError",
+    "PeriodBill",
     "PeriodCrossesSeasonError",
     "PeriodOutsideVersionError",
     "PeriodTotal",
@@ -47,5 +52,6 @@ __all__ = [
     "UnsupportedPriceBasisError",
     "WarningCode",
     "calculate_bill",
+    "calculate_period",
     "require_period_total",
 ]
