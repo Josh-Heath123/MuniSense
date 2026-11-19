@@ -1,7 +1,7 @@
 # ADR-0012: Keep published tariffs as immutable JSON files and rebuild the database from them
 
-- **Status:** Proposed (revised after the architect's review, 2026-11-18)
-- **Date:** 2026-11-18 (proposed)
+- **Status:** Accepted
+- **Date:** 2026-11-18 (proposed; revised after the architect's review); 2026-11-19 (accepted by the owner, W16)
 - **Deciders:** Josh Heath (owner)
 
 ## Context
@@ -31,7 +31,7 @@ What P2 must prove (roadmap):
 ### 1. Format: JSON in a canonical form defined on the text alone
 
 - **The models define the content.** A published file holds a version as the domain models write it (`model_dump_json`), so for the current `schema_version` there is one definition of the content, already strict and tested.
-- **Canonical form is a property of the JSON text, not of the model.** A file is canonical when its text equals `json.dumps(json.loads(text), indent=2, ensure_ascii=False)` followed by one final newline, read as UTF-8. Parsing refuses floats (`parse_float` raises) and duplicate keys (`object_pairs_hook` raises). Key order is whatever the publish step wrote, which is the model's order at that time; the check keeps that order and never reorders. So the check stays true for a file published years ago, whatever the models have become since.
+- **Canonical form is a property of the JSON text, not of the model.** A file is canonical when its text equals `json.dumps(json.loads(text), indent=2, ensure_ascii=False)` followed by one final newline, read as UTF-8. Parsing refuses floats (`parse_float` raises), `NaN`, `Infinity` and `-Infinity` (`parse_constant` raises; `parse_float` does not see them, and `json.loads` would otherwise turn them into floats) and duplicate keys (`object_pairs_hook` raises). Key order is whatever the publish step wrote, which is the model's order at that time; the check keeps that order and never reorders. So the check stays true for a file published years ago, whatever the models have become since.
 - **Validation is a separate check.** A file is also valid when its content loads through the model for its `schema_version`. For the current version that is the model itself. For an older version it is a converter, tested against every committed file of that version, whose output loads through the current model. The loader accepts only listed versions. A failing validation is a code problem to fix in the converter, never a reason to edit the file.
 - **Envelope versioning.** Every file carries `schema_version` in its envelope. A format change is a new schema version with its converter.
 - **Drafts** are written in the same canonical form by the tools that produce them. The P1 drafts are equivalent but were hand-written; they are re-written in canonical form when this is built.
@@ -45,13 +45,14 @@ data/
   sources/<publisher>/*.pdf, README.md        the documents and their human notes (as now)
   drafts/<supplier>/<tariff-year>/<tariff-code>.json            drafts: bare versions
   tariffs/<supplier>/<tariff-code>/<effective-from>.r<N>.json   publications, immutable
-  vat/south-africa/<effective-from>.r<N>.json                   VAT publications, immutable
+  vat/south-africa/<effective-from>.r<N>.json                   VAT publications (one rate each), immutable
   observations/                               user-provided figures, not tariff data (as now)
 ```
 
 - **Folder per tariff.** `<supplier>` and `<tariff-code>` are the catalogue keys already in `TariffVersion` (for example `city-of-ekurhuleni` and `b-residential-1-phase`). Today's drafts sit in `data/drafts/ekurhuleni/` and `data/drafts/vat/`; they move to the supplier-code folders when they are re-written in canonical form.
 - **File name.** `<effective-from>` is the first day of the version the file holds (`2026-07-01`). `r<N>` is the revision: a first publication is `r1`; a publication that supersedes another takes the superseded one's revision plus one, even when it is filed under a different date (section 3). The publish step refuses a path that already exists.
 - **Lookup.** A publication can be found by path, without reading every file.
+- **VAT: one rate per publication.** A VAT publication holds one `VatRate` (its cited percentage, start and end) in the same envelope as a tariff version. VAT therefore uses the same rules as tariffs: overlap refusal, corrections, withdrawals and mid-year amendments. The repository assembles a `VatTable` from the rates current at the requested record time; a gap or an overlap refuses the calculation. Today's draft (one table) is split into one draft per rate when it is re-written.
 - **The source manifest** (`sources.json`) lists each document's SHA-256, path, URL, title, publisher, retrieval date, approval reference and whether it has a text layer. It is what the database's `source_document` table is loaded from. The READMEs stay as the human notes, and a test checks that the two agree.
 
 ### 3. A publication: a version (or a withdrawal) plus a publication record
@@ -82,7 +83,7 @@ data/
 - **`supersedes`** names the publication this one replaces, or is `null`. A publication may be superseded at most once; the loader refuses a second successor.
 - **`checks` holds only the publish step's own automatic results.** Human verification has one record: the `Verified` status on each value (verifier, method, date, text check), as now. Agent results and review evidence live in the pull request and, for humans, in those statuses. They are not copied into the publication.
 - **A correction may change any field,** including `effective_from` and `effective_to`. It is filed under its own (possibly new) effective-from date, with `supersedes` pointing at the old publication's `id`.
-- **A withdrawal** is a publication with `supersedes` set, a `reason`, and no `version` (`"version": null`). It ends the withdrawn version's `recorded_during` at its own `published_at` and puts nothing in its place. It is filed under the withdrawn version's date with the next revision number.
+- **A withdrawal** is a publication with `supersedes` set, a `reason`, and no `version` (`"version": null`). It ends the withdrawn version's `recorded_during` at its own `published_at` and puts nothing in its place. It is filed under the withdrawn version's date with the next revision number. **A withdrawal cannot be superseded:** to bring a withdrawn version back, publish it again as a new publication with `supersedes: null`.
 - **Files are never changed once on `main`**: never edited, deleted or renamed. A CI check and the file guard (both built in P2; neither exists yet) refuse any of these, as the guard already does for migrations on `main`. A correction or withdrawal is a new file; the old file is untouched.
 
 ### 4. How citations and statuses are stored
@@ -114,10 +115,10 @@ data/
   5. **Remove the draft** in the same change. Git keeps its history.
 - **The owner publishes by merging.** The owner runs the step, and the resulting change is reviewed and merged as a pull request. The pull request may not edit the publication. CI checks:
   - that every publication on the branch is canonical and valid (section 1);
-  - for publications **added** by the pull request: `published_at` is no later than CI's own time and **no more than 24 hours earlier**; if a pull request sits longer, the owner re-runs the publish step;
+  - on pull requests only, for publications **added** by the pull request: `published_at` is no later than CI's own time and **no more than 24 hours earlier**. The check does not run on a push to `main`, where a failure after the merge could not be fixed. The bound is therefore against the pull request's last CI run, not the merge: the owner merges soon after CI passes, or re-runs CI first, and re-runs the publish step if the bound has passed;
   - that a superseding publication is later than the one it supersedes;
   - that no publication already on `main` was edited, deleted or renamed.
-- **The remaining gap.** `published_at` is when the owner ran the step, up to 24 hours before the merge. If the pull request is never merged, the publication never existed. This is preferred to taking record time from git, which ADR-0003 rules out. The gap is recorded as TD-14, to revisit when a deployed service exists.
+- **The remaining gap.** `published_at` is when the owner ran the step: up to 24 hours before the pull request's last CI run, plus however long the merge waits after that run. If the pull request is never merged, the publication never existed. This is preferred to taking record time from git, which ADR-0003 rules out. The gap is recorded as TD-14, to revisit when a deployed service exists.
 - **Estimated values may be published.** Every result that uses them warns (ADR-0006). What decides publication is that every value is cited, every citation passes the check or is honestly `no_text_layer`, and every `Verified` status is consistent with it; not that every value is `verified`. P3's pilot depends on this, because the Ekurhuleni schedule is a scan.
 
 ### 6. The database is rebuilt deterministically from the files
@@ -164,7 +165,7 @@ data/
 - Two representations to keep in step. The loader and round-trip tests carry that weight.
 - Published files cannot be fixed in place, even for a typo. Every fix is a new revision.
 - Old schema versions need converters kept and tested for as long as their files exist.
-- `published_at` can be up to 24 hours before the merge (TD-14).
+- `published_at` can be up to 24 hours before the pull request's last CI run, and the merge can come later still (TD-14).
 - Queries over citations are JSONB path queries, which are less obvious than a table; they live in tested repository functions.
 - pypdf's text extraction may not reproduce every printed text exactly (ligatures, columns, hyphenation). The check then fails closed, and the value cannot be published until the citation's printed text or locator is corrected.
 
@@ -185,6 +186,8 @@ data/
 | One file per tariff holding every version and revision | Correcting a version would edit a file that holds published history, which defeats immutability |
 | Close `recorded_during` by editing the superseded file | Edits published files. Deriving the end from the successor's `published_at` keeps every file immutable and gives the same result |
 | Human and agent checks recorded in `publication.checks` | Two records of human verification that can disagree with the values' `Verified` statuses; agent evidence belongs in the pull request |
+| One VAT table per publication | A new rate would correct the whole table, and VAT would need its own overlap and withdrawal rules |
+| Superseding a withdrawal to restore a version | A chain through a withdrawal is harder to read and check; republishing with `supersedes: null` says plainly what happened |
 | A "checked" draft stage with its own file format | A dry run (`--check`) gives the same feedback without a second format |
 | A `cited_value` table now | Duplicates the payload; JSONB path queries answer the same questions; deferred to P6 if needed |
 | No citation check until a later phase | The VAT table cites SARS documents with a text layer, so the check can run now; publishing without it would let wrong printed text through |

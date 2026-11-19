@@ -61,9 +61,9 @@ data/
 5. Nothing imports `api`, `console` or `mcp`.
 6. No production code imports the test-support package `support` (`tests/support`), which is importable only under pytest and mypy.
 
-## Data model (target for P2; details decided in the P2 storage ADR if they differ)
+## Data model (target for P2; ADR-0012 decides the details where they differ)
 
-The database is a deterministic projection of the committed tariff files (ADR-0003). It can be dropped and rebuilt from them at any time.
+The database is a deterministic projection of the committed tariff files (ADR-0003). It can be dropped and rebuilt from them at any time. ADR-0012 sets the file format and layout, the publish step and the loader. It adds a `publication` table (every publication, withdrawals included), stores VAT as one rate per publication, and defers a per-value citation table: citations are queried inside the JSONB payload.
 
 | Table | Purpose | Key points |
 | --- | --- | --- |
