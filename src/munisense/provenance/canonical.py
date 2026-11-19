@@ -21,7 +21,11 @@ from munisense.provenance.errors import CanonicalJsonError
 __all__ = ["MAX_INTEGER_DIGITS", "CanonicalJsonError", "check", "check_bytes", "dumps", "parse"]
 
 MAX_INTEGER_DIGITS = 30
-"""Far beyond any page number or count in a tariff file; decimals are strings."""
+"""Far beyond any page number or count in a tariff file; decimals are strings.
+
+A P2-4 decision, not in ADR-0012: once a file is published under this limit, the limit can
+only be raised, never lowered.
+"""
 
 
 def _refuse_float(text: str) -> NoReturn:
