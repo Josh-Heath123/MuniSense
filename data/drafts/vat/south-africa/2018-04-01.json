@@ -1,0 +1,29 @@
+{
+  "start_cited": {
+    "value": "2018-04-01",
+    "citation": {
+      "document_sha256": "9204c3f8d0cea0200b84559f19bfa638d2f6eb6e2083ac633da4938eec52c31a",
+      "page": 15,
+      "locator": "Chapter 1, 1.2 How does VAT work?, footnote 5",
+      "printed_text": "The standard rate of VAT changed from 14% to 15% with effect from 1 April 2018."
+    },
+    "status": {
+      "kind": "estimated",
+      "reason": "citation check not built until P2"
+    }
+  },
+  "end_cited": null,
+  "percent": {
+    "value": "15",
+    "citation": {
+      "document_sha256": "9204c3f8d0cea0200b84559f19bfa638d2f6eb6e2083ac633da4938eec52c31a",
+      "page": 15,
+      "locator": "Chapter 1, 1.2 How does VAT work?, first paragraph",
+      "printed_text": "at the standard rate of 15%"
+    },
+    "status": {
+      "kind": "estimated",
+      "reason": "citation check not built until P2; no end: Act 3 of 2026 s13 stops the 2025 increase (sha256 5f6e4225703d6ba2f0d19bd0911fe580f787bcab4d1f8d6f421525051366ad1e)"
+    }
+  }
+}

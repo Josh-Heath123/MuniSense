@@ -2,8 +2,8 @@
 
 The Ekurhuleni example tariff for P1 (E32; not the owner's meter, E34), transcribed from
 the signed schedule in `data/sources/ekurhuleni/` into the drafts
-`data/drafts/ekurhuleni/2026-27/` (not reviewed or published; P3), with the VAT rate from
-SARS (`data/sources/sars/`, `data/drafts/vat/`). Every value is `estimated` (E29) until
+`data/drafts/city-of-ekurhuleni/2026-27/` (not reviewed or published; P3), with the VAT rate from
+SARS (`data/sources/sars/`, `data/drafts/vat/south-africa/`). Every value is `estimated` (E29) until
 the citation check (P2) and a human check exist.
 
 Hand calculations use only the printed values:
@@ -35,10 +35,11 @@ from munisense.domain.billing import (
 from munisense.domain.citations import Estimated, StatusKind, cited_statuses
 from munisense.domain.money import Money, VatTable
 from munisense.domain.tariffs import FixedCharge, SeasonalEnergy, TariffVersion
+from munisense.provenance.drafts import load_file, load_vat_table
 
 ROOT = Path(__file__).resolve().parents[3]
 DRAFTS = ROOT / "data" / "drafts"
-TARIFFS = DRAFTS / "ekurhuleni" / "2026-27"
+TARIFFS = DRAFTS / "city-of-ekurhuleni" / "2026-27"
 SCHEDULE_SHA = "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73"
 VAT_GUIDE_SHA = "9204c3f8d0cea0200b84559f19bfa638d2f6eb6e2083ac633da4938eec52c31a"
 VAT_ACT_SHA = "5f6e4225703d6ba2f0d19bd0911fe580f787bcab4d1f8d6f421525051366ad1e"
@@ -46,13 +47,11 @@ E29_REASON = "citation check not built until P2"
 
 
 def tariff(phase: str) -> TariffVersion:
-    path = TARIFFS / f"tariff-b-residential-{phase}.json"
-    return TariffVersion.model_validate_json(path.read_text(encoding="utf-8"))
+    return load_file(TARIFFS / f"tariff-b-residential-{phase}.json", TariffVersion)
 
 
 def vat_table() -> VatTable:
-    path = DRAFTS / "vat" / "south-africa.json"
-    return VatTable.model_validate_json(path.read_text(encoding="utf-8"))
+    return load_vat_table(DRAFTS / "vat" / "south-africa")
 
 
 def month(year: int, number: int) -> BillingPeriod:

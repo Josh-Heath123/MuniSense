@@ -1,6 +1,6 @@
 # South African Revenue Service: source documents
 
-Committed source PDFs for the VAT rate (ADR-0006), downloaded from the official SARS website on 2026-11-18 with the owner's approval (E33). Citations name the SHA-256. Page numbers in citations are PDF page numbers.
+Committed source PDFs for the VAT rate (ADR-0006), listed for machines in `sources.json` (P2-6; a test checks that it agrees with this file), downloaded from the official SARS website on 2026-11-18 with the owner's approval (E33). Citations name the SHA-256. Page numbers in citations are PDF page numbers.
 
 | File | Document | URL | SHA-256 | Size | Text layer |
 | --- | --- | --- | --- | --- | --- |
@@ -9,7 +9,7 @@ Committed source PDFs for the VAT rate (ADR-0006), downloaded from the official 
 
 ## What each supports
 
-- **VAT 404, page 15** (Chapter 1, 1.2 "How does VAT work?"): "at the standard rate of 15%", and footnote 5: "The standard rate of VAT changed from 14% to 15% with effect from 1 April 2018." Cited for the percentage and the start date in `data/drafts/vat/south-africa.json`.
+- **VAT 404, page 15** (Chapter 1, 1.2 "How does VAT work?"): "at the standard rate of 15%", and footnote 5: "The standard rate of VAT changed from 14% to 15% with effect from 1 April 2018." Cited for the percentage and the start date in `data/drafts/vat/south-africa/2018-04-01.json`.
 - **Act 3 of 2026, page 10, section 13**: the VAT rate increase announced in the 2025 national budget "does not come into effect", deemed from 1 May 2025. This is why the 15% entry has no end date. The domain model cites one document per value, so this Act is named, with its full SHA-256, in the status reason of the percentage, not as a citation; a test checks that hash against the committed file.
 
 ## Why not the VAT Act itself

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "suppliers": [
+    {
+      "code": "city-of-ekurhuleni",
+      "name": "City of Ekurhuleni",
+      "kind": "municipality",
+      "tariff_year_start_month": {
+        "value": 7,
+        "citation": {
+          "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+          "page": 1,
+          "locator": "Start date",
+          "printed_text": "01 JULY 2026"
+        },
+        "status": {
+          "kind": "estimated",
+          "reason": "read from the 2026/27 schedule's printed start date; assumed the same each year; scanned page, no text layer"
+        }
+      }
+    }
+  ]
+}

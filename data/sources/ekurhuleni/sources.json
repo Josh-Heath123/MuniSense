@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "publisher": "City of Ekurhuleni",
+  "documents": [
+    {
+      "sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+      "file": "electricity-tariffs-2026-27-signed.pdf",
+      "title": "Schedule 2: Supply of electricity tariffs for the 2026/2027 financial year, version 2026.07.30 (signed)",
+      "url": "https://www.ekurhuleni.gov.za/wp-content/uploads/2026/07/Schedule-2-of-Electricity-Tariffs-2026-27-aligned-with-NERSA-rates-approved-on-23-May-2026-v.26.07.30-signed.pdf",
+      "retrieved_on": "2026-11-17",
+      "approval": "E26",
+      "pages": 37,
+      "text_layer": false
+    }
+  ]
+}
