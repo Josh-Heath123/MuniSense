@@ -38,6 +38,7 @@ Everything runs inside WSL2 (Ubuntu), so local development matches CI and future
 ```bash
 cp .env.example .env        # optional: local settings (the defaults work)
 docker compose up -d db     # PostgreSQL 17: databases munisense_dev and munisense_test (needed from P2)
+uv run poe db-bootstrap     # once per volume: the app (read-only) and migration roles, and the munisense schema
 uv sync                     # install locked dependencies
 uv run pre-commit install   # git hooks: file checks, ruff, gitleaks; refuses a push to main (needs Docker)
 uv run poe fmt              # format and auto-fix
@@ -47,5 +48,14 @@ uv run poe verify           # everything CI runs (offline)
 uv run poe audit            # dependency vulnerability audit (needs network)
 uv run mutmut run           # mutation testing of domain.billing (slow; see docs/quality/mutation-p1-15.md)
 ```
+
+## Database settings
+
+Settings are read from the environment (`src/munisense/platform/settings.py`); `.env.example` lists them. While `MUNISENSE_ENVIRONMENT` is `local` (the default, which includes CI), unset URLs use the published local defaults. The database tests (`tests/integration`, marked `db`) prepare the roles themselves and refuse any database whose name does not end in `_test`. They connect as:
+
+- `munisense_app`: reads only (`SELECT`); this is what the application uses;
+- `munisense_migration`: owns the `munisense` schema; migrations and the loader use it.
+
+Neither is a superuser. Every connection disables GSSAPI encryption and refuses libpq service lookups.
 
 `CLAUDE.md` has the rules for working on the code, and `docs/README.md` maps every document.
