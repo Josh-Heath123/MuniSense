@@ -1,5 +1,6 @@
 """The supplier catalogue: `data/catalogue/suppliers.json` (P2-6, ADR-0012 section 2)."""
 
+from datetime import date
 from enum import StrEnum
 from typing import Annotated, Self
 
@@ -31,6 +32,18 @@ class Supplier(DomainModel):
     name: Text
     kind: SupplierKind
     tariff_year_start_month: Cited[Month]
+
+    def tariff_year(self, day: date) -> str:
+        """The drafts folder name for the tariff year containing `day`.
+
+        `2026-27` for a year starting in any month but January; `2026` for a calendar year
+        (P2-8; ADR-0012 section 2 names the folder `<tariff-year>`).
+        """
+        first_month = self.tariff_year_start_month.value
+        first_year = day.year if day.month >= first_month else day.year - 1
+        if first_month == 1:
+            return str(first_year)
+        return f"{first_year}-{(first_year + 1) % 100:02d}"
 
 
 class SupplierCatalogue(DomainModel):

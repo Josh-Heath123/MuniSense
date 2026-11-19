@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from munisense.domain.money import VatRate
 from munisense.provenance.canonical import CanonicalJsonError
-from munisense.provenance.drafts import load_file, write_file
+from munisense.provenance.drafts import load_file, load_vat_table, write_file
 from munisense.provenance.sources import SourceManifest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -55,3 +55,10 @@ def test_load_file_refuses_a_non_canonical_file(tmp_path: Path) -> None:
     target.write_text('{"x": 1}', encoding="utf-8")
     with pytest.raises(CanonicalJsonError, match="canonical form"):
         load_file(target, VatRate)
+
+
+def test_a_vat_draft_must_be_named_after_its_start(tmp_path: Path) -> None:
+    source = ROOT / "data/drafts/vat/south-africa/2018-04-01.json"
+    (tmp_path / "2019-01-01.json").write_bytes(source.read_bytes())
+    with pytest.raises(ValueError, match="named after its start date, 2018-04-01"):
+        load_vat_table(tmp_path)

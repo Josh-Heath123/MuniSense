@@ -44,6 +44,9 @@ uv run pre-commit install   # git hooks: file checks, ruff, gitleaks; refuses a 
 uv run poe fmt              # format and auto-fix
 uv run poe check            # lint, types, fast tests (the Stop hook runs this)
 uv run poe demo             # the README's example bill, from the real data and engine
+uv run poe publish <draft> --reason "..." [--supersedes <id>] [--check]
+                            # publish a draft (ADR-0012); --check runs every check, writes nothing
+uv run poe publish --withdraw <id> --reason "..."   # withdraw a publication
 uv run poe verify           # everything CI runs (offline)
 uv run poe audit            # dependency vulnerability audit (needs network)
 uv run mutmut run           # mutation testing of domain.billing (slow; see docs/quality/mutation-p1-15.md)
@@ -59,3 +62,7 @@ Settings are read from the process environment (`src/munisense/platform/settings
 Neither is a superuser. Only the bootstrap's own tests (`tests/integration/bootstrap`, also marked `db_admin`) connect as the local superuser. Every connection uses `gssencmode=disable` and `require_auth=scram-sha-256`.
 
 `CLAUDE.md` has the rules for working on the code, and `docs/README.md` maps every document.
+
+## Publishing
+
+`uv run poe publish` turns a draft into an immutable publication under `data/tariffs/` or `data/vat/` (ADR-0012). It refuses, listing every reason, unless the draft sits in its folder, every citation passes the citation check (or is honestly `no_text_layer`), every `Verified` value agrees with the computed text check, and the version overlaps no current publication of the same tariff that it does not supersede. Record time is the moment you run it. Run it with `--check` first; then run it for real, commit the new file together with the removed draft, and open a pull request. A correction is `--supersedes <id>`; if it moves the effective date into another tariff year, its draft sits in that year's folder. A mid-year amendment is two publications in one pull request, the shortening revision first. `--by <handle>` records who published (default `owner`; a pseudonymous handle, never a name). The command reads `data/` under the working directory. Exit codes: 0 published (or would publish), 1 refused, 2 wrong arguments, 3 published but the draft could not be removed (remove it by hand). Never edit a published file.
