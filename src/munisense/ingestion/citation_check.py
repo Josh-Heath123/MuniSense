@@ -22,6 +22,7 @@ here runs inside the API or console.
 
 import hashlib
 import json
+import os
 import re
 import stat
 import subprocess
@@ -45,17 +46,18 @@ CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 class Limits:
     """Each far above what the committed documents need (E50).
 
-    Measured needs (P2-7, on the owner's machine: wall time with `time.perf_counter`, peak
-    resident memory from `resource.getrusage`, peak address space from `/proc/self/status`
-    `VmPeak`): extracting all 176 pages of VAT 404 took
-    4.8 s, 42 MB resident and 64 MB address space; the largest file is 3.3 MB with 176
-    pages. `test_the_limits_hold_a_wide_margin` re-runs every committed document under a
-    fifth of these limits on every `poe verify`. Margins: CPU 12x, time 25x, address space
-    over 30x, file size about 20x, pages about 28x.
+    Measured needs (P2-7, on the owner's machine): extracting all 176 pages of VAT 404, the
+    largest committed document (3.3 MB), took 5.7 to 11.4 s of the child's CPU time over
+    three runs (`resource.getrusage(RUSAGE_CHILDREN)`), about the same wall time, and 45 MB
+    peak resident memory; peak address space about 64 MB (`/proc/self/status` VmPeak).
+    Margins against the worst run: CPU and wall time about 10x and 26x, address space over
+    30x, file size about 20x, pages about 28x. `test_the_limits_hold_a_wide_margin` re-runs
+    every page of every committed document under a fifth of each limit on every
+    `poe verify`. A citation check itself reads only the cited pages, in well under a second.
     """
 
-    timeout_seconds: float = 120.0
-    cpu_seconds: int = 60
+    timeout_seconds: float = 300.0
+    cpu_seconds: int = 120
     """Below the wall-clock timeout, so a busy child is stopped by CPU time first."""
     address_space_bytes: int = 2 * 1024**3
     file_bytes: int = 64 * 1024**2
@@ -116,14 +118,18 @@ def _clean(text: str) -> str:
 def read_document(path: Path, document: SourceDocument, limits: Limits) -> bytes:
     """The file's bytes, if and only if it is the listed document."""
     try:
-        info = path.lstat()
-        if not stat.S_ISREG(info.st_mode):
-            msg = f"{path.name} is not a regular file"
-            raise ExtractionError(msg)
-        if info.st_size > limits.file_bytes:
-            msg = f"{path.name} is {info.st_size} bytes, more than the limit of {limits.file_bytes}"
-            raise ExtractionError(msg)
-        with path.open("rb") as handle:
+        # Opened without following a symlink and without blocking (a FIFO), then checked on
+        # the open descriptor itself, so the file checked is the file read.
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode):
+                msg = f"{path.name} is not a regular file"
+                raise ExtractionError(msg)
+            if info.st_size > limits.file_bytes:
+                size, limit = info.st_size, limits.file_bytes
+                msg = f"{path.name} is {size} bytes, more than the limit of {limit}"
+                raise ExtractionError(msg)
             data = handle.read(limits.file_bytes + 1)
     except OSError as error:
         msg = f"{path.name} cannot be read ({type(error).__name__})"

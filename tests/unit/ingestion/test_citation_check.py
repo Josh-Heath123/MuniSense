@@ -7,6 +7,7 @@ Tests that start the extraction process are marked `slow` (about half a second e
 import dataclasses
 import io
 import json
+import os
 import subprocess
 import sys
 from dataclasses import replace
@@ -149,7 +150,7 @@ def test_a_file_with_other_bytes_is_not_the_listed_document(tmp_path: Path) -> N
 def test_a_symlink_is_refused(tmp_path: Path) -> None:
     link = tmp_path / "vat-404.pdf"
     link.symlink_to(VAT_404)
-    with pytest.raises(ExtractionError, match="not a regular file"):
+    with pytest.raises(ExtractionError, match=r"not a regular file|cannot be read \(OSError\)"):
         read_document(link, _entry(VAT_404), Limits())
 
 
@@ -164,15 +165,22 @@ def test_an_over_size_file_is_refused_before_it_is_read() -> None:
 
 
 def test_a_file_that_grows_while_read_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    real_lstat = Path.lstat
+    real_fstat = os.fstat
 
-    def small(self: Path) -> object:
-        info = real_lstat(self)
+    def small(descriptor: int) -> object:
+        info = real_fstat(descriptor)
         return type("Info", (), {"st_mode": info.st_mode, "st_size": 10})()
 
-    monkeypatch.setattr(Path, "lstat", small)
+    monkeypatch.setattr(os, "fstat", small)
     with pytest.raises(ExtractionError, match="grew past the limit"):
         read_document(VAT_404, _entry(VAT_404), replace(Limits(), file_bytes=1000))
+
+
+def test_a_fifo_is_refused_without_blocking(tmp_path: Path) -> None:
+    fifo = tmp_path / "vat-404.pdf"
+    os.mkfifo(fifo)
+    with pytest.raises(ExtractionError, match="not a regular file"):
+        read_document(fifo, _entry(VAT_404), Limits())
 
 
 def test_a_citation_of_an_unlisted_document_fails_without_reading_anything() -> None:
@@ -398,9 +406,9 @@ def test_the_child_cannot_write_file_content(tmp_path: Path) -> None:
 
 @pytest.mark.slow
 def test_the_limits_hold_a_wide_margin() -> None:
-    """Every page of every committed text document, under a fifth of each limit (E50).
+    """Every page of every committed document, under a fifth of each limit (E50).
 
-    The tightest margin is CPU time: 60 s against about 4.8 s for all of VAT 404 (12x).
+    The tightest margin is CPU time: a fifth is 24 s, against 5.7 to 11.4 s measured.
     """
     fifth = Limits(
         timeout_seconds=Limits().timeout_seconds / 5,
@@ -408,6 +416,7 @@ def test_the_limits_hold_a_wide_margin() -> None:
         address_space_bytes=Limits().address_space_bytes // 5,
         file_bytes=Limits().file_bytes // 5,
         pages=Limits().pages // 5,
+        output_bytes=Limits().output_bytes // 5,
     )
     for path, document in _documents().values():
         count, _ = extract_pages(
