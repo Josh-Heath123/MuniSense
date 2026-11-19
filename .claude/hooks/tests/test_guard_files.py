@@ -220,5 +220,51 @@ class MigrationRuleUnchanged(unittest.TestCase):
             self.assertEqual(allowed.returncode, 0, allowed.stderr)
 
 
+class PublicationRule(unittest.TestCase):
+    """P2-9: Claude's file tools never write under data/tariffs/ or data/vat/."""
+
+    def run_tool(self, repo: Path, rel: str, **tool_input: str) -> subprocess.CompletedProcess[str]:
+        payload = json.dumps({"tool_input": {"file_path": str(repo / rel), **tool_input}})
+        env = {**os.environ, "CLAUDE_PROJECT_DIR": str(repo)}
+        return subprocess.run(
+            [sys.executable, str(HOOKS / "guard_files.py")],
+            input=payload,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+
+    def test_writes_and_edits_under_the_publication_folders_are_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            git(repo, "init", "-q", "-b", "main")
+            for rel in (
+                "data/tariffs/city-of-ekurhuleni/b-residential-1-phase/2026-07-01.r1.json",
+                "data/tariffs/new-supplier/x/2027-01-01.r1.json",
+                "data/vat/south-africa/2018-04-01.r1.json",
+                "data/VAT/south-africa/2018-04-01.r2.json",
+                "data/tariffs/.2026-07-01.r1.json.123.tmp",
+            ):
+                for tool_input in ({"content": "{}"}, {"new_string": "x"}):
+                    with self.subTest(rel=rel, tool=next(iter(tool_input))):
+                        blocked = self.run_tool(repo, rel, **tool_input)
+                        self.assertEqual(blocked.returncode, 2, blocked.stderr)
+                        self.assertIn("uv run poe publish", blocked.stderr)
+
+    def test_drafts_and_sources_stay_writable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            git(repo, "init", "-q", "-b", "main")
+            for rel in (
+                "data/drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json",
+                "data/drafts/vat/south-africa/2018-04-01.json",
+                "data/tariffsheet.md",
+            ):
+                with self.subTest(rel=rel):
+                    allowed = self.run_tool(repo, rel, content="{}")
+                    self.assertEqual(allowed.returncode, 0, allowed.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

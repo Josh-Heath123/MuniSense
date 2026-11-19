@@ -98,6 +98,26 @@ jobs:
           zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
           git /repo --redact --no-banner
 
+      - name: Publication guards (P2-9)
+        # Every run checks the whole set of publications. A pull request also refuses any
+        # change to a publication on its base and re-checks the publications it adds (record
+        # time within 24 hours, every publish-step check re-run). A push to main refuses any
+        # change to a publication since the previous commit; the 24-hour check never runs on
+        # main, where a failure after the merge could not be fixed. Values reach the shell
+        # through env, never by template expansion inside the script.
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            uv run poe publications-check --base "origin/$BASE_REF" --pull-request
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            uv run poe publications-check --base "$BEFORE"
+          else
+            uv run poe publications-check
+          fi
+
       - name: Create the database roles (as the CI superuser, before any test)
         env:
           # One database in CI: the "development" URLs point at the test database.

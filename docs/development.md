@@ -47,6 +47,7 @@ uv run poe demo             # the README's example bill, from the real data and 
 uv run poe publish <draft> --reason "..." [--supersedes <id>] [--check]
                             # publish a draft (ADR-0012); --check runs every check, writes nothing
 uv run poe publish --withdraw <id> --reason "..."   # withdraw a publication
+uv run poe publications-check [--base <ref> [--pull-request]]   # what CI checks about publications (P2-9)
 uv run poe verify           # everything CI runs (offline)
 uv run poe audit            # dependency vulnerability audit (needs network)
 uv run mutmut run           # mutation testing of domain.billing (slow; see docs/quality/mutation-p1-15.md)

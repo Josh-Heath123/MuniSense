@@ -9,6 +9,9 @@ Blocks:
 
 Any crash blocks (fails closed). Git calls share a time budget below the hook timeout.
 - editing an Alembic migration that already exists on the main branch
+- any write or edit under data/tariffs/ or data/vat/ (P2-9, ADR-0012): publications are
+  written only by `uv run poe publish` and are never changed once written, so Claude's file
+  tools may not touch them at all, on any branch. This covers files that exist on main.
 """
 
 from __future__ import annotations
@@ -36,6 +39,8 @@ KEY_SUFFIXES = {".pem", ".key", ".p12", ".pfx"}
 ADR_PATH = re.compile(r"^docs/adr/(\d{4})-[^/]+\.md$", re.IGNORECASE)
 ACCEPTED = re.compile(r"(?im)^\W*status\W*:?\W*accepted\b")
 MIGRATION_PATH = re.compile(r"(^|/)migrations/versions/[^/]+\.py$", re.IGNORECASE)
+# Case-insensitive: /mnt/c is a case-insensitive file system.
+PUBLICATION_PATH = re.compile(r"^data/(tariffs|vat)(/|$)", re.IGNORECASE)
 
 
 def new_content(tool_input: dict[str, Any]) -> str:
@@ -179,6 +184,12 @@ def check(data: dict[str, Any]) -> int:
                 "ADR with /adr that supersedes it; the only permitted edit here is "
                 "marking it 'Superseded by ADR-NNNN'."
             )
+    if rel and PUBLICATION_PATH.match(rel):
+        problems.append(
+            f"{rel} is under data/tariffs/ or data/vat/. Publications are written only by "
+            "`uv run poe publish` and never changed; a correction is a new publication "
+            "(ADR-0012). Use `uv run poe publish` instead."
+        )
     if rel and MIGRATION_PATH.search(rel):
         released = on_main(rel, git)
         if released is None and path.exists():
