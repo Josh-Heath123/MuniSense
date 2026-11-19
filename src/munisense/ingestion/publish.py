@@ -109,7 +109,7 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _documents(data: Path) -> dict[str, tuple[Path, SourceDocument]]:
+def documents(data: Path) -> dict[str, tuple[Path, SourceDocument]]:
     documents: dict[str, tuple[Path, SourceDocument]] = {}
     for manifest in sorted((data / "sources").glob("*/sources.json")):
         for document in load_file(manifest, SourceManifest).documents:
@@ -120,19 +120,19 @@ def _documents(data: Path) -> dict[str, tuple[Path, SourceDocument]]:
     return documents
 
 
-def _valid_period(version: TariffVersion | VatRate) -> tuple[date, date | None]:
+def valid_period(version: TariffVersion | VatRate) -> tuple[date, date | None]:
     if isinstance(version, VatRate):
         return version.start, version.end
     end = version.effective_to.value if version.effective_to is not None else None
     return version.effective_from.value, end
 
 
-def _overlaps(a: tuple[date, date | None], b: tuple[date, date | None]) -> bool:
+def overlaps(a: tuple[date, date | None], b: tuple[date, date | None]) -> bool:
     (a_start, a_end), (b_start, b_end) = a, b
     return (b_end is None or a_start < b_end) and (a_end is None or b_start < a_end)
 
 
-def _folder(data: Path, scope: str, code: str) -> Path:
+def publication_folder(data: Path, scope: str, code: str) -> Path:
     if scope == VAT_SCOPE:
         return data / "vat" / code
     return data / "tariffs" / scope / code
@@ -140,7 +140,7 @@ def _folder(data: Path, scope: str, code: str) -> Path:
 
 def _load_existing(data: Path, scope: str, code: str) -> list[Existing]:
     found = []
-    for path in sorted(_folder(data, scope, code).glob("*.json")):
+    for path in sorted(publication_folder(data, scope, code).glob("*.json")):
         publication: TariffPublication | VatRatePublication
         if scope == VAT_SCOPE:
             publication = load_bytes(path.read_bytes(), VatRatePublication)
@@ -155,7 +155,7 @@ def _load_existing(data: Path, scope: str, code: str) -> list[Existing]:
             raise ProvenanceError(msg)
         start, end = (None, None)
         if publication.version is not None:
-            start, end = _valid_period(publication.version)
+            start, end = valid_period(publication.version)
         found.append(Existing(path, record.id, record.published_at, record.supersedes, start, end))
     return found
 
@@ -184,7 +184,7 @@ def _next_revision(existing: list[Existing], day: date) -> int:
     return max(revisions, default=0) + 1
 
 
-def _text_check_reasons(model: BaseModel, results: list[CitationResult]) -> list[str]:
+def text_check_reasons(model: BaseModel, results: list[CitationResult]) -> list[str]:
     computed = {r.path: r.outcome for r in results}
     expected = {TextCheck.PASSED: Outcome.PASSED, TextCheck.NO_TEXT_LAYER: Outcome.NO_TEXT_LAYER}
     reasons = []
@@ -262,29 +262,29 @@ def publish(  # one refusal list, built in order
             raise PublishRefusedError(
                 [f"the draft is not valid: {_where(e['loc'])}: {e['msg']}" for e in error.errors()]
             ) from None
-        day = _valid_period(version)[0]
+        day = valid_period(version)[0]
         supersedes = request.supersedes
     existing = _load_existing(data, scope, code)
     if supersedes is not None:
         _check_target(existing, supersedes, reasons)
     revision = ParsedId.of(supersedes).revision + 1 if supersedes else _next_revision(existing, day)
     publication_id = f"{scope}/{code}/{day.isoformat()}/r{revision}"
-    target_path = _folder(data, scope, code) / f"{day.isoformat()}.r{revision}.json"
+    target_path = publication_folder(data, scope, code) / f"{day.isoformat()}.r{revision}.json"
     result = Result(target_path, publication_id)
     counts = {"passed": 0, "no_text_layer": 0, "failed": 0}
     if version is not None:
-        result.citations = checker(version, _documents(data))
+        result.citations = checker(version, documents(data))
         for cited in result.citations:
             counts[cited.outcome.value] += 1
             if cited.outcome is Outcome.FAILED:
                 reasons.append(f"citation {cited.path} (page {cited.page}): {cited.reason}")
-        reasons.extend(_text_check_reasons(version, result.citations))
+        reasons.extend(text_check_reasons(version, result.citations))
         successors = _successors(existing)
         for other in existing:
             current = other.id not in successors and not other.is_withdrawal
             if other.start is None or not current or other.id == supersedes:
                 continue
-            if _overlaps(_valid_period(version), (other.start, other.end)):
+            if overlaps(valid_period(version), (other.start, other.end)):
                 reasons.append(f"overlaps {other.id} in valid time without superseding it")
     if target_path.exists():
         reasons.append(f"{target_path.name} already exists")

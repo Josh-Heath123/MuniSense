@@ -9,6 +9,9 @@ Blocks:
 
 Any crash blocks (fails closed). Git calls share a time budget below the hook timeout.
 - editing an Alembic migration that already exists on the main branch
+- any write or edit under data/tariffs/ or data/vat/ (P2-9, ADR-0012): publications are
+  written only by `uv run poe publish` and are never changed once written, so Claude's file
+  tools may not touch them at all, on any branch. This covers files that exist on main.
 """
 
 from __future__ import annotations
@@ -36,6 +39,8 @@ KEY_SUFFIXES = {".pem", ".key", ".p12", ".pfx"}
 ADR_PATH = re.compile(r"^docs/adr/(\d{4})-[^/]+\.md$", re.IGNORECASE)
 ACCEPTED = re.compile(r"(?im)^\W*status\W*:?\W*accepted\b")
 MIGRATION_PATH = re.compile(r"(^|/)migrations/versions/[^/]+\.py$", re.IGNORECASE)
+# Case-insensitive: /mnt/c is a case-insensitive file system.
+PUBLICATION_PATH = re.compile(r"^data/(tariffs|vat)(/|$)", re.IGNORECASE)
 
 
 def new_content(tool_input: dict[str, Any]) -> str:
@@ -49,10 +54,19 @@ def new_content(tool_input: dict[str, Any]) -> str:
 
 def relative(path: Path, root: Path) -> str | None:
     """Path relative to the project root with forward slashes, on Windows too."""
+    resolved, base = path.resolve(), root.resolve()
     try:
-        return path.resolve().relative_to(root.resolve()).as_posix()
+        return resolved.relative_to(base).as_posix()
     except ValueError:
-        return None
+        pass
+    # /mnt/c is case-insensitive: /mnt/c/munisense/... is the same folder as
+    # /mnt/c/MuniSense/..., and must not escape the rules below (P2-9 security review).
+    # The slice below assumes case folding keeps the root's length (true for an ASCII root,
+    # such as this project's; "ß" would not be). It can only over-block, so it fails safe.
+    full, prefix = resolved.as_posix(), base.as_posix().rstrip("/") + "/"
+    if full.casefold().startswith(prefix.casefold()):
+        return full[len(prefix) :]
+    return None
 
 
 MAIN_REFS = ("refs/heads/main", "refs/remotes/origin/main")  # fully qualified: no shadowing
@@ -179,6 +193,12 @@ def check(data: dict[str, Any]) -> int:
                 "ADR with /adr that supersedes it; the only permitted edit here is "
                 "marking it 'Superseded by ADR-NNNN'."
             )
+    if rel and PUBLICATION_PATH.match(rel):
+        problems.append(
+            f"{rel} is under data/tariffs/ or data/vat/. Publications are written only by "
+            "`uv run poe publish` and never changed; a correction is a new publication "
+            "(ADR-0012). Use `uv run poe publish` instead."
+        )
     if rel and MIGRATION_PATH.search(rel):
         released = on_main(rel, git)
         if released is None and path.exists():
