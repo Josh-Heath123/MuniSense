@@ -27,5 +27,11 @@ def write_file(path: Path, value: BaseModel) -> None:
 
 def load_vat_table(folder: Path) -> VatTable:
     """Assemble a VAT table from one-rate drafts named `<start>.json`, in date order."""
-    rates = [load_file(path, VatRate) for path in sorted(folder.glob("*.json"))]
+    rates = []
+    for path in sorted(folder.glob("*.json")):
+        rate = load_file(path, VatRate)
+        if path.stem != rate.start.isoformat():
+            msg = f"{path.name}: a VAT draft is named after its start date, {rate.start}"
+            raise ValueError(msg)
+        rates.append(rate)
     return VatTable(rates=tuple(rates))

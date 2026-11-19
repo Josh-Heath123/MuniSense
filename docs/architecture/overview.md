@@ -32,7 +32,7 @@ src/munisense/
   provenance/     canonical JSON (canonical.py) and the publication envelope: PublicationRecord, TariffPublication, VatRatePublication, withdrawals (publication.py, ADR-0012, P2-4); source manifests (SourceManifest, sources.py) and reading and writing data files in canonical form (drafts.py, P2-6). The per-value Citation and status types live in domain/citations, because the domain may not import this package
   ingestion/      the citation check (citation_check.py; P2-7), whose PDF text extraction runs in a
                   separate, resource-limited `python -I` process (pdf_text.py, stdlib and pypdf only);
-                  later the publish step (P2-8), validator, review-and-publish
+                  the publish step (publish.py, `poe publish`; P2-8); later the review workflow
   persistence/    SQLAlchemy models, repositories, Alembic migrations, as-of queries
   services/       use cases: calculate_bill, compare_tariffs, publish_version, ... (from P2). Today only
                   demo.py: the `poe demo` entry point, which reads the Ekurhuleni drafts directly (TD-13)
