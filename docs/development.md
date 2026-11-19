@@ -39,6 +39,7 @@ Everything runs inside WSL2 (Ubuntu), so local development matches CI and future
 cp .env.example .env        # optional: local settings (the defaults work)
 docker compose up -d db     # PostgreSQL 17: databases munisense_dev and munisense_test (needed from P2)
 uv sync                     # install locked dependencies
+uv run poe db-bootstrap     # once per volume, after uv sync: the two roles and the munisense schema
 uv run pre-commit install   # git hooks: file checks, ruff, gitleaks; refuses a push to main (needs Docker)
 uv run poe fmt              # format and auto-fix
 uv run poe check            # lint, types, fast tests (the Stop hook runs this)
@@ -47,5 +48,14 @@ uv run poe verify           # everything CI runs (offline)
 uv run poe audit            # dependency vulnerability audit (needs network)
 uv run mutmut run           # mutation testing of domain.billing (slow; see docs/quality/mutation-p1-15.md)
 ```
+
+## Database settings
+
+Settings are read from the process environment (`src/munisense/platform/settings.py`). Only docker compose reads the local settings file; Python does not, so if you change the port or a password there, export the matching `MUNISENSE_*` URLs too. While `MUNISENSE_ENVIRONMENT` is `local` (the default, which includes CI), every host must be loopback and unset URLs use the published local defaults. Any libpq `PG*` environment variable is refused. Run `uv run poe db-bootstrap` once per volume before the database tests (`tests/integration`, marked `db`). They refuse any database whose name does not end in `_test` and connect as:
+
+- `munisense_app`: reads only (`SELECT`); this is what the application uses;
+- `munisense_migration`: owns the `munisense` schema; migrations and the loader use it.
+
+Neither is a superuser. Only the bootstrap's own tests (`tests/integration/bootstrap`, also marked `db_admin`) connect as the local superuser. Every connection uses `gssencmode=disable` and `require_auth=scram-sha-256`.
 
 `CLAUDE.md` has the rules for working on the code, and `docs/README.md` maps every document.
