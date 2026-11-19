@@ -4,24 +4,31 @@ Tests that start the extraction process are marked `slow` (about half a second e
 `poe verify` and CI run them, `poe check` does not (E43).
 """
 
+import dataclasses
+import io
 import json
+import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from pypdf import Configuration
 
 from munisense.domain.money import VatRate
 from munisense.domain.tariffs import TariffVersion
-from munisense.ingestion import pdf_text
+from munisense.ingestion import citation_check, pdf_text
 from munisense.ingestion.citation_check import (
     ExtractionError,
     Limits,
     Outcome,
     _outcome,  # the decision table is tested directly
+    _parse_output,  # the output checks are tested directly
     check_citations,
     extract_pages,
     iter_cited,
     normalise,
+    read_document,
 )
 from munisense.provenance.drafts import load_file
 from munisense.provenance.sources import SourceDocument, SourceManifest
@@ -42,11 +49,24 @@ def _documents() -> dict[str, tuple[Path, SourceDocument]]:
     return documents
 
 
-def _with_citation(rate: VatRate, **changes: object) -> VatRate:
-    percent = rate.percent.model_copy(
-        update={"citation": rate.percent.citation.model_copy(update=changes)}
-    )
-    return rate.model_copy(update={"percent": percent})
+def _entry(path: Path) -> SourceDocument:
+    return next(d for p, d in _documents().values() if p == path)
+
+
+def _rate(**changes: object) -> VatRate:
+    """The VAT draft with both of its citations changed."""
+    rate = load_file(VAT_DRAFT, VatRate)
+    updates = {}
+    for name in ("start_cited", "percent"):
+        cited = getattr(rate, name)
+        updates[name] = cited.model_copy(
+            update={"citation": cited.citation.model_copy(update=changes)}
+        )
+    return rate.model_copy(update=updates)
+
+
+def _done(stdout: bytes, returncode: int = 0) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.CompletedProcess(["child"], returncode, stdout, b"")
 
 
 # --- fast: the rules themselves -------------------------------------------------------
@@ -61,7 +81,7 @@ def _with_citation(rate: VatRate, **changes: object) -> VatRate:
         ("", ""),
     ],
 )
-def test_whitespace_is_normalised_on_unicode_whitespace(text: str, normalised: str) -> None:
+def test_whitespace_is_normalised(text: str, normalised: str) -> None:
     assert normalise(text) == normalised
 
 
@@ -69,11 +89,14 @@ def test_whitespace_is_normalised_on_unicode_whitespace(text: str, normalised: s
     ("printed", "page", "text_layer", "outcome", "reason"),
     [
         ("standard rate", "at the  standard\nrate of 15%", True, Outcome.PASSED, "found"),
+        (" standard\n  rate ", "the standard rate", True, Outcome.PASSED, "found"),
+        ("standard" + chr(0xA0) + "rate", "the standard rate", True, Outcome.PASSED, "found"),
         ("standard rate", "at the reduced rate", True, Outcome.FAILED, "not found"),
+        ("Standard Rate", "standard rate", True, Outcome.FAILED, "not found"),
         ("standard rate", "  \n ", True, Outcome.FAILED, "but the page has none"),
         ("01 JULY 2026", "", False, Outcome.NO_TEXT_LAYER, "scanned page"),
         ("01 JULY 2026", "01 JULY 2026", False, Outcome.FAILED, "but the page has text"),
-        ("Standard Rate", "standard rate", True, Outcome.FAILED, "not found"),
+        ("  ", "anything", True, Outcome.FAILED, "printed text is empty"),
     ],
 )
 def test_the_outcome_rules_fail_closed(
@@ -103,9 +126,157 @@ def test_the_walker_looks_inside_mappings() -> None:
     assert [path for path, _ in iter_cited({"x": [rate.percent]})] == ["['x'][0]"]
 
 
-def test_the_child_extracts_pages_in_process() -> None:
-    result = pdf_text.extract(str(VAT_404), [15], maximum_pages=5_000)
+def test_every_pypdf_limit_is_pinned() -> None:
+    fields = {f.name for f in dataclasses.fields(Configuration)}
+    assert set(pdf_text.PYPDF_LIMITS) == fields - pdf_text.NOT_LIMITS
+    assert pdf_text.PYPDF_LIMITS["jbig2dec_binary"] is None
+
+
+# --- fast: the file must be the listed document ---------------------------------------
+
+
+def test_the_listed_document_is_read() -> None:
+    assert read_document(VAT_404, _entry(VAT_404), Limits()) == VAT_404.read_bytes()
+
+
+def test_a_file_with_other_bytes_is_not_the_listed_document(tmp_path: Path) -> None:
+    other = tmp_path / "vat-404.pdf"
+    other.write_bytes(VAT_404.read_bytes() + b"\n")
+    with pytest.raises(ExtractionError, match="not the listed document"):
+        read_document(other, _entry(VAT_404), Limits())
+
+
+def test_a_symlink_is_refused(tmp_path: Path) -> None:
+    link = tmp_path / "vat-404.pdf"
+    link.symlink_to(VAT_404)
+    with pytest.raises(ExtractionError, match="not a regular file"):
+        read_document(link, _entry(VAT_404), Limits())
+
+
+def test_a_missing_file_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(ExtractionError, match=r"cannot be read \(FileNotFoundError\)"):
+        read_document(tmp_path / "gone.pdf", _entry(VAT_404), Limits())
+
+
+def test_an_over_size_file_is_refused_before_it_is_read() -> None:
+    with pytest.raises(ExtractionError, match="more than the limit of 1000"):
+        read_document(VAT_404, _entry(VAT_404), replace(Limits(), file_bytes=1000))
+
+
+def test_a_file_that_grows_while_read_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_lstat = Path.lstat
+
+    def small(self: Path) -> object:
+        info = real_lstat(self)
+        return type("Info", (), {"st_mode": info.st_mode, "st_size": 10})()
+
+    monkeypatch.setattr(Path, "lstat", small)
+    with pytest.raises(ExtractionError, match="grew past the limit"):
+        read_document(VAT_404, _entry(VAT_404), replace(Limits(), file_bytes=1000))
+
+
+def test_a_citation_of_an_unlisted_document_fails_without_reading_anything() -> None:
+    results = check_citations(_rate(document_sha256="0" * 64), _documents())
+    assert {(r.outcome, r.reason) for r in results} == {
+        (Outcome.FAILED, "the cited document is not in a source manifest")
+    }
+
+
+def test_a_manifest_entry_for_another_document_fails() -> None:
+    documents = _documents()
+    sha256 = load_file(VAT_DRAFT, VatRate).percent.citation.document_sha256
+    documents[sha256] = (VAT_404, _entry(SCHEDULE))
+    results = check_citations(load_file(VAT_DRAFT, VatRate), documents)
+    assert {r.reason for r in results} == {
+        "the manifest entry does not describe the cited document"
+    }
+
+
+def test_a_swapped_file_fails_closed(tmp_path: Path) -> None:
+    swapped = tmp_path / "vat-404.pdf"
+    swapped.write_bytes(SCHEDULE.read_bytes())
+    documents = _documents()
+    sha256 = _entry(VAT_404).sha256
+    documents[sha256] = (swapped, documents[sha256][1])
+    results = check_citations(load_file(VAT_DRAFT, VatRate), documents)
+    assert {r.outcome for r in results} == {Outcome.FAILED}
+    assert {r.reason for r in results} == {
+        "vat-404.pdf is not the listed document (its SHA-256 differs)"
+    }
+
+
+# --- fast: the child's output must have exactly the expected shape ---------------------
+
+
+@pytest.mark.parametrize(
+    ("stdout", "returncode", "message"),
+    [
+        (b'{"page_count": 1, "pages": {"15": "x"}}', -9, "exit code -9"),
+        (b'{"page_count": 1, "pages": {"15": "x"}}', 1, "exit code 1"),
+        (b"", 0, "without a result"),
+        (b'{"page_count": 1, "pa', 0, "without a result"),
+        (b"\xff\xfe", 0, "without a result"),
+        (b'["x"]', 0, "wrong shape"),
+        (b'"x"', 0, "wrong shape"),
+        (b'{"pages": {"15": "x"}}', 0, "wrong shape"),
+        (b'{"page_count": 1, "pages": {}}', 0, "wrong shape"),
+        (b'{"page_count": 1, "pages": {"15": "x", "16": "y"}}', 0, "wrong shape"),
+        (b'{"page_count": 1, "pages": {"15": 7}}', 0, "wrong shape"),
+        (b'{"page_count": true, "pages": {"15": "x"}}', 0, "wrong shape"),
+        (b'{"page_count": 1, "pages": {"15": "x"}, "extra": 1}', 0, "wrong shape"),
+        (b'{"error": 5}', 0, "wrong shape"),
+    ],
+)
+def test_output_of_the_wrong_shape_or_a_failed_exit_fails(
+    stdout: bytes, returncode: int, message: str
+) -> None:
+    with pytest.raises(ExtractionError, match=message):
+        _parse_output(_done(stdout, returncode), [15], Limits())
+
+
+def test_output_larger_than_the_limit_fails() -> None:
+    with pytest.raises(ExtractionError, match="larger than 10 bytes"):
+        _parse_output(
+            _done(b'{"page_count": 1, "pages": {"15": "x"}}'),
+            [15],
+            replace(Limits(), output_bytes=10),
+        )
+
+
+def test_a_child_error_is_reported_without_control_characters() -> None:
+    with pytest.raises(ExtractionError) as raised:
+        _parse_output(_done(json.dumps({"error": "bad\x1b[31m\nline"}).encode()), [15], Limits())
+    assert str(raised.value) == "bad?[31m?line"
+
+
+def test_a_process_that_cannot_start_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(*_: object, **__: object) -> None:
+        raise OSError
+
+    monkeypatch.setattr(subprocess, "run", refuse)
+    with pytest.raises(ExtractionError, match=r"could not run \(OSError\)"):
+        extract_pages(b"%PDF", [1], Limits())
+
+
+def test_a_page_count_that_differs_from_the_manifest_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        citation_check, "extract_pages", lambda *_: (175, {15: "standard rate of 15%"})
+    )
+    results = check_citations(load_file(VAT_DRAFT, VatRate), _documents())
+    assert {r.reason for r in results} == {"the document has 175 pages, but the manifest says 176"}
+
+
+# --- fast: the child, in process (its limits are not applied here) ---------------------
+
+
+def test_the_child_extracts_pages_without_changing_global_state() -> None:
+    from pypdf import get_configuration
+
+    before = get_configuration()
+    result = pdf_text.extract(VAT_404.read_bytes(), [15], maximum_pages=5_000)
+    assert result["page_count"] == 176
     assert "standard rate of 15%" in normalise(str(result["pages"]["15"]))  # type: ignore[index]
+    assert get_configuration() is before
 
 
 @pytest.mark.parametrize(
@@ -119,29 +290,21 @@ def test_the_child_extracts_pages_in_process() -> None:
 def test_the_child_refuses_missing_pages_and_long_documents(
     pages: list[int], maximum: int, message: str
 ) -> None:
-    assert message in str(pdf_text.extract(str(VAT_404), pages, maximum_pages=maximum)["error"])
+    result = pdf_text.extract(VAT_404.read_bytes(), pages, maximum_pages=maximum)
+    assert message in str(result["error"])
 
 
-def test_the_child_reports_any_failure_as_an_error(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+def test_the_child_main_sets_its_limits_first_and_reports_failures(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    broken = tmp_path / "broken.pdf"
-    broken.write_bytes(b"%PDF-1.7\nnot really a pdf")
-    request = json.dumps({"path": str(broken), "pages": [1], "maximum_pages": 10})
-    assert pdf_text.main(["pdf_text.py", request]) == 0
-    assert "error" in json.loads(capsys.readouterr().out)
-
-
-def test_an_over_size_file_is_refused_before_any_process_starts() -> None:
-    with pytest.raises(ExtractionError, match="more than the limit of 1000"):
-        extract_pages(VAT_404, [15], replace(Limits(), file_bytes=1000))
-
-
-def test_a_citation_of_an_unlisted_document_fails() -> None:
-    rate = _with_citation(load_file(VAT_DRAFT, VatRate), document_sha256="0" * 64)
-    by_path = {r.path: r for r in check_citations(rate, _documents())}
-    assert by_path["percent"].outcome is Outcome.FAILED
-    assert "not in a source manifest" in by_path["percent"].reason
+    calls: list[tuple[int, int]] = []
+    monkeypatch.setattr(pdf_text, "set_limits", lambda a, c: calls.append((a, c)))
+    request = json.dumps(
+        {"pages": [1], "maximum_pages": 10, "file_bytes": 100, "address_space": 7, "cpu_seconds": 3}
+    )
+    assert pdf_text.main(["pdf_text.py", request], io.BytesIO(b"%PDF-1.7\nnot really")) == 0
+    assert calls == [(7, 3)]
+    assert json.loads(capsys.readouterr().out)["error"] in {"PdfReadError", "PdfStreamError"}
 
 
 # --- slow: through the limited child process ------------------------------------------
@@ -166,65 +329,105 @@ def test_every_tariff_b_citation_is_on_a_scan(path: Path) -> None:
 
 @pytest.mark.slow
 def test_every_page_of_the_ekurhuleni_schedule_yields_no_text() -> None:
-    texts = extract_pages(SCHEDULE, list(range(1, 38)), Limits())
-    assert len(texts) == 37
+    count, texts = extract_pages(SCHEDULE.read_bytes(), list(range(1, 38)), Limits())
+    assert count == 37
     assert not any(normalise(t) for t in texts.values())
 
 
 @pytest.mark.slow
-def test_a_wrong_printed_text_fails() -> None:
-    rate = _with_citation(load_file(VAT_DRAFT, VatRate), printed_text="at the standard rate of 16%")
-    by_path = {r.path: r for r in check_citations(rate, _documents())}
-    assert by_path["percent"].outcome is Outcome.FAILED
-    assert by_path["start_cited"].outcome is Outcome.PASSED
+def test_a_wrong_printed_text_fails_as_not_found() -> None:
+    results = check_citations(_rate(printed_text="at the standard rate of 16%"), _documents())
+    assert {(r.outcome, r.reason) for r in results} == {
+        (Outcome.FAILED, "printed text not found on the cited page")
+    }
 
 
 @pytest.mark.slow
-def test_a_wrong_page_fails() -> None:
-    rate = _with_citation(load_file(VAT_DRAFT, VatRate), page=16)
-    by_path = {r.path: r for r in check_citations(rate, _documents())}
-    assert by_path["percent"].outcome is Outcome.FAILED
+def test_a_wrong_page_fails_as_not_found() -> None:
+    results = check_citations(_rate(page=16), _documents())
+    assert {(r.outcome, r.reason) for r in results} == {
+        (Outcome.FAILED, "printed text not found on the cited page")
+    }
 
 
 @pytest.mark.slow
 def test_a_page_past_the_end_fails_every_citation_of_that_document() -> None:
-    rate = _with_citation(load_file(VAT_DRAFT, VatRate), page=500)
-    results = check_citations(rate, _documents())
+    results = check_citations(_rate(page=500), _documents())
     assert {r.outcome for r in results} == {Outcome.FAILED}
     assert all("page 500 does not exist" in r.reason for r in results)
 
 
 @pytest.mark.slow
-def test_an_extraction_error_fails_closed(tmp_path: Path) -> None:
-    broken = tmp_path / "broken.pdf"
-    broken.write_bytes(b"%PDF-1.7\nnot really a pdf")
-    documents = _documents()
-    sha256 = load_file(VAT_DRAFT, VatRate).percent.citation.document_sha256
-    documents[sha256] = (broken, documents[sha256][1])
-    results = check_citations(load_file(VAT_DRAFT, VatRate), documents)
-    assert {r.outcome for r in results} == {Outcome.FAILED}
+def test_a_broken_pdf_fails_closed_in_the_child() -> None:
+    with pytest.raises(ExtractionError, match=r"Pdf(Read|Stream)Error"):
+        extract_pages(b"%PDF-1.7\nnot really a pdf", [1], Limits())
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize(
     ("limits", "message"),
     [
-        (replace(Limits(), timeout_seconds=0.01), "took longer than 0.01 s"),
-        (replace(Limits(), address_space_bytes=40 * 1024**2), "MemoryError|ended without a result"),
-        (replace(Limits(), cpu_seconds=1), "ended without a result"),
+        (replace(Limits(), timeout_seconds=0.01), r"took longer than 0\.01 s"),
+        (replace(Limits(), address_space_bytes=40 * 1024**2), r"MemoryError|exit code"),
+        (replace(Limits(), cpu_seconds=1), r"exit code -9"),  # soft = hard: SIGKILL
     ],
     ids=["wall-clock timeout", "memory limit", "cpu limit"],
 )
 def test_each_resource_limit_fails_closed(limits: Limits, message: str) -> None:
-    with pytest.raises(ExtractionError, match=rf"{message}"):
-        extract_pages(VAT_404, list(range(1, 177)), limits)
+    with pytest.raises(ExtractionError, match=message):
+        extract_pages(VAT_404.read_bytes(), list(range(1, 177)), limits)
 
 
-def test_the_default_limits_are_far_above_the_measured_needs() -> None:
-    """Measured on the owner's machine (P2-7): 4.8 s, 42 MB resident, 64 MB address space."""
-    limits = Limits()
-    largest = max(p.stat().st_size for p in (DATA / "sources").glob("*/*.pdf"))
-    assert limits.timeout_seconds >= 20 * 4.8
-    assert limits.address_space_bytes >= 20 * 64 * 1024**2
-    assert limits.file_bytes >= 15 * largest
-    assert limits.pages >= 20 * 176
+@pytest.mark.slow
+def test_the_child_cannot_write_file_content(tmp_path: Path) -> None:
+    """RLIMIT_FSIZE is 0: the child's own limits applied, then an unbuffered write fails."""
+    probe = tmp_path / "probe"
+    script = (
+        "import sys; sys.path.insert(0, sys.argv[1]); import pdf_text;"
+        " pdf_text.set_limits(2**31, 10); open(sys.argv[2], 'wb', buffering=0).write(b'x')"
+    )
+    done = subprocess.run(  # noqa: S603  # fixed arguments, no shell
+        [sys.executable, "-I", "-c", script, str(Path(pdf_text.__file__).parent), str(probe)],
+        capture_output=True,
+        env={},
+        check=False,
+    )
+    assert b"File too large" in done.stderr
+    assert probe.stat().st_size == 0
+
+
+@pytest.mark.slow
+def test_the_limits_hold_a_wide_margin() -> None:
+    """Every page of every committed text document, under a fifth of each limit (E50).
+
+    The tightest margin is CPU time: 60 s against about 4.8 s for all of VAT 404 (12x).
+    """
+    fifth = Limits(
+        timeout_seconds=Limits().timeout_seconds / 5,
+        cpu_seconds=Limits().cpu_seconds // 5,
+        address_space_bytes=Limits().address_space_bytes // 5,
+        file_bytes=Limits().file_bytes // 5,
+        pages=Limits().pages // 5,
+    )
+    for path, document in _documents().values():
+        count, _ = extract_pages(
+            read_document(path, document, fifth), list(range(1, document.pages + 1)), fifth
+        )
+        assert count == document.pages
+
+
+def test_set_limits_sets_hard_limits_on_everything_the_child_needs_capped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import resource
+
+    calls: dict[int, tuple[int, int]] = {}
+    monkeypatch.setattr(resource, "setrlimit", lambda which, value: calls.update({which: value}))
+    pdf_text.set_limits(123, 4)
+    assert calls == {
+        resource.RLIMIT_AS: (123, 123),
+        resource.RLIMIT_CPU: (4, 4),
+        resource.RLIMIT_FSIZE: (0, 0),
+        resource.RLIMIT_CORE: (0, 0),
+        resource.RLIMIT_NOFILE: (64, 64),
+    }
