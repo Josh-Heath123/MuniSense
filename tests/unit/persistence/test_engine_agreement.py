@@ -8,6 +8,7 @@ query keys hidden in values, percent-encoding), so the next parser disagreement 
 
 from urllib.parse import quote
 
+import pytest
 from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
@@ -63,6 +64,7 @@ def _assert_agrees(url: DatabaseUrl) -> None:
     port=st.none() | st.integers(1, 65535),
     options=st.lists(st.tuples(keys, text), max_size=4),
     raw_tail=st.sampled_from(["", "#", "#&dbname=other", "@evil.example.org", "&dbname=other"]),
+    host=st.sampled_from(["localhost", "127.0.0.1", "[::1]"]),
 )
 @example(
     user="munisense_app",
@@ -71,6 +73,7 @@ def _assert_agrees(url: DatabaseUrl) -> None:
     port=5432,
     options=[("sslrootcert", "/x")],
     raw_tail="#&dbname=munisense_dev",
+    host="localhost",
 )
 def test_accepted_urls_connect_with_exactly_the_checked_parts(
     user: str,
@@ -79,11 +82,12 @@ def test_accepted_urls_connect_with_exactly_the_checked_parts(
     port: int | None,
     options: list[tuple[str, str]],
     raw_tail: str,
+    host: str,
 ) -> None:
     query = "&".join(f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in options)
     port_part = f":{port}" if port is not None else ""
     raw = (
-        f"postgresql://{quote(user, safe='')}:{quote(password, safe='')}@localhost{port_part}"
+        f"postgresql://{quote(user, safe='')}:{quote(password, safe='')}@{host}{port_part}"
         f"/{quote(database, safe='')}?{query}{raw_tail}"
     )
     try:
@@ -101,3 +105,16 @@ def test_any_accepted_string_agrees_with_the_driver(raw: str) -> None:
     except SettingsError:
         return
     _assert_agrees(url)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "postgresql://munisense_app:pw@localhost:5432/munisense_test",
+        "postgresql://a%40b:p%23w%3Fx@127.0.0.1/db%2Fname?sslmode=prefer&application_name=x%26y",
+        "postgresql://u:p@[::1]:5433/x_test?connect_timeout=5&sslrootcert=%2Fetc%2Fca.pem",
+    ],
+)
+def test_known_accepted_urls_reach_the_agreement_check(raw: str) -> None:
+    """The generated tests skip refused URLs; these are accepted, so the check really runs."""
+    _assert_agrees(check_url(raw, Environment.LOCAL, "MUNISENSE_DATABASE_URL"))

@@ -209,7 +209,8 @@ def test_tests_accept_a_test_database() -> None:
         (f"{LOCAL}?sslrootcert=/x#&dbname=munisense_dev", "must not contain '#'"),
         (f"{LOCAL}#fragment", "must not contain '#'"),
         ("postgresql://u:p@evil.example.org@localhost/x_test", "exactly one '@'"),
-        ("postgresql://u:p@%2Fvar%2Frun%2Fpostgresql/x_test", "not a Unix socket"),
+        ("postgresql://u:p@%2Fvar%2Frun%2Fpostgresql/x_test", "percent-encode the host"),
+        ("postgresql://u:p@db%2Eexample.org/x_test", "percent-encode the host"),
     ],
 )
 def test_urls_that_parsers_read_differently_are_refused(raw: str, message: str) -> None:
@@ -219,7 +220,7 @@ def test_urls_that_parsers_read_differently_are_refused(raw: str, message: str) 
 
 def test_a_deployed_unix_socket_is_refused() -> None:
     raw = "postgresql://u:a-real-secret@%2Fvar%2Frun%2Fpostgresql/prod?sslmode=verify-full"
-    with pytest.raises(SettingsError, match="not a Unix socket"):
+    with pytest.raises(SettingsError, match="cannot name a Unix socket"):
         database_url({**DEPLOYED, APP: raw}, APP)
 
 

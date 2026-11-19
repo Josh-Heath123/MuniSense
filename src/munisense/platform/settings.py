@@ -219,8 +219,10 @@ def check_url(raw: str, where: Environment, name: str) -> DatabaseUrl:
     if parts.netloc.count("@") != 1:
         msg = f"{name} must have exactly one '@' (percent-encode it inside a password)"
         raise SettingsError(msg)
-    if unquote(hostname).startswith("/"):
-        msg = f"{name} must name a network host, not a Unix socket (no TLS there)"
+    # A percent-encoded host is refused: it is the only way to write a Unix-socket path
+    # (`%2Fvar%2Frun%2Fpostgresql`, no TLS there), and libpq would not decode a name anyway.
+    if "%" in hostname:
+        msg = f"{name} must not percent-encode the host name (and cannot name a Unix socket)"
         raise SettingsError(msg)
     options = dict(parse_qsl(parts.query, keep_blank_values=True))
     if refused := sorted(options.keys() - ALLOWED_OPTIONS):
