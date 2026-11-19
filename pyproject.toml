@@ -7,7 +7,11 @@ requires-python = "==3.13.*"
 # Runtime dependencies are added only in the phase that needs them (standards.md).
 # pydantic: approved by the owner for P1 (E28); strict mode only inside the domain (ADR-0004).
 dependencies = [
+    "alembic>=1",
+    "psycopg[binary]>=3",
     "pydantic>=2.14,<3",
+    "pypdf>=6",
+    "sqlalchemy>=2",
 ]
 
 [dependency-groups]
@@ -177,6 +181,7 @@ forbidden_modules = [
     "structlog",
     "jinja2",
     "pydantic_settings",
+    "pypdf",
 ]
 
 [[tool.importlinter.contracts]]
@@ -214,6 +219,41 @@ forbidden_modules = [
     "munisense.ingestion",
     "munisense.persistence",
 ]
+
+[[tool.importlinter.contracts]]
+name = "Rule 4: only persistence imports SQLAlchemy, Alembic and psycopg"
+type = "forbidden"
+source_modules = [
+    "munisense.domain",
+    "munisense.catalogue",
+    "munisense.provenance",
+    "munisense.ingestion",
+    "munisense.services",
+    "munisense.api",
+    "munisense.console",
+    "munisense.mcp",
+    "munisense.platform",
+]
+# Others reach the database through persistence; only direct imports break.
+allow_indirect_imports = "true"
+forbidden_modules = ["sqlalchemy", "alembic", "psycopg"]
+
+[[tool.importlinter.contracts]]
+name = "Rule 4b: only ingestion imports pypdf"
+type = "forbidden"
+source_modules = [
+    "munisense.domain",
+    "munisense.catalogue",
+    "munisense.provenance",
+    "munisense.persistence",
+    "munisense.services",
+    "munisense.api",
+    "munisense.console",
+    "munisense.mcp",
+    "munisense.platform",
+]
+allow_indirect_imports = "true"
+forbidden_modules = ["pypdf"]
 
 [[tool.importlinter.contracts]]
 name = "Rule 6: production code never imports the test-support package"
