@@ -117,6 +117,7 @@ addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importli
 markers = [
     "slow: slow tests, excluded from `poe check`",
     "db: needs PostgreSQL (docker compose up -d db), excluded from `poe check`",
+    "db_admin: connects as the local superuser to test the bootstrap itself (also `db`)",
 ]
 
 # --------------------------------------------------------------- coverage

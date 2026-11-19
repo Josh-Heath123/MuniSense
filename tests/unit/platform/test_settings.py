@@ -1,9 +1,14 @@
 """Database settings refuse unsafe values before anything connects (P2-3)."""
 
+from urllib.parse import quote
+
 import pytest
 
 from munisense.platform.settings import (
+    ALLOWED_OPTIONS,
+    LIBPQ_ENVIRONMENT,
     LOCAL_DEFAULTS,
+    PUBLISHED_PASSWORDS,
     DatabaseUrl,
     Environment,
     SettingsError,
@@ -13,12 +18,14 @@ from munisense.platform.settings import (
 )
 
 APP = "MUNISENSE_DATABASE_URL"
+DEPLOYED = {"MUNISENSE_ENVIRONMENT": "deployed"}
 SAFE = "postgresql://munisense_app:a-real-secret@db.example.org:5432/munisense?sslmode=verify-full"
+LOCAL = "postgresql://u:p@localhost/x_test"
 
 
 def test_the_environment_is_local_by_default() -> None:
     assert environment({}) is Environment.LOCAL
-    assert environment({"MUNISENSE_ENVIRONMENT": "deployed"}) is Environment.DEPLOYED
+    assert environment(DEPLOYED) is Environment.DEPLOYED
 
 
 def test_an_unknown_environment_is_refused() -> None:
@@ -28,35 +35,74 @@ def test_an_unknown_environment_is_refused() -> None:
 
 def test_a_local_environment_falls_back_to_the_published_defaults() -> None:
     url = database_url({}, APP)
-    assert url.user == "munisense_app"
-    assert url.database == "munisense_dev"
+    assert (url.user, url.database) == ("munisense_app", "munisense_dev")
 
 
 @pytest.mark.parametrize("name", sorted(LOCAL_DEFAULTS))
-def test_every_connection_disables_gssapi_encryption(name: str) -> None:
-    assert "gssencmode=disable" in database_url({}, name).url
+def test_every_connection_forces_the_safe_authentication_options(name: str) -> None:
+    url = database_url({}, name).url
+    assert "gssencmode=disable" in url
+    assert "require_auth=scram-sha-256" in url
 
 
-def test_gssencmode_is_forced_even_when_the_url_omits_it() -> None:
-    url = database_url({APP: "postgresql://u:p@localhost/x_dev?sslmode=prefer"}, APP)
-    assert url.url == "postgresql://u:p@localhost/x_dev?gssencmode=disable&sslmode=prefer"
+def test_the_forced_options_are_added_to_a_url_without_them() -> None:
+    url = database_url({APP: LOCAL + "?sslmode=prefer"}, APP)
+    assert url.url == (
+        "postgresql://u:p@localhost/x_test?gssencmode=disable"
+        "&require_auth=scram-sha-256&sslmode=prefer"
+    )
 
 
-def test_a_url_that_enables_gssapi_encryption_is_refused() -> None:
-    with pytest.raises(SettingsError, match="gssencmode=disable"):
-        database_url({APP: "postgresql://u:p@localhost/x?gssencmode=prefer"}, APP)
+@pytest.mark.parametrize(
+    "query", ["gssencmode=prefer", "require_auth=gss", "require_auth=password"]
+)
+def test_weaker_authentication_options_are_refused(query: str) -> None:
+    with pytest.raises(SettingsError, match="must use"):
+        database_url({APP: f"{LOCAL}?{query}"}, APP)
 
 
-@pytest.mark.parametrize("option", ["service=munisense", "servicefile=/tmp/s.conf"])
-def test_service_lookups_in_the_url_are_refused(option: str) -> None:
-    with pytest.raises(SettingsError, match="service lookups are refused"):
-        database_url({APP: f"postgresql://u:p@localhost/x?{option}"}, APP)
+@pytest.mark.parametrize(
+    "key",
+    [
+        "dbname",
+        "user",
+        "password",
+        "host",
+        "hostaddr",
+        "port",
+        "options",
+        "service",
+        "servicefile",
+        "passfile",
+        "krbsrvname",
+        "gsslib",
+    ],
+)
+def test_query_keys_that_could_replace_what_was_checked_are_refused(key: str) -> None:
+    with pytest.raises(SettingsError, match=f"sets {key}="):
+        database_url({APP: f"{LOCAL}?{key}=x"}, APP)
 
 
-@pytest.mark.parametrize("variable", ["PGSERVICE", "PGSERVICEFILE"])
-def test_service_lookups_from_the_environment_are_refused(variable: str) -> None:
+def test_a_percent_encoded_refused_key_is_refused() -> None:
+    with pytest.raises(SettingsError, match="sets dbname="):
+        database_url({APP: f"{LOCAL}?db%6Eame=munisense_dev"}, APP)
+
+
+def test_every_allowed_option_is_accepted() -> None:
+    query = "&".join(f"{key}=x" for key in sorted(ALLOWED_OPTIONS - {"gssencmode", "require_auth"}))
+    assert database_url({APP: f"{LOCAL}?{query}"}, APP).database == "x_test"
+
+
+def test_a_repeated_key_keeps_its_last_value_once() -> None:
+    url = database_url({APP: f"{LOCAL}?sslmode=disable&sslmode=require"}, APP).url
+    assert url.count("sslmode=") == 1
+    assert "sslmode=require" in url
+
+
+@pytest.mark.parametrize("variable", LIBPQ_ENVIRONMENT)
+def test_every_libpq_environment_variable_is_refused_even_empty(variable: str) -> None:
     with pytest.raises(SettingsError, match=f"{variable} is set"):
-        database_url({variable: "munisense"}, APP)
+        database_url({variable: ""}, APP)
 
 
 @pytest.mark.parametrize(
@@ -66,46 +112,78 @@ def test_service_lookups_from_the_environment_are_refused(variable: str) -> None
         ("postgresql://localhost/x", "a user, a host and a database"),
         ("postgresql://u:p@localhost/", "a user, a host and a database"),
         ("postgresql://u:p@/x", "a user, a host and a database"),
+        ("postgresql://u:p@[::1/x", "not a valid URL"),
+        ("postgresql://u:p@localhost:port/x", "not a valid URL"),
+        ("postgresql://u:p@localhost,127.0.0.1/x", "one host"),
     ],
 )
-def test_a_malformed_url_is_refused(raw: str, message: str) -> None:
-    with pytest.raises(SettingsError, match=message):
+def test_a_malformed_url_is_refused_without_echoing_it(raw: str, message: str) -> None:
+    with pytest.raises(SettingsError, match=message) as refused:
         database_url({APP: raw}, APP)
+    assert "u:p" not in str(refused.value)
+
+
+def test_percent_encoded_credentials_are_decoded() -> None:
+    raw = f"postgresql://{quote('app user')}:{quote('p@ss:w/rd', safe='')}@localhost/x_test"
+    url = database_url({APP: raw}, APP)
+    assert (url.user, url.password) == ("app user", "p@ss:w/rd")
+
+
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "[::1]"])
+def test_a_local_environment_accepts_loopback_hosts(host: str) -> None:
+    assert database_url({APP: f"postgresql://u:p@{host}:5432/x_test"}, APP).user == "u"
+
+
+def test_a_local_environment_refuses_a_remote_host() -> None:
+    with pytest.raises(SettingsError, match="not loopback"):
+        database_url({APP: SAFE}, APP)
+
+
+def test_the_postgres_scheme_becomes_postgresql() -> None:
+    url = database_url({APP: "postgres://u:p@localhost/x_test"}, APP).url
+    assert url.startswith("postgresql://u:p@localhost/x_test?")
 
 
 def test_a_deployed_environment_needs_every_url_set() -> None:
     with pytest.raises(SettingsError, match="is not set"):
-        database_url({"MUNISENSE_ENVIRONMENT": "deployed"}, APP)
+        database_url(DEPLOYED, APP)
 
 
-@pytest.mark.parametrize("password", ["munisense-local-only", "ci-only-not-a-secret"])
-def test_a_deployed_environment_refuses_the_published_passwords(password: str) -> None:
-    raw = SAFE.replace("a-real-secret", password)
+def test_every_published_password_is_in_the_refused_set() -> None:
+    defaults = {DatabaseUrl(raw, "", "").password for raw in LOCAL_DEFAULTS.values()}
+    assert defaults | {"ci-only-not-a-secret"} == PUBLISHED_PASSWORDS
+
+
+@pytest.mark.parametrize("password", sorted(PUBLISHED_PASSWORDS))
+@pytest.mark.parametrize("encode", [False, True])
+def test_a_deployed_environment_refuses_the_published_passwords(
+    password: str, *, encode: bool
+) -> None:
+    written = "".join(f"%{ord(c):02X}" for c in password) if encode else password
     with pytest.raises(SettingsError, match="published local password"):
-        database_url({"MUNISENSE_ENVIRONMENT": "deployed", APP: raw}, APP)
+        database_url({**DEPLOYED, APP: SAFE.replace("a-real-secret", written)}, APP)
 
 
 @pytest.mark.parametrize("query", ["", "?sslmode=require", "?sslmode=verify-ca"])
 def test_a_deployed_environment_requires_verify_full(query: str) -> None:
     raw = SAFE.removesuffix("?sslmode=verify-full") + query
     with pytest.raises(SettingsError, match="sslmode=verify-full"):
-        database_url({"MUNISENSE_ENVIRONMENT": "deployed", APP: raw}, APP)
+        database_url({**DEPLOYED, APP: raw}, APP)
 
 
 def test_a_safe_deployed_url_is_accepted() -> None:
-    url = database_url({"MUNISENSE_ENVIRONMENT": "deployed", APP: SAFE}, APP)
-    assert url.url.endswith("?gssencmode=disable&sslmode=verify-full")
+    url = database_url({**DEPLOYED, APP: SAFE}, APP)
+    assert url.url.endswith("?gssencmode=disable&require_auth=scram-sha-256&sslmode=verify-full")
 
 
-def test_the_local_ci_container_does_not_need_tls() -> None:
-    raw = "postgresql://munisense_app:ci-only-not-a-secret@localhost:5432/munisense_test"
-    assert database_url({APP: raw}, APP).database == "munisense_test"
+def test_the_repr_never_shows_the_password() -> None:
+    assert "munisense-app-local-only" not in repr(database_url({}, APP))
 
 
 def test_with_database_changes_only_the_database() -> None:
     url = database_url({}, APP).with_database("munisense_test")
     assert url.database == "munisense_test"
-    assert url.url.startswith("postgresql://munisense_app:")
+    assert url.password == database_url({}, APP).password
     assert "/munisense_test?gssencmode=disable" in url.url
 
 

@@ -4,13 +4,13 @@ from collections.abc import Iterator
 
 import pytest
 from sqlalchemy import Engine, text
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import DBAPIError
 
-from munisense.persistence import bootstrap as bootstrap_module
-from munisense.persistence.bootstrap import bootstrap
-from munisense.persistence.connection import engine
-from munisense.platform.settings import DatabaseUrl
-from support.database import TestDatabase
+PROBES = (
+    ("TABLE", "munisense.p2_3_probe"),
+    ("SEQUENCE", "munisense.p2_3_probe_seq"),
+    ("FUNCTION", "munisense.p2_3_probe_fn()"),
+)
 
 
 def _scalar(e: Engine, sql: str) -> object:
@@ -32,92 +32,71 @@ def test_neither_role_is_a_superuser_or_can_create_roles_or_databases(
 
 
 @pytest.mark.parametrize("which", ["app_engine", "migration_engine"])
-def test_connections_do_not_use_gssapi_encryption(
+def test_the_driver_connects_with_the_forced_options(
     which: str, request: pytest.FixtureRequest
 ) -> None:
     e: Engine = request.getfixturevalue(which)
-    assert _scalar(e, "SELECT encrypted FROM pg_stat_gssapi WHERE pid = pg_backend_pid()") is False
+    with e.connect() as connection:
+        pgconn = connection.connection.driver_connection.pgconn  # type: ignore[union-attr]
+        # libpq's own values; the summary in `info.dsn` leaves out values equal to the
+        # compiled default (gssencmode is `disable` by default in this psycopg-binary build).
+        values = {option.keyword: option.val for option in pgconn.info}
+    assert values[b"gssencmode"] == b"disable"
+    assert values[b"require_auth"] == b"scram-sha-256"
 
 
 def test_connections_use_the_munisense_schema(app_engine: Engine) -> None:
     assert _scalar(app_engine, "SHOW search_path") == "munisense"
 
 
-@pytest.mark.parametrize("schema", ["munisense", "public"])
-def test_the_app_role_cannot_create_tables(app_engine: Engine, schema: str) -> None:
-    with (
-        app_engine.connect() as connection,
-        pytest.raises(ProgrammingError, match="permission denied"),
-    ):
-        connection.execute(text(f"CREATE TABLE {schema}.p2_3_probe (x int)"))
+def test_app_sessions_are_read_only_by_default(app_engine: Engine) -> None:
+    assert _scalar(app_engine, "SHOW default_transaction_read_only") == "on"
 
 
 @pytest.fixture
-def probe_table(migration_engine: Engine) -> Iterator[str]:
+def probe_objects(migration_engine: Engine) -> Iterator[None]:
+    """A table, a sequence and a function made by the migration role."""
     with migration_engine.begin() as connection:
-        connection.execute(text("DROP TABLE IF EXISTS munisense.p2_3_probe"))
+        for kind, name in PROBES:
+            connection.execute(text(f"DROP {kind} IF EXISTS {name}"))
         connection.execute(text("CREATE TABLE munisense.p2_3_probe (x int)"))
         connection.execute(text("INSERT INTO munisense.p2_3_probe VALUES (1)"))
-    yield "munisense.p2_3_probe"
+        connection.execute(text("CREATE SEQUENCE munisense.p2_3_probe_seq"))
+        connection.execute(
+            text("CREATE FUNCTION munisense.p2_3_probe_fn() RETURNS int LANGUAGE sql AS 'SELECT 1'")
+        )
+    yield
     with migration_engine.begin() as connection:
-        connection.execute(text("DROP TABLE munisense.p2_3_probe"))
+        for kind, name in PROBES:
+            connection.execute(text(f"DROP {kind} {name}"))
 
 
-def test_the_app_role_reads_tables_the_migration_role_creates(
-    app_engine: Engine, probe_table: str
-) -> None:
+@pytest.mark.usefixtures("probe_objects")
+def test_the_app_role_reads_tables_the_migration_role_creates(app_engine: Engine) -> None:
     assert _scalar(app_engine, "SELECT x FROM munisense.p2_3_probe") == 1
 
 
+@pytest.mark.usefixtures("probe_objects")
 @pytest.mark.parametrize(
     "statement",
     [
-        "INSERT INTO {t} VALUES (2)",
-        "UPDATE {t} SET x = 3",
-        "DELETE FROM {t}",
-        "TRUNCATE {t}",
-        "DROP TABLE {t}",
+        "INSERT INTO munisense.p2_3_probe VALUES (2)",
+        "UPDATE munisense.p2_3_probe SET x = 3",
+        "DELETE FROM munisense.p2_3_probe",
+        "TRUNCATE munisense.p2_3_probe",
+        "DROP TABLE munisense.p2_3_probe",
+        "CREATE TABLE munisense.p2_3_other (x int)",
+        "CREATE TABLE public.p2_3_other (x int)",
+        "CREATE TEMP TABLE p2_3_temp (x int)",
+        "SELECT nextval('munisense.p2_3_probe_seq')",
+        "SELECT munisense.p2_3_probe_fn()",
     ],
 )
-def test_the_app_role_cannot_change_data(
-    app_engine: Engine, probe_table: str, statement: str
-) -> None:
-    with app_engine.connect() as connection, pytest.raises(ProgrammingError):
-        connection.execute(text(statement.format(t=probe_table)))
-
-
-def test_the_bootstrap_is_idempotent_and_runs_from_its_command(
-    test_database: TestDatabase, app_engine: Engine
-) -> None:
-    db = test_database
-    env = {
-        "MUNISENSE_ADMIN_DATABASE_URL": db.admin.url,
-        "MUNISENSE_DATABASE_URL": db.app.url,
-        "MUNISENSE_MIGRATION_DATABASE_URL": db.migration.url,
-        "MUNISENSE_TEST_DATABASE_URL": db.app.url,
-        "MUNISENSE_TEST_MIGRATION_DATABASE_URL": db.migration.url,
-    }
-    assert bootstrap_module.main(env) == 0
-    assert _scalar(app_engine, "SELECT current_user") == db.app.user
-
-
-def test_the_bootstrap_creates_a_role_that_does_not_exist(test_database: TestDatabase) -> None:
-    db = test_database
-    probe = DatabaseUrl(
-        db.app.url.replace(f"//{db.app.user}:", "//munisense_p2_3_probe:", 1),
-        "munisense_p2_3_probe",
-        db.app.database,
-    )
-    admin = engine(db.admin)
-    try:
-        bootstrap(db.admin, probe, db.migration)
-        with admin.connect() as connection:
-            row = connection.execute(
-                text("SELECT rolsuper FROM pg_roles WHERE rolname = 'munisense_p2_3_probe'")
-            ).one()
-        assert row.rolsuper is False
-    finally:
-        with admin.begin() as connection:
-            connection.execute(text("DROP OWNED BY munisense_p2_3_probe"))
-            connection.execute(text("DROP ROLE munisense_p2_3_probe"))
-        admin.dispose()
+def test_the_app_role_is_refused_everything_but_reading(app_engine: Engine, statement: str) -> None:
+    # Read-only sessions are switched off first, so the refusal shown is the privilege
+    # check itself, not only the read-only default.
+    with app_engine.connect() as connection:
+        connection.execute(text("SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE"))
+        connection.commit()
+        with pytest.raises(DBAPIError, match=r"permission denied|must be owner"):
+            connection.execute(text(statement))

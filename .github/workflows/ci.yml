@@ -26,7 +26,8 @@ jobs:
       UV_LOCKED: "1"
       # Database tests (P2-3): the CI container counts as local (E50), so these throwaway
       # credentials are allowed here and refused by the settings anywhere deployed. The
-      # superuser prepares the two roles; the tests then connect as those roles.
+      # superuser creates the two roles (the step before verify); the tests connect as those
+      # roles, except the bootstrap's own tests (`db_admin`).
       MUNISENSE_ADMIN_DATABASE_URL: postgresql://munisense:ci-only-not-a-secret@localhost:5432/munisense_test
       MUNISENSE_TEST_DATABASE_URL: postgresql://munisense_app:ci-only-not-a-secret@localhost:5432/munisense_test
       MUNISENSE_TEST_MIGRATION_DATABASE_URL: postgresql://munisense_migration:ci-only-not-a-secret@localhost:5432/munisense_test
@@ -96,6 +97,13 @@ jobs:
           docker run --rm --network none -v "$PWD:/repo:ro"
           zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
           git /repo --redact --no-banner
+
+      - name: Create the database roles (as the CI superuser, before any test)
+        env:
+          # One database in CI: the "development" URLs point at the test database.
+          MUNISENSE_DATABASE_URL: postgresql://munisense_app:ci-only-not-a-secret@localhost:5432/munisense_test
+          MUNISENSE_MIGRATION_DATABASE_URL: postgresql://munisense_migration:ci-only-not-a-secret@localhost:5432/munisense_test
+        run: uv run poe db-bootstrap
 
       - name: uv run poe verify
         run: uv run poe verify

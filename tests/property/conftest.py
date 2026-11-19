@@ -8,10 +8,12 @@ more on 2026-11-18, and 0.19 s or more on 2026-11-19; the faster ones stay in `p
 import pytest
 from hypothesis import settings
 
-# No per-example deadline: on a loaded machine (the owner's WSL disk, a slow CI runner) a
-# 200 ms deadline fails for timing, not correctness. One full run on 2026-11-19 failed
-# intermittently while taking 191 s instead of the usual 35-70 s; the test was not captured.
-settings.register_profile("munisense", deadline=None)
+# A generous per-example deadline (2 s instead of Hypothesis's 200 ms): on a loaded machine
+# (the owner's WSL disk, a slow CI runner) 200 ms can fail for timing, not correctness. One
+# full run on 2026-11-19 failed once while taking 191 s instead of the usual 35-70 s; the
+# failing test was not captured, so the cause is not proven. A test slower than 2 s per
+# example still fails. Hypothesis is used only under tests/property today.
+settings.register_profile("munisense", deadline=2000)
 settings.load_profile("munisense")
 
 SLOWEST = {

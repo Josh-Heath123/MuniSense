@@ -1,8 +1,9 @@
 """Database tests: every test here is marked `db` and runs against `*_test` only (P2-3).
 
-The session fixture prepares the test database's roles and schema with the bootstrap,
-connecting as the local superuser (`MUNISENSE_ADMIN_DATABASE_URL`), and refuses any
-database whose name does not end in `_test`.
+They connect as the two roles only, never as a superuser. The roles and schema are made
+beforehand by `uv run poe db-bootstrap` (CI runs it as a step before the tests). The
+bootstrap's own tests, which must connect as the superuser, live in `bootstrap/` and are
+also marked `db_admin`.
 """
 
 import os
@@ -10,9 +11,9 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Engine
+from sqlalchemy import Engine, text
+from sqlalchemy.exc import OperationalError
 
-from munisense.persistence.bootstrap import bootstrap
 from munisense.persistence.connection import engine
 from munisense.platform.settings import database_url, require_test_database
 from support.database import TestDatabase
@@ -26,6 +27,8 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for item in items:
         if item.path.is_relative_to(HERE):
             item.add_marker(pytest.mark.db)
+            if item.path.is_relative_to(HERE / "bootstrap"):
+                item.add_marker(pytest.mark.db_admin)
 
 
 @pytest.fixture(scope="session")
@@ -34,11 +37,15 @@ def test_database() -> TestDatabase:
     migration = require_test_database(
         database_url(os.environ, "MUNISENSE_TEST_MIGRATION_DATABASE_URL")
     )
-    admin = require_test_database(
-        database_url(os.environ, "MUNISENSE_ADMIN_DATABASE_URL").with_database(app.database)
-    )
-    bootstrap(admin, app, migration)
-    return TestDatabase(admin, app, migration)
+    probe = engine(app)
+    try:
+        with probe.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except OperationalError:
+        pytest.fail("cannot connect as the app role: run `uv run poe db-bootstrap` first")
+    finally:
+        probe.dispose()
+    return TestDatabase(app, migration)
 
 
 @pytest.fixture
