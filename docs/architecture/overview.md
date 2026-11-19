@@ -57,7 +57,8 @@ data/
 1. `munisense.domain` imports nothing outside `munisense.domain`, an allow-list of pure standard-library modules and Pydantic v2 (strict mode only, never `pydantic.v1`; ADR-0004). It does no I/O, reads no clock and uses no randomness: `open`, `print`, `input`, `eval`, `exec`, `compile` and `__import__` are refused, and so are `now`, `today` and `utcnow`, called or passed (for example as a Pydantic `default_factory`). `zoneinfo` and `uuid` are deliberately not on the allow-list: the caller passes dates and offset-aware datetimes in, and identifiers are made outside the domain. import-linter enforces the munisense part and forbids named third-party packages (rule 1b); the test enforces the allow-list.
 2. Within the domain: (`citations` | `periods`) ← `money` ← `tariffs` ← `billing` (arrows point at what may be imported). `domain/base.py` is outside the layers and may be imported by all of them.
 3. `api`, `console` and `mcp` import `services` and `platform` only, never `persistence` or `ingestion` directly.
-4. Only `persistence` imports SQLAlchemy.
+4. Only `persistence` imports SQLAlchemy, Alembic and psycopg (and Mako, which only Alembic uses).
+4b. Only `ingestion` imports pypdf.
 5. Nothing imports `api`, `console` or `mcp`.
 6. No production code imports the test-support package `support` (`tests/support`), which is importable only under pytest and mypy.
 
