@@ -61,6 +61,8 @@ def relative(path: Path, root: Path) -> str | None:
         pass
     # /mnt/c is case-insensitive: /mnt/c/munisense/... is the same folder as
     # /mnt/c/MuniSense/..., and must not escape the rules below (P2-9 security review).
+    # The slice below assumes case folding keeps the root's length (true for an ASCII root,
+    # such as this project's; "ß" would not be). It can only over-block, so it fails safe.
     full, prefix = resolved.as_posix(), base.as_posix().rstrip("/") + "/"
     if full.casefold().startswith(prefix.casefold()):
         return full[len(prefix) :]

@@ -62,6 +62,7 @@ from munisense.provenance.publication import (
     VatRatePublication,
     load_bytes,
 )
+from munisense.provenance.sources import SourceDocument
 
 RECORD_TIME_WINDOW = timedelta(hours=24)
 FOLDERS = ("tariffs", "vat")
@@ -116,7 +117,14 @@ def _files(data: Path, problems: list[str]) -> list[Path]:
                 path = Path(current) / name
                 if path.is_symlink():
                     problems.append(f"{path.relative_to(data).as_posix()}: a symbolic link")
-            found.extend(Path(current) / f for f in files if not (Path(current) / f).is_symlink())
+            for name in sorted(files):
+                path = Path(current) / name
+                if path.is_symlink():
+                    continue  # reported above
+                if not path.is_file():  # a FIFO or device would block or mislead a read
+                    problems.append(f"{path.relative_to(data).as_posix()}: not a regular file")
+                    continue
+                found.append(path)
     return sorted(found)
 
 
@@ -164,13 +172,15 @@ def check_set(data: Path, loaded: list[Loaded]) -> list[str]:  # one rule per bl
     successors: dict[str, list[str]] = {}
     times: dict[tuple[tuple[str, str], datetime], str] = {}
     for publication in loaded:
-        version = publication.publication.version
-        if isinstance(publication.publication, TariffPublication) and version is not None:
+        if (
+            isinstance(publication.publication, TariffPublication)
+            and (version := publication.publication.version) is not None
+        ):
             if suppliers is not None and publication.key[0] not in suppliers:
                 problems.append(
                     f"{publication.id}: supplier {publication.key[0]} is not in the catalogue"
                 )
-            if any(isinstance(c, FreeBasicAllocation) for c in version.components):  # type: ignore[union-attr]
+            if any(isinstance(c, FreeBasicAllocation) for c in version.components):
                 problems.append(
                     f"{publication.id}: a free basic allocation cannot be published until TD-10"
                     " is done (E49)"
@@ -242,6 +252,8 @@ def changes_since(repo: Path, base: str) -> tuple[list[str], list[str]]:
         where = " -> ".join(paths)
         if status != "A":
             problems.append(f"{where}: a publication on the base was changed ({status})")
+        elif not paths[0].startswith(("data/tariffs/", "data/vat/")):
+            problems.append(f"{where}: added under a case variant of the publication folders")
         elif new_mode != REGULAR_FILE_MODE:
             problems.append(f"{where}: added as mode {new_mode}, not a regular file")
         else:
@@ -271,9 +283,10 @@ def check_added(  # one list of problems, check by check
     problems = []
     by_path = {p.path.resolve(): p for p in loaded}
     try:
-        sources = documents(data)
+        sources: dict[str, tuple[Path, SourceDocument]] | None = documents(data)
     except (ProvenanceError, ValidationError, OSError) as error:
-        return [f"source manifests: {type(error).__name__}: {str(error)[:200]}"]
+        problems.append(f"source manifests: {type(error).__name__}: {str(error)[:200]}")
+        sources = None  # the citation re-run is skipped; every other check still runs
     added_publications = []
     for rel in added:
         publication = by_path.get((data.parent / rel).resolve())
@@ -297,7 +310,9 @@ def check_added(  # one list of problems, check by check
             )
         version = publication.publication.version
         counts = {"passed": 0, "no_text_layer": 0, "failed": 0}
-        if version is not None:
+        if version is not None and sources is None:
+            continue  # cannot re-run the citation check; already reported
+        if version is not None and sources is not None:
             results = checker(version, sources)
             for result in results:
                 counts[result.outcome.value] += 1

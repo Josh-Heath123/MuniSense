@@ -6,6 +6,7 @@ The module is `slow` (git and file copies): `poe verify` and CI run it, `poe che
 """
 
 import json
+import os
 import shutil
 import subprocess
 from datetime import UTC, date, datetime, timedelta
@@ -596,3 +597,36 @@ def test_a_missing_data_folder_has_nothing_to_check_but_the_catalogue(tmp_path: 
     found = guards.run_checks(tmp_path / "data")
     assert len(found) == 1
     assert found[0].startswith("catalogue/suppliers.json: FileNotFoundError")
+
+
+def test_a_fifo_is_refused_without_blocking(repo: Path) -> None:
+    os.mkfifo(repo / FOLDER / "2026-08-01.r1.json")
+    assert problems(repo) == [
+        "tariffs/city-of-ekurhuleni/b-residential-1-phase/2026-08-01.r1.json: not a regular file"
+    ]
+
+
+def test_a_case_variant_of_the_data_folder_is_refused_even_on_a_push(repo: Path) -> None:
+    variant = repo / "DATA/tariffs/city-of-ekurhuleni/b-residential-1-phase"
+    try:
+        variant.mkdir(parents=True)
+    except FileExistsError:  # pragma: no cover  # a case-insensitive file system
+        pytest.skip("the file system is case-insensitive")
+    shutil.copy(repo / FOLDER / "2026-07-01.r1.json", variant / "2026-07-01.r2.json")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "variant")
+    found = problems(repo, base="main")  # no --pull-request: as on a push to main
+    assert (
+        "DATA/tariffs/city-of-ekurhuleni/b-residential-1-phase/2026-07-01.r2.json: added under"
+        " a case variant of the publication folders"
+    ) in found
+
+
+def test_unreadable_manifests_do_not_hide_the_other_checks(repo: Path) -> None:
+    _added(repo)
+    shutil.copy(
+        repo / "data/sources/sars/sources.json", repo / "data/sources/ekurhuleni/sources.json"
+    )
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(days=3))
+    assert found[0].startswith("source manifests: ProvenanceError")
+    assert any("recorded more than 24 hours before this run" in p for p in found), found

@@ -5,7 +5,7 @@ _Last updated: 2026-11-19, on branch `feat/p2-9-publication-guards`._
 ## Now
 
 - **Last gate:** P1 Calculation core, approved on 2026-11-18 (E40). P0 approved on 2026-11-17 (W4).
-- **Phase:** P2 Versioned storage (approved, E40). **Next:** the P2-9 architect checkpoint (stop). P2-3 to P2-9 are built and reviewed, each in its own pull request (#33 to #38), stacked in order and unmerged; #33 waits for W17. Stop points: after P2-9 (checkpoint), and before publishing in P2-13.
+- **Phase:** P2 Versioned storage (approved, E40). **Next:** the P2-9 architect checkpoint (stop): `docs/reports/2026-11-19-P2-checkpoint.md`. P2-3 to P2-9 are built and reviewed, each in its own pull request (#33 to #38), stacked in order and unmerged; #33 waits for W17. Stop points: after P2-9 (checkpoint), and before publishing in P2-13.
 - **Blocked on:** nothing.
 - **Design checkpoint:** P1-10 report written and reviewed by the architect; decisions E34 to E39 recorded.
 
@@ -16,6 +16,7 @@ _Last updated: 2026-11-19, on branch `feat/p2-9-publication-guards`._
 | W17 | (P2-9 checkpoint) P2-3: the bootstrap's own tests (`tests/integration/bootstrap`, `db_admin`) connect as the local superuser, against the criterion that tests never do | Accept for the bootstrap's tests only: creating roles needs a superuser, and every other database test connects as the two roles |
 | W18 | (P2-9 checkpoint, for the architect) Three revision questions in ADR-0012. (1) A withdrawn version is restored with `supersedes: null`, but `r1` already exists under its date; provisional reading in `publication.py`: a publication superseding nothing may take any revision, and the publish step gives it the next free one (a correction that forgot its `supersedes` is then caught only by the overlap refusal; revision gaps are not refused). (2) **The rule "superseded revision + 1, even under another date" can deadlock:** a correction moved to a date where that revision already exists can never be published (`poe publish` refuses "already exists"; tested, P2-8 review). (3) A withdrawal's `checks` record `schema: valid`, the documents sentence and `overlap: none`, which say nothing for a file with no version; P2-9's re-run must treat withdrawals explicitly | Confirm (1); for (2), either the next free revision under the new date for a moved correction, or a new ADR; for (3), a separate `checks` shape for withdrawals in a later schema version |
 | W19 | (P2-9 checkpoint) E43 is not met: `poe check` measured 26 to 31 s after P2-3 (mostly mypy on SQLAlchemy and per-run overhead on the `/mnt/c` disk), and 30 to 51 s after P2-7, rising run by run on the same code; no single fast test takes more than 0.8 s | Accept up to 35 s, or decide between parallel tests (a dependency) and moving mypy out of `check` |
+| W20 | (P2-9 checkpoint) Merge protection: nothing technical enforces review or green CI before a merge (E17), and the publication guards run the pull request's own code; check whether CODEOWNERS and branch protection are available on the current GitHub plan | Check the plan; if available, require the owner's review for pull requests touching publications or their guards |
 
 ## Decided (owner: Josh Heath, 2026-11-17)
 
