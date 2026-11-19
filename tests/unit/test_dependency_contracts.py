@@ -2,14 +2,15 @@
 
 import-linter enforces the rules; this test stops them being loosened silently: every
 top-level package except the owner must be a source module of a contract that forbids
-the dependency, with no `ignore_imports` exemption. The root module is outside the
-contracts, so it is checked here directly. A planted violation broke both contracts when
-they were added (see the P2-2 pull request).
+the dependency, with no `ignore_imports` exemption. Top-level modules (the root
+`__init__.py`) are outside the contracts, so they are checked here directly. A planted
+violation broke both contracts when they were added (see the P2-2 pull request).
 """
 
 import ast
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -28,7 +29,7 @@ OWNERS = {
 }
 
 
-def _forbidding(dependency: str) -> list[dict[str, object]]:
+def _forbidding(dependency: str) -> list[dict[str, Any]]:
     config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     return [
         c
@@ -42,18 +43,15 @@ def test_every_package_but_the_owner_is_forbidden_the_dependency(
     dependency: str, owner: str
 ) -> None:
     contracts = _forbidding(dependency)
-    sources = {
-        str(m).removeprefix("munisense.")
-        for c in contracts
-        for m in c["source_modules"]  # type: ignore[attr-defined]
-    }
+    sources = {str(m).removeprefix("munisense.") for c in contracts for m in c["source_modules"]}
     assert sources >= set(PACKAGES) - {owner}
     assert owner not in sources
     assert all("ignore_imports" not in c for c in contracts)
 
 
-def test_the_root_module_imports_no_owned_dependency() -> None:
-    tree = ast.parse((SRC / "__init__.py").read_text(encoding="utf-8"))
+@pytest.mark.parametrize("module", sorted(p.name for p in SRC.glob("*.py")))
+def test_top_level_modules_import_no_owned_dependency(module: str) -> None:
+    tree = ast.parse((SRC / module).read_text(encoding="utf-8"))
     imported = {
         alias.name.split(".")[0]
         for node in ast.walk(tree)
