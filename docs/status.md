@@ -1,11 +1,11 @@
 # Status
 
-_Last updated: 2026-11-19, on branch `chore/p2-2-dependencies`._
+_Last updated: 2026-11-19, on `main` after PR #31._
 
 ## Now
 
 - **Last gate:** P1 Calculation core, approved on 2026-11-18 (E40). P0 approved on 2026-11-17 (W4).
-- **Phase:** P2 Versioned storage (approved, E40). **Next task:** P2-3 (settings and database roles). Stop points: after P2-9, and before publishing in P2-13.
+- **Phase:** P2 Versioned storage (approved, E40). **Next task:** P2-3 (settings and database roles), once the architect and owner acknowledge the security criteria proposed for P2-3 and P2-7 in PR #31. Stop points: after P2-9, and before publishing in P2-13.
 - **Blocked on:** nothing.
 - **Design checkpoint:** P1-10 report written and reviewed by the architect; decisions E34 to E39 recorded.
 
@@ -86,7 +86,7 @@ Each task is one branch and one pull request, about half a day. The design is AD
 | ID | Task | Acceptance criteria | Status |
 | --- | --- | --- | --- |
 | P2-1 | Storage ADR | ADR-0012 accepted (W16, E48) | **done** (PR #29) |
-| P2-2 | Dependencies for P2 | SQLAlchemy 2, Alembic and psycopg 3 approved by the architect for the owner (E49); pypdf approved (E47). The PR records each version, licence and transitive package. Stop and ask only if a package fails the licence policy (E15), needs a build step, or is younger than 14 days. Each installs from a wheel with no build step (`--no-build`). Import-linter: only `persistence` imports SQLAlchemy, Alembic and psycopg, and only `ingestion` imports pypdf (closes TD-6), each **shown to break** on a deliberate violation. `poe verify` and `poe audit` pass | in review |
+| P2-2 | Dependencies for P2 | SQLAlchemy 2, Alembic and psycopg 3 approved by the architect for the owner (E49); pypdf approved (E47). The PR records each version, licence and transitive package. Stop and ask only if a package fails the licence policy (E15), needs a build step, or is younger than 14 days. Each installs from a wheel with no build step (`--no-build`). Import-linter: only `persistence` imports SQLAlchemy, Alembic and psycopg, and only `ingestion` imports pypdf (closes TD-6), each **shown to break** on a deliberate violation. `poe verify` and `poe audit` pass | **done** (PR #31) |
 | P2-3 | Settings and database roles | `platform` settings read the database URLs from the environment; separate migration role (owns the schema) and application role (read-only); the app and tests never connect as a superuser; a test fixture refuses a database whose name does not end in `_test`; settings refuse the published default passwords outside development (the P2 notes); libpq connections set `gssencmode=disable`, require `sslmode=verify-full` outside local development, and never use an `ldap://` service lookup (P2-2 security review; **proposed in P2-2, for the architect and owner to acknowledge**). Tests for each refusal | not started |
 | P2-4 | Canonical JSON and the publication envelope | Canonical parse and write as ADR-0012 section 1 (floats, `NaN`, `Infinity`, `-Infinity` and duplicate keys refused; text equality, never re-serialised through the model). Strict models for the envelope: publication record, tariff publication, VAT-rate publication, withdrawal (no version). Converter registry keyed by `schema_version` (only version 1 for now). Property tests: canonical text round-trips; changes of whitespace or formatting are caught (re-ordered keys are kept by design; in a published file they are caught by P2-9's no-change check) | not started |
 | P2-6 | Catalogue, source manifests and canonical drafts | `data/catalogue/suppliers.json`; `data/sources/<publisher>/sources.json` for Ekurhuleni and SARS, with a test that each agrees with its README and that every hash matches the file; drafts moved to `data/drafts/<supplier-code>/…` in canonical form; the VAT table split into one draft per rate; `poe demo` and its README test still pass | not started |
