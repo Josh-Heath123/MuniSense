@@ -22,6 +22,7 @@ from munisense.ingestion.publish import Checker, Request, publish
 from munisense.provenance import canonical
 from munisense.provenance.drafts import load_file, write_file
 from munisense.provenance.sources import SourceDocument
+from support.builders import fixture_free_basic
 
 pytestmark = pytest.mark.slow
 
@@ -352,14 +353,16 @@ def test_pull_request_needs_a_base() -> None:
     assert exited.value.code == 2
 
 
-def test_an_added_file_that_is_not_a_publication_is_refused_once(repo: Path) -> None:
+def test_an_added_file_that_is_not_a_publication_is_refused(repo: Path) -> None:
     (repo / FOLDER / "notes.json").write_text("{}", encoding="utf-8")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "stray file")
     found = problems(repo, base="main", pull_request=True, clock=lambda: START)
     assert found == [
         "tariffs/city-of-ekurhuleni/b-residential-1-phase/notes.json: not a publication"
-        " (only <date>.r<N>.json files belong here)"
+        " (only <date>.r<N>.json files belong here)",
+        "data/tariffs/city-of-ekurhuleni/b-residential-1-phase/notes.json: added, but not"
+        " loaded as a publication",
     ]
 
 
@@ -395,3 +398,201 @@ def test_an_earlier_version_that_does_not_overlap_is_not_refused(repo: Path) -> 
 
 def test_the_default_clock_gives_an_offset() -> None:
     assert guards._now().utcoffset() is not None
+
+
+# --- links, submodules and case variants (P2-9 reviews) -------------------------------
+
+
+def test_a_symlinked_folder_under_the_publication_folders_is_refused(repo: Path) -> None:
+    (repo / "data/tariffs/linked").symlink_to(repo / "data/drafts")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "link")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START)
+    assert "tariffs/linked: a symbolic link" in found
+    assert "data/tariffs/linked: added as mode 120000, not a regular file" in found
+
+
+def test_a_symlinked_file_is_refused(repo: Path) -> None:
+    link = repo / FOLDER / "2026-08-01.r1.json"
+    link.symlink_to(repo / FOLDER / "2026-07-01.r1.json")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "link")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START)
+    assert f"{(FOLDER / link.name).relative_to('data').as_posix()}: a symbolic link" in found
+    assert any("added as mode 120000" in p for p in found), found
+
+
+def test_a_submodule_under_the_publication_folders_is_refused(repo: Path) -> None:
+    head = git(repo, "rev-parse", "HEAD").strip()
+    git(repo, "update-index", "--add", "--cacheinfo", f"160000,{head},data/vat/sub")
+    git(repo, "commit", "-q", "-m", "gitlink")
+    found = problems(repo, base="main")
+    assert "data/vat/sub: added as mode 160000, not a regular file" in found
+
+
+def test_a_case_variant_publication_folder_is_refused(repo: Path) -> None:
+    variant = repo / "data/Tariffs/city-of-ekurhuleni/b-residential-1-phase"
+    try:
+        variant.mkdir(parents=True)
+    except FileExistsError:  # pragma: no cover  # a case-insensitive file system
+        pytest.skip("the file system is case-insensitive")
+    shutil.copy(repo / FOLDER / "2026-07-01.r1.json", variant / "2026-07-01.r2.json")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "variant")
+    found = problems(repo, base="main")
+    assert "Tariffs/: a case variant of a publication folder" in found
+
+
+# --- the publish step's other checks (P2-9 review) -----------------------------------
+
+
+def test_a_backdated_added_publication_is_refused(repo: Path) -> None:
+    """Recorded before the published r1, so it would escape the overlap check."""
+    body = json.loads((repo / FOLDER / "2026-07-01.r1.json").read_text("utf-8"))
+    body["publication"].update(
+        {"id": f"{TARIFF}/2026-07-01/r2", "published_at": "2026-12-01T09:00:00+00:00"}
+    )
+    (repo / FOLDER / "2026-07-01.r2.json").write_text(canonical.dumps(body), encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "backdated")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert (
+        f"{TARIFF}/2026-07-01/r2: recorded no later than {TARIFF}/2026-07-01/r1,"
+        " which is already published" in found
+    )
+
+
+def test_two_publications_of_one_tariff_may_not_share_a_record_time(repo: Path) -> None:
+    body = json.loads((repo / FOLDER / "2026-07-01.r1.json").read_text("utf-8"))
+    body["publication"]["id"] = f"{TARIFF}/2026-07-01/r2"
+    (repo / FOLDER / "2026-07-01.r2.json").write_text(canonical.dumps(body), encoding="utf-8")
+    assert f"{TARIFF}/2026-07-01/r2 and {TARIFF}/2026-07-01/r1 share a record time" in problems(
+        repo
+    )
+
+
+def test_a_published_free_basic_allocation_is_refused(repo: Path) -> None:
+    path = repo / FOLDER / "2026-07-01.r1.json"
+    body = json.loads(path.read_text("utf-8"))
+    version = TariffVersion.model_validate_json(json.dumps(body["version"]))
+    with_fba = version.model_copy(
+        update={"components": (*version.components, fixture_free_basic("50"))}
+    )
+    body["version"] = canonical.parse(with_fba.model_dump_json())
+    path.write_text(canonical.dumps(body), encoding="utf-8")
+    assert problems(repo) == [
+        f"{TARIFF}/2026-07-01/r1: a free basic allocation cannot be published until TD-10"
+        " is done (E49)"
+    ]
+
+
+def test_a_supplier_not_in_the_catalogue_is_refused(repo: Path) -> None:
+    catalogue = repo / "data/catalogue/suppliers.json"
+    body = json.loads(catalogue.read_text("utf-8"))
+    body["suppliers"][0]["code"] = "elsewhere"
+    catalogue.write_text(canonical.dumps(body), encoding="utf-8")
+    assert problems(repo) == [
+        f"{TARIFF}/2026-07-01/r1: supplier city-of-ekurhuleni is not in the catalogue"
+    ]
+
+
+def test_an_unreadable_catalogue_is_reported(repo: Path) -> None:
+    (repo / "data/catalogue/suppliers.json").write_text("{}", encoding="utf-8")
+    found = problems(repo)
+    assert len(found) == 1
+    assert found[0].startswith("catalogue/suppliers.json: CanonicalJsonError")
+
+
+def test_a_verified_value_that_disagrees_with_the_rerun_is_refused(repo: Path) -> None:
+    _added(repo)
+    path = repo / FOLDER / "2026-07-01.r2.json"
+    body = json.loads(path.read_text("utf-8"))
+    body["version"]["printed_name"]["status"] = {
+        "kind": "verified",
+        "verifier": "owner",
+        "verifier_kind": "human",
+        "method": "visual comparison with the scanned page",
+        "verified_on": "2026-12-01",
+        "text_check": "passed",
+    }
+    path.write_text(canonical.dumps(body), encoding="utf-8")
+    git(repo, "commit", "-qam", "verified")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert (
+        f"{TARIFF}/2026-07-01/r2: printed_name: verified with text check passed, but the"
+        " citation check gives no_text_layer"
+    ) in found
+
+
+def test_a_changed_tool_label_is_refused(repo: Path) -> None:
+    _added(repo)
+    path = repo / FOLDER / "2026-07-01.r2.json"
+    body = json.loads(path.read_text("utf-8"))
+    body["publication"]["checks"]["tool_version"] = "hand made"
+    path.write_text(canonical.dumps(body), encoding="utf-8")
+    git(repo, "commit", "-qam", "label")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert f"{TARIFF}/2026-07-01/r2: tool label 'hand made', not 'munisense publish 1'" in found
+
+
+def test_unreadable_manifests_are_reported_not_raised(repo: Path) -> None:
+    _added(repo)
+    shutil.copy(
+        repo / "data/sources/sars/sources.json", repo / "data/sources/ekurhuleni/sources.json"
+    )
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert found == [
+        "source manifests: ProvenanceError: document"
+        " 5f6e4225703d6ba2f0d19bd0911fe580f787bcab4d1f8d6f421525051366ad1e"
+        " is listed in two manifests"
+    ]
+
+
+def test_missing_publication_folders_are_in_order(tmp_path: Path) -> None:
+    shutil.copytree(ROOT / "data" / "catalogue", tmp_path / "data" / "catalogue")
+    assert guards.run_checks(tmp_path / "data") == []
+
+
+@pytest.mark.parametrize("base", ["no-such-ref", "--output=/tmp/x", "0" * 40])
+def test_an_unusable_base_fails_closed(
+    repo: Path, base: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert guards.main([f"--base={base}"], repo / "data", checker=checker()) == 2
+    assert "git failed" in capsys.readouterr().err
+
+
+def test_the_real_citation_check_runs_on_an_added_vat_publication(repo: Path) -> None:
+    for pdf in (ROOT / "data" / "sources").glob("*/*.pdf"):
+        shutil.copy(pdf, repo / "data" / "sources" / pdf.parent.name / pdf.name)
+    data = repo / "data"
+    rate = load_file(ROOT / "data/drafts/vat/south-africa/2018-04-01.json", VatRate)
+    shortened = rate.model_copy(
+        update={"end_cited": rate.start_cited.model_copy(update={"value": date(2027, 1, 1)})}
+    )
+    draft = data / "drafts/vat/south-africa/2018-04-01.json"
+    write_file(draft, shortened)
+    publish(
+        data,
+        Request(reason="t", draft=draft, supersedes="vat/south-africa/2018-04-01/r1"),
+        Clock(START + timedelta(minutes=30)),
+    )
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "shortened VAT rate")
+    assert (
+        guards.run_checks(data, "main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+        == []
+    )
+
+
+def test_a_publication_folder_that_is_itself_a_link_is_refused(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    shutil.copytree(ROOT / "data" / "catalogue", data / "catalogue")
+    (tmp_path / "elsewhere").mkdir()
+    (data / "vat").symlink_to(tmp_path / "elsewhere")
+    assert guards.run_checks(data) == ["vat/: a symbolic link, not a folder"]
+
+
+def test_a_missing_data_folder_has_nothing_to_check_but_the_catalogue(tmp_path: Path) -> None:
+    found = guards.run_checks(tmp_path / "data")
+    assert len(found) == 1
+    assert found[0].startswith("catalogue/suppliers.json: FileNotFoundError")

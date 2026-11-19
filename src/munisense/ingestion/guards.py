@@ -2,22 +2,35 @@
 
 `uv run poe publications-check` checks every file under `data/tariffs/` and `data/vat/`:
 
+- the folders are spelled exactly so (no case variant such as `data/Tariffs/`), and nothing
+  under them is a symbolic link;
 - every file is a publication at its own path (`<effective-from>.r<N>.json` in its tariff's
   folder); anything else, such as a temporary file left by a killed publish run, is refused;
-- every publication is canonical and valid (through the converter for its schema version);
+- every publication is canonical and valid (through the converter for its schema version),
+  names a supplier in the catalogue, and holds no free basic allocation while TD-10 is open
+  (E49);
 - every `supersedes` names an existing publication of the same tariff that is not a
-  withdrawal; no publication has two successors; a successor's record time is later.
+  withdrawal; no publication has two successors; a successor's record time is later; no two
+  publications of one tariff share a record time.
 
-With `--base <ref>` it also refuses any publication that exists at the merge base and was
-edited, deleted or renamed since. With `--pull-request` (pull requests only, never on
-`main`, where a failure after the merge could not be fixed) it checks each publication the
-change adds: record time within 24 hours of now and not in the future, and every publish
-step check re-run (the citation check included) with its results compared to the checks
-recorded in the file. Only added publications are re-checked: a later pypdf may extract an
-old page differently, and old files cannot be edited.
+With `--base <ref>` it also refuses any change, other than an added regular file, to the
+publication folders since the merge base of that ref and HEAD (committed changes only): an
+edit, deletion, rename, type change, symbolic link or submodule. With `--pull-request`
+(pull requests only, never on `main`, where a failure after the merge could not be fixed)
+it re-runs the publish step's checks on each added publication: record time within 24
+hours of now, not in the future, and later than every other publication of the same tariff
+it could follow; the citation check and `Verified` text checks, with the counts compared to
+those recorded; the overlap with the publications current when it was published; and the
+tool label. Only added publications are re-checked: a later pypdf may extract an old page
+differently, and old files cannot be edited.
+
+The checks run the pull request's own code, so they catch mistakes made through the normal
+path; they are not a boundary against a change that also edits the guards (security
+register).
 """
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -28,8 +41,11 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from munisense.catalogue.suppliers import SupplierCatalogue
+from munisense.domain.tariffs import FreeBasicAllocation
 from munisense.ingestion.citation_check import Outcome, check_citations
 from munisense.ingestion.publish import (
+    TOOL_VERSION,
     Checker,
     Clock,
     documents,
@@ -37,6 +53,7 @@ from munisense.ingestion.publish import (
     text_check_reasons,
     valid_period,
 )
+from munisense.provenance.drafts import load_file
 from munisense.provenance.errors import ProvenanceError
 from munisense.provenance.publication import (
     VAT_CODE,
@@ -47,10 +64,13 @@ from munisense.provenance.publication import (
 )
 
 RECORD_TIME_WINDOW = timedelta(hours=24)
+FOLDERS = ("tariffs", "vat")
 TARIFF_FILE = re.compile(
     r"^tariffs/([^/]+)/([^/]+)/([0-9]{4}-[0-9]{2}-[0-9]{2})\.r([1-9][0-9]*)\.json$"
 )
 VAT_FILE = re.compile(rf"^vat/{VAT_CODE}/([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})\.r([1-9][0-9]*)\.json$")
+REGULAR_FILE_MODE = "100644"
+REDO = "see 'Publishing' in docs/development.md to publish it again"
 
 
 @dataclass(frozen=True)
@@ -79,14 +99,32 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _files(data: Path, problems: list[str]) -> list[Path]:
+    """Every file under the publication folders, refusing links and case variants."""
+    found: list[Path] = []
+    if data.is_dir():
+        for entry in sorted(data.iterdir()):
+            if entry.name.casefold() in FOLDERS and entry.name not in FOLDERS:
+                problems.append(f"{entry.name}/: a case variant of a publication folder")
+    for folder in FOLDERS:
+        top = data / folder
+        if top.is_symlink():
+            problems.append(f"{folder}/: a symbolic link, not a folder")
+            continue
+        for current, dirs, files in os.walk(top):  # does not follow links
+            for name in sorted(dirs + files):
+                path = Path(current) / name
+                if path.is_symlink():
+                    problems.append(f"{path.relative_to(data).as_posix()}: a symbolic link")
+            found.extend(Path(current) / f for f in files if not (Path(current) / f).is_symlink())
+    return sorted(found)
+
+
 def load_all(data: Path) -> tuple[list[Loaded], list[str]]:
     """Every publication under `data`, and the problems with any file there."""
     loaded: list[Loaded] = []
     problems: list[str] = []
-    files = sorted(
-        p for folder in ("tariffs", "vat") for p in (data / folder).rglob("*") if not p.is_dir()
-    )
-    for path in files:
+    for path in _files(data, problems):
         rel = path.relative_to(data).as_posix()
         tariff, vat = TARIFF_FILE.match(rel), VAT_FILE.match(rel)
         if tariff is None and vat is None:
@@ -113,12 +151,34 @@ def load_all(data: Path) -> tuple[list[Loaded], list[str]]:
     return loaded, problems
 
 
-def check_set(loaded: list[Loaded]) -> list[str]:
-    """The rules about the whole set of publications."""
+def check_set(data: Path, loaded: list[Loaded]) -> list[str]:  # one rule per block
+    """The rules about every publication and about the whole set."""
     problems = []
+    try:
+        catalogue = load_file(data / "catalogue" / "suppliers.json", SupplierCatalogue)
+        suppliers = {s.code for s in catalogue.suppliers}
+    except (ProvenanceError, ValidationError, OSError) as error:
+        problems.append(f"catalogue/suppliers.json: {type(error).__name__}: {str(error)[:200]}")
+        suppliers = None  # unreadable: reported once above, not as every supplier unknown
     by_id = {p.id: p for p in loaded}
     successors: dict[str, list[str]] = {}
+    times: dict[tuple[tuple[str, str], datetime], str] = {}
     for publication in loaded:
+        version = publication.publication.version
+        if isinstance(publication.publication, TariffPublication) and version is not None:
+            if suppliers is not None and publication.key[0] not in suppliers:
+                problems.append(
+                    f"{publication.id}: supplier {publication.key[0]} is not in the catalogue"
+                )
+            if any(isinstance(c, FreeBasicAllocation) for c in version.components):  # type: ignore[union-attr]
+                problems.append(
+                    f"{publication.id}: a free basic allocation cannot be published until TD-10"
+                    " is done (E49)"
+                )
+        moment = (publication.key, publication.published_at)
+        if moment in times:
+            problems.append(f"{publication.id} and {times[moment]} share a record time")
+        times[moment] = publication.id
         target = publication.supersedes
         if target is None:
             continue
@@ -140,7 +200,7 @@ def check_set(loaded: list[Loaded]) -> list[str]:
 
 def _git(repo: Path, *args: str) -> str:
     done = subprocess.run(  # noqa: S603  # a fixed program and arguments, no shell
-        ["git", *args],  # noqa: S607  # git from PATH, as everywhere in CI
+        ["git", "-c", "core.quotePath=false", *args],  # noqa: S607  # git from PATH, as in CI
         cwd=repo,
         capture_output=True,
         text=True,
@@ -150,30 +210,58 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def changes_since(repo: Path, base: str) -> tuple[list[str], list[str]]:
-    """(paths of added publications, problems): any other change to a publication that
-    exists at the merge base of `base` and HEAD is refused."""
-    merge_base = _git(repo, "merge-base", base, "HEAD").strip()
-    listing = _git(
+    """(paths of added publications, problems) since the merge base of `base` and HEAD.
+
+    Only an added regular file is allowed; every other change to the publication folders
+    (any case spelling) is refused, including a symbolic link or a submodule.
+    """
+    commit = _git(repo, "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}").strip()
+    merge_base = _git(repo, "merge-base", commit, "HEAD").strip()
+    raw = _git(
         repo,
         "diff",
-        "--name-status",
+        "--raw",
+        "-z",
+        "--no-color",
+        "--no-ext-diff",
         "--find-renames",
         merge_base,
         "HEAD",
         "--",
-        "data/tariffs",
-        "data/vat",
+        ":(icase)data/tariffs",
+        ":(icase)data/vat",
     )
+    fields = raw.split("\0")
     added, problems = [], []
-    for line in listing.splitlines():
-        status, *paths = line.split("\t")
-        if status == "A":
-            added.append(paths[0])
+    index = 0
+    while index < len(fields) - 1:
+        _old_mode, new_mode, _old, _new, status = fields[index].lstrip(":").split(" ")
+        count = 2 if status[0] in "RC" else 1
+        paths = fields[index + 1 : index + 1 + count]
+        index += 1 + count
+        where = " -> ".join(paths)
+        if status != "A":
+            problems.append(f"{where}: a publication on the base was changed ({status})")
+        elif new_mode != REGULAR_FILE_MODE:
+            problems.append(f"{where}: added as mode {new_mode}, not a regular file")
         else:
-            problems.append(
-                f"{' -> '.join(paths)}: a publication on the base was changed ({status})"
-            )
+            added.append(paths[0])
     return added, problems
+
+
+def _order_problems(publication: Loaded, loaded: list[Loaded], added: set[str]) -> list[str]:
+    """An added publication must be recorded later than every other one of its tariff,
+    except added ones recorded later still (which are checked in their turn)."""
+    problems = []
+    for other in loaded:
+        if other is publication or other.key != publication.key:
+            continue
+        other_added = other.id in added
+        if not other_added and other.published_at >= publication.published_at:
+            problems.append(
+                f"{publication.id}: recorded no later than {other.id}, which is already published"
+            )
+    return problems
 
 
 def check_added(  # one list of problems, check by check
@@ -182,18 +270,30 @@ def check_added(  # one list of problems, check by check
     """Re-run the publish step's checks on the publications a pull request adds."""
     problems = []
     by_path = {p.path.resolve(): p for p in loaded}
-    sources = documents(data)
+    try:
+        sources = documents(data)
+    except (ProvenanceError, ValidationError, OSError) as error:
+        return [f"source manifests: {type(error).__name__}: {str(error)[:200]}"]
+    added_publications = []
     for rel in added:
         publication = by_path.get((data.parent / rel).resolve())
         if publication is None:
-            continue  # refused by load_all already
+            problems.append(f"{rel}: added, but not loaded as a publication")
+            continue
+        added_publications.append(publication)
+    added_ids = {p.id for p in added_publications}
+    for publication in added_publications:
         record = publication.publication.publication
         if record.published_at > now:
             problems.append(f"{publication.id}: recorded in the future ({record.published_at})")
         elif record.published_at < now - RECORD_TIME_WINDOW:
             problems.append(
-                f"{publication.id}: recorded more than 24 hours before this run; run the "
-                "publish step again"
+                f"{publication.id}: recorded more than 24 hours before this run; {REDO}"
+            )
+        problems.extend(_order_problems(publication, loaded, added_ids))
+        if record.checks.tool_version != TOOL_VERSION:
+            problems.append(
+                f"{publication.id}: tool label {record.checks.tool_version!r}, not {TOOL_VERSION!r}"
             )
         version = publication.publication.version
         counts = {"passed": 0, "no_text_layer": 0, "failed": 0}
@@ -236,7 +336,7 @@ def run_checks(
     checker: Checker = check_citations,
 ) -> list[str]:
     loaded, problems = load_all(data)
-    problems += check_set(loaded)
+    problems += check_set(data, loaded)
     if base is not None:
         added, changed = changes_since(data.parent, base)
         problems += changed
@@ -254,7 +354,9 @@ def main(
     parser = argparse.ArgumentParser(
         prog="poe publications-check", description=__doc__.split("\n")[0]
     )
-    parser.add_argument("--base", help="git ref to compare with (its merge base with HEAD)")
+    parser.add_argument(
+        "--base", help="git ref to compare with (committed changes since its merge base)"
+    )
     parser.add_argument(
         "--pull-request",
         action="store_true",
@@ -270,7 +372,7 @@ def main(
         )
     except subprocess.CalledProcessError as error:
         sys.stderr.write(
-            f"publications-check: git failed ({error.returncode}): {error.stderr[:300]}\n"
+            f"publications-check: git failed ({error.returncode}): {str(error.stderr)[:300]}\n"
         )
         return 2
     if problems:

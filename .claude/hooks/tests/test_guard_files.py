@@ -252,6 +252,33 @@ class PublicationRule(unittest.TestCase):
                         self.assertEqual(blocked.returncode, 2, blocked.stderr)
                         self.assertIn("uv run poe publish", blocked.stderr)
 
+    def test_case_variant_root_relative_and_multiedit_paths_are_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "Repo"
+            repo.mkdir()
+            git(repo, "init", "-q", "-b", "main")
+            target = "data/vat/south-africa/2018-04-01.r1.json"
+            cases = [
+                # A case variant of the project root (the same folder on /mnt/c).
+                {"file_path": str(Path(tmp) / "repo" / target), "content": "{}"},
+                # A path that climbs out of the drafts folder.
+                {"file_path": str(repo / "data/drafts/../vat/x.json"), "content": "{}"},
+                # MultiEdit's own payload shape.
+                {"file_path": str(repo / target), "edits": [{"old_string": "a", "new_string": "b"}]},
+            ]
+            env = {**os.environ, "CLAUDE_PROJECT_DIR": str(repo)}
+            for tool_input in cases:
+                with self.subTest(tool_input=tool_input["file_path"]):
+                    blocked = subprocess.run(
+                        [sys.executable, str(HOOKS / "guard_files.py")],
+                        input=json.dumps({"tool_input": tool_input}),
+                        capture_output=True,
+                        text=True,
+                        env=env,
+                        check=False,
+                    )
+                    self.assertEqual(blocked.returncode, 2, blocked.stderr)
+
     def test_drafts_and_sources_stay_writable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

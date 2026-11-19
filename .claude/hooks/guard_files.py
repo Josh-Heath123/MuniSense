@@ -54,10 +54,17 @@ def new_content(tool_input: dict[str, Any]) -> str:
 
 def relative(path: Path, root: Path) -> str | None:
     """Path relative to the project root with forward slashes, on Windows too."""
+    resolved, base = path.resolve(), root.resolve()
     try:
-        return path.resolve().relative_to(root.resolve()).as_posix()
+        return resolved.relative_to(base).as_posix()
     except ValueError:
-        return None
+        pass
+    # /mnt/c is case-insensitive: /mnt/c/munisense/... is the same folder as
+    # /mnt/c/MuniSense/..., and must not escape the rules below (P2-9 security review).
+    full, prefix = resolved.as_posix(), base.as_posix().rstrip("/") + "/"
+    if full.casefold().startswith(prefix.casefold()):
+        return full[len(prefix) :]
+    return None
 
 
 MAIN_REFS = ("refs/heads/main", "refs/remotes/origin/main")  # fully qualified: no shadowing
