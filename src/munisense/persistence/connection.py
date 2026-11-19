@@ -3,7 +3,7 @@
 import os
 from collections.abc import Mapping
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import URL, Engine, create_engine
 
 from munisense.platform.settings import DatabaseUrl, refuse_libpq_environment
 
@@ -11,7 +11,7 @@ SCHEMA = "munisense"
 
 
 def engine(url: DatabaseUrl, env: Mapping[str, str] = os.environ) -> Engine:
-    """An engine for a checked URL (its forced options are already part of it).
+    """An engine built from a checked URL's parts (its forced options are among them).
 
     The libpq environment is checked again here, because libpq reads the process
     environment at connect time, not the mapping the settings were read from.
@@ -20,8 +20,17 @@ def engine(url: DatabaseUrl, env: Mapping[str, str] = os.environ) -> Engine:
     exception messages and logs.
     """
     refuse_libpq_environment(env)
+    target = URL.create(
+        "postgresql+psycopg",
+        username=url.user,
+        password=url.password,
+        host=url.host,
+        port=url.port,
+        database=url.database,
+        query=dict(url.options),
+    )
     return create_engine(
-        url.url.replace("postgresql://", "postgresql+psycopg://", 1),
+        target,
         connect_args={"options": f"-c search_path={SCHEMA}"},
         pool_pre_ping=True,
         hide_parameters=True,

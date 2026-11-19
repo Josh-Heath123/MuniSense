@@ -23,6 +23,10 @@ SAFE = "postgresql://munisense_app:a-real-secret@db.example.org:5432/munisense?s
 LOCAL = "postgresql://u:p@localhost/x_test"
 
 
+def _url(database: str) -> DatabaseUrl:
+    return DatabaseUrl("u", "p", "localhost", None, database, ())
+
+
 def test_the_environment_is_local_by_default() -> None:
     assert environment({}) is Environment.LOCAL
     assert environment(DEPLOYED) is Environment.DEPLOYED
@@ -150,7 +154,7 @@ def test_a_deployed_environment_needs_every_url_set() -> None:
 
 
 def test_every_published_password_is_in_the_refused_set() -> None:
-    defaults = {DatabaseUrl(raw, "", "").password for raw in LOCAL_DEFAULTS.values()}
+    defaults = {database_url({}, name).password for name in LOCAL_DEFAULTS}
     assert defaults | {"ci-only-not-a-secret"} == PUBLISHED_PASSWORDS
 
 
@@ -189,11 +193,46 @@ def test_with_database_changes_only_the_database() -> None:
 
 @pytest.mark.parametrize("name", ["munisense_dev", "munisense", "munisense_test_copy"])
 def test_tests_refuse_a_database_not_named_test(name: str) -> None:
-    url = DatabaseUrl(f"postgresql://u:p@localhost/{name}", "u", name)
+    url = _url(name)
     with pytest.raises(SettingsError, match="must end in '_test'"):
         require_test_database(url)
 
 
 def test_tests_accept_a_test_database() -> None:
-    url = DatabaseUrl("postgresql://u:p@localhost/munisense_test", "u", "munisense_test")
+    url = _url("munisense_test")
     assert require_test_database(url) is url
+
+
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        (f"{LOCAL}?sslrootcert=/x#&dbname=munisense_dev", "must not contain '#'"),
+        (f"{LOCAL}#fragment", "must not contain '#'"),
+        ("postgresql://u:p@evil.example.org@localhost/x_test", "exactly one '@'"),
+        ("postgresql://u:p@%2Fvar%2Frun%2Fpostgresql/x_test", "not a Unix socket"),
+    ],
+)
+def test_urls_that_parsers_read_differently_are_refused(raw: str, message: str) -> None:
+    with pytest.raises(SettingsError, match=message):
+        database_url({APP: raw}, APP)
+
+
+def test_a_deployed_unix_socket_is_refused() -> None:
+    raw = "postgresql://u:a-real-secret@%2Fvar%2Frun%2Fpostgresql/prod?sslmode=verify-full"
+    with pytest.raises(SettingsError, match="not a Unix socket"):
+        database_url({**DEPLOYED, APP: raw}, APP)
+
+
+def test_the_url_property_reads_back_to_the_same_parts() -> None:
+    raw = "postgresql://app%20user:p%40ss%3Aw%2Frd@[::1]:5433/x_test?sslmode=prefer"
+    url = database_url({APP: raw}, APP)
+    assert database_url({APP: url.url}, APP) == url
+    assert (url.host, url.port) == ("::1", 5433)
+
+
+def test_every_libpq_environment_variable_is_listed() -> None:
+    """Checked against the bundled libpq's own option table (PQconndefaults)."""
+    from psycopg import pq  # tests may import the driver
+
+    libpq = {o.envvar.decode() for o in pq.Conninfo.get_defaults() if o.envvar}
+    assert libpq <= set(LIBPQ_ENVIRONMENT)

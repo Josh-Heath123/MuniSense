@@ -38,8 +38,9 @@ def test_the_driver_connects_with_the_forced_options(
     e: Engine = request.getfixturevalue(which)
     with e.connect() as connection:
         pgconn = connection.connection.driver_connection.pgconn  # type: ignore[union-attr]
-        # libpq's own values; the summary in `info.dsn` leaves out values equal to the
-        # compiled default (gssencmode is `disable` by default in this psycopg-binary build).
+        # libpq's own values. The require_auth check is meaningful; the gssencmode one
+        # cannot fail with this psycopg-binary build, whose compiled default is already
+        # `disable` (the settings unit tests and the engine agreement test cover it).
         values = {option.keyword: option.val for option in pgconn.info}
     assert values[b"gssencmode"] == b"disable"
     assert values[b"require_auth"] == b"scram-sha-256"

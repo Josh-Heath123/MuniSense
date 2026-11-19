@@ -24,9 +24,9 @@ Every connection:
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
-from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit
 
 
 class SettingsError(ValueError):
@@ -141,19 +141,29 @@ LIBPQ_ENVIRONMENT = (
 
 @dataclass(frozen=True)
 class DatabaseUrl:
-    """A checked libpq URL. Its `repr` never shows the URL, which holds the password."""
+    """The checked parts of a database URL. Engines are built from these parts, never by
+    parsing a URL string again, so no second parser can read it differently (P2-3 review).
+    The password is left out of `repr`.
+    """
 
-    url: str = field(repr=False)
     user: str
+    password: str = field(repr=False)
+    host: str
+    port: int | None
     database: str
+    options: tuple[tuple[str, str], ...]
 
     @property
-    def password(self) -> str:
-        return unquote(urlsplit(self.url).password or "")
+    def url(self) -> str:
+        """The parts as a URL again, for passing to another process's settings."""
+        credentials = f"{quote(self.user, safe='')}:{quote(self.password, safe='')}"
+        host = f"[{self.host}]" if ":" in self.host else self.host
+        port = f":{self.port}" if self.port is not None else ""
+        query = urlencode(self.options)
+        return f"postgresql://{credentials}@{host}{port}/{quote(self.database, safe='')}?{query}"
 
     def with_database(self, database: str) -> "DatabaseUrl":
-        parts = urlsplit(self.url)
-        return DatabaseUrl(urlunsplit(parts._replace(path=f"/{database}")), self.user, database)
+        return replace(self, database=database)
 
 
 def environment(env: Mapping[str, str]) -> Environment:
@@ -184,10 +194,14 @@ def database_url(env: Mapping[str, str], name: str) -> DatabaseUrl:
 
 
 def check_url(raw: str, where: Environment, name: str) -> DatabaseUrl:
+    # Parsers disagree about a fragment and about a second "@" (SQLAlchemy reads `#...` as
+    # part of the query; libpq splits user information at the last "@"), so both are refused.
+    if "#" in raw:
+        msg = f"{name} must not contain '#'"
+        raise SettingsError(msg)
     try:
         parts = urlsplit(raw)
-        hostname, password = parts.hostname, unquote(parts.password or "")
-        parts.port  # noqa: B018  # parsed for its check: a malformed port raises
+        hostname, password, port = parts.hostname, unquote(parts.password or ""), parts.port
     except ValueError:
         msg = f"{name} is not a valid URL"
         raise SettingsError(msg) from None
@@ -201,6 +215,12 @@ def check_url(raw: str, where: Environment, name: str) -> DatabaseUrl:
         raise SettingsError(msg)
     if "," in parts.netloc:
         msg = f"{name} must name one host"
+        raise SettingsError(msg)
+    if parts.netloc.count("@") != 1:
+        msg = f"{name} must have exactly one '@' (percent-encode it inside a password)"
+        raise SettingsError(msg)
+    if unquote(hostname).startswith("/"):
+        msg = f"{name} must name a network host, not a Unix socket (no TLS there)"
         raise SettingsError(msg)
     options = dict(parse_qsl(parts.query, keep_blank_values=True))
     if refused := sorted(options.keys() - ALLOWED_OPTIONS):
@@ -221,8 +241,14 @@ def check_url(raw: str, where: Environment, name: str) -> DatabaseUrl:
             msg = f"{name} must use sslmode=verify-full outside a local environment"
             raise SettingsError(msg)
     options.update(FORCED_OPTIONS)
-    url = urlunsplit(parts._replace(scheme="postgresql", query=urlencode(sorted(options.items()))))
-    return DatabaseUrl(url, user, database)
+    return DatabaseUrl(
+        user=user,
+        password=password,
+        host=hostname,
+        port=port,
+        database=database,
+        options=tuple(sorted(options.items())),
+    )
 
 
 def require_test_database(url: DatabaseUrl) -> DatabaseUrl:
