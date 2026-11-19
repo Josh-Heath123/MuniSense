@@ -39,7 +39,7 @@ from pydantic import BaseModel, ValidationError
 from munisense.catalogue.suppliers import SupplierCatalogue
 from munisense.domain.citations import TextCheck, Verified
 from munisense.domain.money import VatRate
-from munisense.domain.tariffs import TariffVersion
+from munisense.domain.tariffs import FreeBasicAllocation, TariffVersion
 from munisense.ingestion.citation_check import (
     CitationResult,
     Outcome,
@@ -61,6 +61,7 @@ from munisense.provenance.publication import (
 from munisense.provenance.sources import SourceDocument, SourceManifest
 
 TOOL_VERSION = "munisense publish 1"
+"""A fixed label (the package has no version yet); raise the number when the checks change."""
 DOCUMENTS_CHECKED = "all cited documents in a manifest; hashes match"
 
 Checker = Callable[[BaseModel, dict[str, tuple[Path, SourceDocument]]], list[CitationResult]]
@@ -100,6 +101,8 @@ class Result:
     publication_id: str
     citations: list[CitationResult] = field(default_factory=list)
     written: bool = False
+    draft_not_removed: str | None = None
+    """Set when the publication was written but the draft could not be removed."""
 
 
 def _now() -> datetime:
@@ -107,9 +110,12 @@ def _now() -> datetime:
 
 
 def _documents(data: Path) -> dict[str, tuple[Path, SourceDocument]]:
-    documents = {}
+    documents: dict[str, tuple[Path, SourceDocument]] = {}
     for manifest in sorted((data / "sources").glob("*/sources.json")):
         for document in load_file(manifest, SourceManifest).documents:
+            if document.sha256 in documents:
+                msg = f"document {document.sha256} is listed in two manifests"
+                raise ProvenanceError(msg)
             documents[document.sha256] = (manifest.parent / document.file, document)
     return documents
 
@@ -158,18 +164,17 @@ def _successors(existing: list[Existing]) -> dict[str, str]:
     return {e.supersedes: e.id for e in existing if e.supersedes is not None}
 
 
-def _check_target(existing: list[Existing], target_id: str, reasons: list[str]) -> Existing | None:
+def _check_target(existing: list[Existing], target_id: str, reasons: list[str]) -> None:
     """The publication to supersede or withdraw, refusing what may not be superseded."""
     by_id = {e.id: e for e in existing}
     if target_id not in by_id:
         reasons.append(f"{target_id} is not a publication of this tariff")
-        return None
+        return
     target = by_id[target_id]
     if target.is_withdrawal:
         reasons.append(f"{target_id} is a withdrawal; republish with no supersedes instead")
     if target_id in _successors(existing):
         reasons.append(f"{target_id} is already superseded by {_successors(existing)[target_id]}")
-    return target
 
 
 def _next_revision(existing: list[Existing], day: date) -> int:
@@ -207,7 +212,11 @@ class Request:
 
 def _load_draft(data: Path, draft: Path) -> tuple[TariffVersion | VatRate, str, str, list[str]]:
     """The draft's version, scope and code, and any refusal about where it sits."""
-    relative = draft.resolve().relative_to((data / "drafts").resolve())
+    drafts = (data / "drafts").resolve()
+    resolved = draft.resolve()
+    if not resolved.is_relative_to(drafts) or not resolved.is_file():
+        raise PublishRefusedError([f"{draft} is not a draft file under {data / 'drafts'}"])
+    relative = resolved.relative_to(drafts)
     if relative.parts[0] == "vat":
         rate = load_file(draft, VatRate)
         reasons = []
@@ -217,6 +226,14 @@ def _load_draft(data: Path, draft: Path) -> tuple[TariffVersion | VatRate, str, 
             )
         return rate, VAT_SCOPE, VAT_CODE, reasons
     version = load_file(draft, TariffVersion)
+    if any(isinstance(c, FreeBasicAllocation) for c in version.components):
+        # E49: all of TD-10 before the first tariff with a free basic allocation is published.
+        return (
+            version,
+            version.supplier,
+            version.tariff_code,
+            ["a free basic allocation cannot be published until TD-10 is done (E49)"],
+        )
     catalogue = load_file(data / "catalogue" / "suppliers.json", SupplierCatalogue)
     try:
         supplier = catalogue.by_code(version.supplier)
@@ -254,7 +271,8 @@ def publish(  # one refusal list, built in order
         day = _valid_period(version)[0]
         supersedes = request.supersedes
     existing = _load_existing(data, scope, code)
-    target = _check_target(existing, supersedes, reasons) if supersedes is not None else None
+    if supersedes is not None:
+        _check_target(existing, supersedes, reasons)
     revision = ParsedId.of(supersedes).revision + 1 if supersedes else _next_revision(existing, day)
     publication_id = f"{scope}/{code}/{day.isoformat()}/r{revision}"
     target_path = _folder(data, scope, code) / f"{day.isoformat()}.r{revision}.json"
@@ -277,10 +295,13 @@ def publish(  # one refusal list, built in order
     if target_path.exists():
         reasons.append(f"{target_path.name} already exists")
     published_at = clock()
-    if published_at.tzinfo is None:
+    latest = max(existing, key=lambda e: e.published_at, default=None)
+    if published_at.utcoffset() is None:
         reasons.append("the clock gave a time without an offset")
-    elif target is not None and published_at <= target.published_at:
-        reasons.append(f"the record time is not later than that of {target.id}")
+    elif latest is not None and published_at <= latest.published_at:
+        # Record time only moves forward within a tariff, so a mid-year amendment's new
+        # version can never be recorded before the revision that made room for it.
+        reasons.append(f"the record time is not later than that of {latest.id}")
     if reasons:
         raise PublishRefusedError(reasons)
     body = {
@@ -306,20 +327,48 @@ def publish(  # one refusal list, built in order
         text = render(kind.model_validate_json(canonical.dumps(body)))
     except ValidationError as error:
         raise PublishRefusedError(
-            [f"the publication is not valid: {error.error_count()} errors"]
+            [
+                f"the publication is not valid: {'.'.join(map(str, e['loc']))}: {e['msg']}"
+                for e in error.errors()
+            ]
         ) from None
     if request.check_only:
         return result
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(target_path, "xb") as handle:  # "x": never overwrite
-        handle.write(text.encode("utf-8"))
-    if request.draft is not None:
-        request.draft.unlink()
+    _write_new(target_path, text.encode("utf-8"))
     result.written = True
+    if request.draft is not None:
+        try:
+            request.draft.unlink()
+        except OSError as error:
+            result.draft_not_removed = f"{type(error).__name__}: {error}"
     return result
 
 
-def main(argv: Sequence[str] | None = None, data: Path | None = None) -> int:
+def _write_new(target: Path, data: bytes) -> None:
+    """Write `data` to `target` atomically, never replacing an existing file.
+
+    A temporary file in the same folder is written and synced, then hard-linked to the
+    target (which fails if the target exists) and removed, so a crash leaves either no
+    publication or a complete one.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    try:
+        with open(temporary, "xb") as handle:  # "x": a fresh file
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    data: Path | None = None,
+    clock: Clock = _now,
+    checker: Checker = check_citations,
+) -> int:
     parser = argparse.ArgumentParser(prog="poe publish", description=__doc__.split("\n")[0])
     parser.add_argument("draft", nargs="?", type=Path, help="the draft file to publish")
     parser.add_argument("--reason", required=True, help="why this is published (recorded)")
@@ -330,7 +379,7 @@ def main(argv: Sequence[str] | None = None, data: Path | None = None) -> int:
     args = parser.parse_args(argv)
     if (args.draft is None) == (args.withdraw is None) or (args.withdraw and args.supersedes):
         parser.error("give either a draft (optionally with --supersedes) or --withdraw <id>")
-    root = data or Path(os.environ.get("MUNISENSE_DATA", Path.cwd() / "data"))
+    root = data or Path.cwd() / "data"
     request = Request(
         reason=args.reason,
         published_by=args.by,
@@ -340,7 +389,7 @@ def main(argv: Sequence[str] | None = None, data: Path | None = None) -> int:
         check_only=args.check,
     )
     try:
-        result = publish(root, request)
+        result = publish(root, request, clock, checker)
     except PublishRefusedError as refused:
         sys.stderr.write("refused:\n" + "".join(f"  - {r}\n" for r in refused.reasons))
         return 1
@@ -351,6 +400,9 @@ def main(argv: Sequence[str] | None = None, data: Path | None = None) -> int:
     sys.stdout.write(f"{verb} {result.publication_id} at {result.target}\n")
     for cited in result.citations:
         sys.stdout.write(f"  {cited.outcome.value:13} {cited.path} (page {cited.page})\n")
+    if result.draft_not_removed is not None:
+        sys.stderr.write(f"published, but could not remove the draft: {result.draft_not_removed}\n")
+        return 3
     return 0
 
 

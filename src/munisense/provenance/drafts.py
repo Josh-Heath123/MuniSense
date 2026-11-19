@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from munisense.domain.money import VatRate, VatTable
 from munisense.provenance import canonical
+from munisense.provenance.errors import ProvenanceError
 
 
 def load_file[M: BaseModel](path: Path, model: type[M]) -> M:
@@ -32,6 +33,6 @@ def load_vat_table(folder: Path) -> VatTable:
         rate = load_file(path, VatRate)
         if path.stem != rate.start.isoformat():
             msg = f"{path.name}: a VAT draft is named after its start date, {rate.start}"
-            raise ValueError(msg)
+            raise ProvenanceError(msg)
         rates.append(rate)
     return VatTable(rates=tuple(rates))
