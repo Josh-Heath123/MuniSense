@@ -58,3 +58,56 @@ def test_integers_and_strings_are_allowed() -> None:
         "page": 4,
         "rate": "3.3700",
     }
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        ({"x": 1.5}, "floats"),
+        ({"x": float("nan")}, "cannot write"),
+        ({"x": float("inf")}, "cannot write"),
+        ({"x": "\ud800"}, "lone surrogate"),
+        ({"x": object()}, "TypeError"),
+        ({"x": 10**31}, "longer than 30 digits"),
+    ],
+)
+def test_the_writer_refuses_what_the_parser_refuses(value: object, message: str) -> None:
+    with pytest.raises(CanonicalJsonError, match=message):
+        canonical.dumps(value)
+
+
+def test_an_overlong_integer_is_refused_on_parse() -> None:
+    with pytest.raises(CanonicalJsonError, match="longer than 30 digits"):
+        canonical.parse('{"x": ' + "9" * 5000 + "}")
+
+
+def test_very_deep_nesting_is_a_canonical_error() -> None:
+    with pytest.raises(CanonicalJsonError, match="nested too deeply"):
+        canonical.parse("[" * 100_000 + "]" * 100_000)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ['{"x": -0}\n', '{\n  "x": "\\/"\n}\n', "   \n"],
+)
+def test_more_non_canonical_forms(text: str) -> None:
+    with pytest.raises(CanonicalJsonError, match=r"canonical form|not valid JSON"):
+        canonical.check(text)
+
+
+def test_an_escaped_lone_surrogate_is_refused() -> None:
+    with pytest.raises(CanonicalJsonError, match="lone surrogate"):
+        canonical.check('{\n  "x": "\\ud800"\n}\n')
+
+
+@pytest.mark.parametrize("text", ["{}\n", "[]\n", "1\n", '"x"\n', "null\n"])
+def test_empty_containers_and_scalars_are_canonical_json(text: str) -> None:
+    assert canonical.dumps(canonical.check(text)) == text
+
+
+def test_check_bytes_refuses_a_bom_and_invalid_utf8() -> None:
+    assert canonical.check_bytes(b"{}\n") == {}
+    with pytest.raises(CanonicalJsonError, match="byte-order mark"):
+        canonical.check_bytes(b"\xef\xbb\xbf{}\n")
+    with pytest.raises(CanonicalJsonError, match="not valid UTF-8"):
+        canonical.check_bytes(b'{"x": "\xff"}\n')

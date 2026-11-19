@@ -12,21 +12,26 @@ from munisense.domain.money import VatTable
 from munisense.domain.tariffs import TariffVersion
 from munisense.provenance import canonical
 from munisense.provenance.canonical import CanonicalJsonError
+from munisense.provenance.errors import PublicationError
 from munisense.provenance.publication import (
     CONVERTERS,
     ParsedId,
-    PublicationError,
     TariffPublication,
     VatRatePublication,
     load,
+    load_bytes,
     render,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
 TARIFF = TariffVersion.model_validate_json(
-    (ROOT / "data/drafts/ekurhuleni/2026-27/tariff-b-residential-1-phase.json").read_text()
+    (ROOT / "data/drafts/ekurhuleni/2026-27/tariff-b-residential-1-phase.json").read_text(
+        encoding="utf-8"
+    )
 )
-VAT = VatTable.model_validate_json((ROOT / "data/drafts/vat/south-africa.json").read_text())
+VAT = VatTable.model_validate_json(
+    (ROOT / "data/drafts/vat/south-africa.json").read_text(encoding="utf-8")
+)
 TARIFF_ID = "city-of-ekurhuleni/b-residential-1-phase/2026-07-01"
 VAT_ID = "vat/south-africa/2018-04-01"
 
@@ -40,9 +45,9 @@ def _record(publication_id: str, supersedes: str | None = None) -> dict[str, Any
         "reason": "test publication",
         "checks": {
             "tool_version": "munisense 0.0.0",
-            "schema_valid": True,
-            "documents_listed_and_hashes_match": True,
-            "overlaps": "none",
+            "schema": "valid",
+            "documents": "all cited documents in a manifest; hashes match",
+            "overlap": "none",
             "citation_check": {"passed": 0, "no_text_layer": 31, "failed": 0},
         },
     }
@@ -100,8 +105,11 @@ def test_a_correction_may_move_to_another_effective_date() -> None:
 @pytest.mark.parametrize(
     ("publication_id", "supersedes", "message"),
     [
-        (f"{TARIFF_ID}/r2", None, "must supersede the revision before it"),
-        (f"{TARIFF_ID}/r1", "city-of-ekurhuleni/b-residential-1-phase/2026-06-01/r1", "after"),
+        (
+            f"{TARIFF_ID}/r1",
+            "city-of-ekurhuleni/b-residential-1-phase/2026-06-01/r1",
+            "must be the revision after",
+        ),
         (f"{TARIFF_ID}/r3", f"{TARIFF_ID}/r1", "must be the revision after"),
         (
             f"{TARIFF_ID}/r2",
@@ -162,13 +170,13 @@ def test_a_naive_record_time_is_refused() -> None:
 
 def test_a_failed_citation_check_cannot_be_published() -> None:
     text = _tariff(f"{TARIFF_ID}/r1").replace('"failed": 0', '"failed": 1')
-    with pytest.raises(ValidationError, match="failed"):
+    with pytest.raises(ValidationError, match=r"citation_check\.failed\n  Input should be 0"):
         load(text, TariffPublication)
 
 
 def test_a_name_is_refused_as_publisher() -> None:
     text = _tariff(f"{TARIFF_ID}/r1").replace('"published_by": "owner"', '"published_by": "A Name"')
-    with pytest.raises(ValidationError, match="published_by"):
+    with pytest.raises(ValidationError, match=r"published_by\n  String should match pattern"):
         load(text, TariffPublication)
 
 
@@ -198,3 +206,68 @@ def test_only_schema_version_1_exists_and_converts_to_itself() -> None:
 def test_a_malformed_id_is_refused() -> None:
     with pytest.raises(PublicationError, match="not a publication id"):
         ParsedId.of("city-of-ekurhuleni/2026-07-01/r1")
+
+
+def test_a_withdrawn_version_can_be_restored_with_a_later_revision() -> None:
+    """Provisional reading of ADR-0012 (module docstring): r3 restores after r1 and r2."""
+    restored = load(_tariff(f"{TARIFF_ID}/r3"), TariffPublication)
+    assert restored.publication.supersedes is None
+    assert ParsedId.of(restored.publication.id).revision == 3
+
+
+def test_the_file_says_schema_although_the_model_holds_schema_check() -> None:
+    text = render(load(_tariff(f"{TARIFF_ID}/r1"), TariffPublication))
+    assert '"schema": "valid"' in text
+    assert "schema_check" not in text
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        ('"schema": "valid"', '"schema": true', "schema"),
+        ('"overlap": "none"', '"overlap": "some"', "overlap"),
+        ('"documents": "all cited', '"documents": "most cited', "documents"),
+        ('"passed": 0', '"passed": -1', "greater than or equal to 0"),
+        ('"no_text_layer": 31', '"no_text_layer": -1', "greater than or equal to 0"),
+        ('"schema": "valid"', '"schema_check": "valid"', "schema"),
+    ],
+)
+def test_the_checks_record_accepts_only_passing_results(old: str, new: str, message: str) -> None:
+    with pytest.raises(ValidationError, match=message):
+        load(_tariff(f"{TARIFF_ID}/r1").replace(old, new), TariffPublication)
+
+
+def test_an_unknown_key_in_the_envelope_is_refused() -> None:
+    body = json.loads(_tariff(f"{TARIFF_ID}/r1"))
+    body["note"] = "extra"
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        load(canonical.dumps(body), TariffPublication)
+
+
+def test_a_vat_file_is_not_a_tariff_publication() -> None:
+    with pytest.raises(ValidationError):
+        load(_vat(f"{VAT_ID}/r1"), TariffPublication)
+
+
+@pytest.mark.parametrize(
+    "publication_id",
+    [
+        f"{TARIFF_ID}/r1\u0661",  # an Arabic-Indic digit one
+        "city-of-ekurhuleni/b-residential-1-phase/\u0662026-07-01/r1",
+    ],
+)
+def test_only_ascii_digits_make_an_id(publication_id: str) -> None:
+    with pytest.raises(PublicationError, match="not a publication id"):
+        ParsedId.of(publication_id)
+
+
+def test_an_impossible_date_in_an_id_is_a_publication_error() -> None:
+    with pytest.raises(PublicationError, match="not a valid date"):
+        ParsedId.of("city-of-ekurhuleni/b-residential-1-phase/2026-02-30/r1")
+
+
+def test_load_bytes_reads_strict_utf8() -> None:
+    text = _tariff(f"{TARIFF_ID}/r1")
+    assert load_bytes(text.encode("utf-8"), TariffPublication) == load(text, TariffPublication)
+    with pytest.raises(CanonicalJsonError, match="byte-order mark"):
+        load_bytes(b"\xef\xbb\xbf" + text.encode("utf-8"), TariffPublication)

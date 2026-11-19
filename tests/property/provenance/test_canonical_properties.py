@@ -6,16 +6,26 @@ caught by P2-9's no-change check.
 
 import json
 
-from hypothesis import given
+from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from munisense.provenance import canonical
 from munisense.provenance.canonical import CanonicalJsonError
 
-scalars = st.none() | st.booleans() | st.integers() | st.text()
+scalars = (
+    st.none()
+    | st.booleans()
+    | st.integers(-(10**30) + 1, 10**30 - 1)
+    | st.text(alphabet=st.characters(exclude_categories=["Cs"]))
+)
 values = st.recursive(
     scalars,
-    lambda inner: st.lists(inner, max_size=4) | st.dictionaries(st.text(), inner, max_size=4),
+    lambda inner: (
+        st.lists(inner, max_size=4)
+        | st.dictionaries(
+            st.text(alphabet=st.characters(exclude_categories=["Cs"])), inner, max_size=4
+        )
+    ),
     max_leaves=20,
 )
 
@@ -36,8 +46,7 @@ def test_changes_of_whitespace_or_formatting_are_caught(value: object, change: s
         "extra-newline": text + "\n",
         "ascii": json.dumps(value, indent=2, ensure_ascii=True) + "\n",
     }[change]
-    if changed == text:  # the change did nothing for this value (for example, a scalar)
-        return
+    assume(changed != text)  # the change does nothing for some values (for example, scalars)
     try:
         canonical.check(changed)
     except CanonicalJsonError:

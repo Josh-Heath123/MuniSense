@@ -9,13 +9,24 @@ The envelope's `publication` record carries the record time (`published_at`) and
 publish step's own automatic results (`checks`); human verification lives in each value's
 `Verified` status. The identity rules of ADR-0012 are checked here:
 
-- the id is `<scope>/<code>/<effective-from>/r<N>`, and matches the content it holds;
-- a first publication (`r1`) supersedes nothing; every later revision supersedes the
-  revision before it of the same tariff (`r<N-1>`), possibly filed under another date;
+- the id is `<scope>/<code>/<effective-from>/r<N>` (ASCII digits only), and matches the
+  content it holds;
+- a publication that supersedes another is the revision after it (`r<N+1>`) of the same
+  tariff, possibly filed under another date;
 - a withdrawal has no version, supersedes something, and is filed under the same date.
 
-Whether the superseded publication exists, is not itself a withdrawal and is superseded only
-once is a property of the whole set of files; the publish step and the loader check it.
+**Provisional reading (for the architect, P2-9 checkpoint):** ADR-0012 says a first
+publication is `r1`, and that a withdrawn version is restored by publishing it again with
+`supersedes: null`. Under its own date `r1` already exists, so a publication that supersedes
+nothing may have any revision here; the publish step gives it the next free revision.
+
+Rules about the whole set of files are not visible to one file: the superseded publication
+exists, is not a withdrawal and has only this successor; the file's path agrees with its id;
+the next free revision. The publish step (P2-8), the CI check (P2-9) and the loader (P2-11)
+check them.
+
+`load` raises `CanonicalJsonError`, `PublicationError` (both `ProvenanceError`) or Pydantic's
+`ValidationError`.
 """
 
 import re
@@ -23,26 +34,22 @@ from collections.abc import Callable
 from datetime import date
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import AwareDatetime, Field, StringConstraints, model_validator
+from pydantic import AwareDatetime, ConfigDict, Field, StringConstraints, model_validator
 
 from munisense.domain.base import DomainModel
 from munisense.domain.citations.model import Handle, Text
 from munisense.domain.money import VatRate
 from munisense.domain.tariffs import TariffVersion
 from munisense.provenance import canonical
+from munisense.provenance.errors import PublicationError
 
-ID_PATTERN = (
-    r"^([a-z0-9][a-z0-9_-]{0,63})/([a-z0-9][a-z0-9_-]{0,63})/(\d{4}-\d{2}-\d{2})/r([1-9]\d{0,3})$"
-)
+# ASCII digits only (`[0-9]`, never `\\d`, which also matches other scripts' digits).
+_CODE = r"[a-z0-9][a-z0-9_-]{0,63}"
+ID_PATTERN = rf"^({_CODE})/({_CODE})/([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})/r([1-9][0-9]{{0,3}})$"
 PublicationId = Annotated[str, StringConstraints(pattern=ID_PATTERN)]
 
 VAT_SCOPE = "vat"
 VAT_CODE = "south-africa"
-SCHEMA_VERSIONS = (1,)
-
-
-class PublicationError(ValueError):
-    """A publication file is malformed, or its identity does not match its content."""
 
 
 class ParsedId(DomainModel):
@@ -58,9 +65,12 @@ class ParsedId(DomainModel):
             msg = f"not a publication id: {publication_id!r}"
             raise PublicationError(msg)
         scope, code, day, revision = match.groups()
-        return cls(
-            scope=scope, code=code, effective_from=date.fromisoformat(day), revision=int(revision)
-        )
+        try:
+            effective_from = date.fromisoformat(day)
+        except ValueError:
+            msg = f"not a valid date in publication id: {publication_id!r}"
+            raise PublicationError(msg) from None
+        return cls(scope=scope, code=code, effective_from=effective_from, revision=int(revision))
 
     @property
     def key(self) -> tuple[str, str]:
@@ -76,12 +86,23 @@ class CitationCheckCounts(DomainModel):
 
 
 class PublishChecks(DomainModel):
-    """The publish step's own automatic results, recorded when it wrote the file."""
+    """The publish step's own automatic results, recorded when it wrote the file.
+
+    The keys are those of ADR-0012's example. `schema` is held as `schema_check`, because
+    Pydantic models already have a `schema` attribute; the file still says `schema`.
+    """
+
+    model_config = ConfigDict(
+        **DomainModel.model_config,
+        validate_by_alias=True,
+        validate_by_name=False,
+        serialize_by_alias=True,
+    )
 
     tool_version: Text
-    schema_valid: Literal[True]
-    documents_listed_and_hashes_match: Literal[True]
-    overlaps: Literal["none"]
+    schema_check: Annotated[Literal["valid"], Field(alias="schema")]
+    documents: Literal["all cited documents in a manifest; hashes match"]
+    overlap: Literal["none"]
     citation_check: CitationCheckCounts
 
 
@@ -97,10 +118,7 @@ class PublicationRecord(DomainModel):
     def _revision_chain(self) -> Self:
         own = ParsedId.of(self.id)
         if self.supersedes is None:
-            if own.revision != 1:
-                msg = f"{self.id}: a revision after r1 must supersede the revision before it"
-                raise ValueError(msg)
-            return self
+            return self  # any revision: see the provisional reading in the module docstring
         previous = ParsedId.of(self.supersedes)
         if previous.key != own.key:
             msg = f"{self.id}: may supersede only a publication of the same tariff"
@@ -171,13 +189,18 @@ class VatRatePublication(DomainModel):
 
 Publication = TariffPublication | VatRatePublication
 
-# One converter per older schema version, each turning that version's JSON into the current
-# one. Only version 1 exists, so there is nothing to convert yet (ADR-0012, section 1).
+# For each known schema version, a function from that version's JSON to the current one's.
+# The current version maps to itself. Only version 1 exists. When version 2 arrives: each
+# converter goes straight to the current version, takes the publication kind into account,
+# and is tested against every committed file of its version (ADR-0012, section 1).
 CONVERTERS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {1: lambda value: value}
 
 
 def load[P: (TariffPublication, VatRatePublication)](text: str, kind: type[P]) -> P:
-    """Check canonical form, convert from the file's schema version, then validate."""
+    """Check canonical form, convert from the file's schema version, then validate.
+
+    `text` is the decoded file; `load_bytes` reads a file's bytes as strict UTF-8.
+    """
     value = canonical.check(text)
     if not isinstance(value, dict):
         msg = "a publication file holds one JSON object"
@@ -192,3 +215,9 @@ def load[P: (TariffPublication, VatRatePublication)](text: str, kind: type[P]) -
 def render(publication: Publication) -> str:
     """The canonical text of a publication, keys in the models' own order."""
     return canonical.dumps(canonical.parse(publication.model_dump_json()))
+
+
+def load_bytes[P: (TariffPublication, VatRatePublication)](data: bytes, kind: type[P]) -> P:
+    """`load` for a file's bytes: strict UTF-8 without a byte-order mark."""
+    canonical.check_bytes(data)
+    return load(data.decode("utf-8"), kind)
