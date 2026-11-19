@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from munisense.domain.citations import TextCheck, Verified
 from munisense.domain.money import VatRate
@@ -577,8 +577,9 @@ def test_a_canonical_but_invalid_draft_is_refused(data: Path) -> None:
     body = json.loads(vat_draft(data).read_text("utf-8"))
     body["percent"]["value"] = "fifteen"
     vat_draft(data).write_text(canonical.dumps(body), encoding="utf-8")
-    with pytest.raises(ValidationError):
-        _publish(data, draft=vat_draft(data))
+    reasons = _refused(data, draft=vat_draft(data))
+    assert reasons
+    assert all(r.startswith("the draft is not valid: percent.value:") for r in reasons)
 
 
 @pytest.mark.parametrize("where", ["outside", "folder"])
@@ -604,8 +605,13 @@ def test_a_free_basic_allocation_cannot_be_published_before_td_10(
 ) -> None:
     components = (*original.components, fixture_free_basic("50"))
     _write_tariff(data, original.model_copy(update={"components": components}))
-    assert _refused(data, draft=tariff_draft(data)) == [
-        "a free basic allocation cannot be published until TD-10 is done (E49)"
+    wrong = data / "drafts" / "city-of-ekurhuleni" / "2025-26" / "b-residential-1-phase.json"
+    wrong.parent.mkdir()
+    tariff_draft(data).rename(wrong)
+    assert _refused(data, draft=wrong) == [  # every reason is listed, not only the first
+        "a free basic allocation cannot be published until TD-10 is done (E49)",
+        "this draft belongs at drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json,"
+        " not drafts/city-of-ekurhuleni/2025-26/b-residential-1-phase.json",
     ]
 
 

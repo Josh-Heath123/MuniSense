@@ -226,31 +226,20 @@ def _load_draft(data: Path, draft: Path) -> tuple[TariffVersion | VatRate, str, 
             )
         return rate, VAT_SCOPE, VAT_CODE, reasons
     version = load_file(draft, TariffVersion)
+    reasons = []
     if any(isinstance(c, FreeBasicAllocation) for c in version.components):
         # E49: all of TD-10 before the first tariff with a free basic allocation is published.
-        return (
-            version,
-            version.supplier,
-            version.tariff_code,
-            ["a free basic allocation cannot be published until TD-10 is done (E49)"],
-        )
+        reasons.append("a free basic allocation cannot be published until TD-10 is done (E49)")
     catalogue = load_file(data / "catalogue" / "suppliers.json", SupplierCatalogue)
     try:
         supplier = catalogue.by_code(version.supplier)
     except KeyError:
-        return (
-            version,
-            version.supplier,
-            version.tariff_code,
-            [f"supplier {version.supplier} is not in the catalogue"],
-        )
+        reasons.append(f"supplier {version.supplier} is not in the catalogue")
+        return version, version.supplier, version.tariff_code, reasons
     year = supplier.tariff_year(version.effective_from.value)
     expected = (version.supplier, year, f"{version.tariff_code}.json")
-    reasons = (
-        []
-        if relative.parts == expected
-        else [f"this draft belongs at drafts/{'/'.join(expected)}, not drafts/{relative}"]
-    )
+    if relative.parts != expected:
+        reasons.append(f"this draft belongs at drafts/{'/'.join(expected)}, not drafts/{relative}")
     return version, version.supplier, version.tariff_code, reasons
 
 
@@ -267,7 +256,12 @@ def publish(  # one refusal list, built in order
     else:
         if request.draft is None:
             raise PublishRefusedError(["give a draft to publish, or --withdraw <id>"])
-        version, scope, code, reasons = _load_draft(data, request.draft)
+        try:
+            version, scope, code, reasons = _load_draft(data, request.draft)
+        except ValidationError as error:
+            raise PublishRefusedError(
+                [f"the draft is not valid: {_where(e['loc'])}: {e['msg']}" for e in error.errors()]
+            ) from None
         day = _valid_period(version)[0]
         supersedes = request.supersedes
     existing = _load_existing(data, scope, code)
@@ -328,7 +322,7 @@ def publish(  # one refusal list, built in order
     except ValidationError as error:
         raise PublishRefusedError(
             [
-                f"the publication is not valid: {'.'.join(map(str, e['loc']))}: {e['msg']}"
+                f"the publication is not valid: {_where(e['loc'])}: {e['msg']}"
                 for e in error.errors()
             ]
         ) from None
@@ -342,6 +336,10 @@ def publish(  # one refusal list, built in order
         except OSError as error:
             result.draft_not_removed = f"{type(error).__name__}: {error}"
     return result
+
+
+def _where(location: tuple[int | str, ...]) -> str:
+    return ".".join(map(str, location))
 
 
 def _write_new(target: Path, data: bytes) -> None:
@@ -361,6 +359,14 @@ def _write_new(target: Path, data: bytes) -> None:
         os.link(temporary, target)
     finally:
         temporary.unlink(missing_ok=True)
+    try:  # make the new folder entry durable too; git remains the lasting record
+        folder = os.open(target.parent, os.O_RDONLY)
+        try:
+            os.fsync(folder)
+        finally:
+            os.close(folder)
+    except OSError:  # pragma: no cover  # some file systems cannot sync a folder
+        pass
 
 
 def main(
