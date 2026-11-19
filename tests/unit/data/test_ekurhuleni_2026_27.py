@@ -47,7 +47,7 @@ E29_REASON = "citation check not built until P2"
 
 
 def tariff(phase: str) -> TariffVersion:
-    return load_file(TARIFFS / f"tariff-b-residential-{phase}.json", TariffVersion)
+    return load_file(TARIFFS / f"b-residential-{phase}.json", TariffVersion)
 
 
 def vat_table() -> VatTable:

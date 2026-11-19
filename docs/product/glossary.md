@@ -5,6 +5,9 @@
 | **Supplier** | The body that bills the customer for electricity: a municipality (or its utility, such as City Power) or Eskom directly |
 | **Tariff** | A named price structure published by a supplier for a customer class, for example Ekurhuleni "Tariff A" |
 | **Tariff version** | One tariff's prices for one validity period, such as 1 July 2026 to 30 June 2027. Corrections create new versions |
+| **Draft** | A bare tariff version or VAT rate under `data/drafts/`, committed but not published; never used in a calculation except by the `poe demo` example (TD-13) |
+| **Supplier catalogue** | `data/catalogue/suppliers.json`: every supplier's code, name, kind and cited tariff-year start month |
+| **Source manifest** | `data/sources/<publisher>/sources.json`: the committed source documents of one publisher, by SHA-256, with URL, retrieval date, approval, page count and text layer |
 | **Publication** | One committed, immutable file under `data/tariffs/` or `data/vat/`: a tariff version or VAT rate in an envelope that records when it was published (record time) and the publish step's own checks (ADR-0012) |
 | **Revision** | The `r<N>` in a publication's id and file name. A correction or withdrawal is the next revision of what it supersedes |
 | **Withdrawal** | A publication with no version: it ends what MuniSense believes about a published version, from its own record time, and puts nothing in its place |

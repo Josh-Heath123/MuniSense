@@ -21,7 +21,8 @@ def load_file[M: BaseModel](path: Path, model: type[M]) -> M:
 
 def write_file(path: Path, value: BaseModel) -> None:
     """Write `value` in canonical form, in the model's own key order."""
-    path.write_text(canonical.dumps(canonical.parse(value.model_dump_json())), encoding="utf-8")
+    text = canonical.dumps(canonical.parse(value.model_dump_json()))
+    path.write_bytes(text.encode("utf-8"))  # bytes: no newline translation on any platform
 
 
 def load_vat_table(folder: Path) -> VatTable:

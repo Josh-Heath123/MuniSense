@@ -16,7 +16,7 @@ from munisense.provenance.drafts import load_file, load_vat_table
 
 ROOT = Path(__file__).resolve().parents[3]
 DRAFTS = ROOT / "data" / "drafts"
-TARIFF = DRAFTS / "city-of-ekurhuleni" / "2026-27" / "tariff-b-residential-1-phase.json"
+TARIFF = DRAFTS / "city-of-ekurhuleni" / "2026-27" / "b-residential-1-phase.json"
 VAT = DRAFTS / "vat" / "south-africa"
 JULY_2026 = BillingPeriod(start=date(2026, 7, 1), end=date(2026, 8, 1))
 KWH = Decimal(350)

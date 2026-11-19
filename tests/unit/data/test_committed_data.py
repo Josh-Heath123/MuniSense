@@ -5,13 +5,14 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from pydantic import BaseModel
 from pypdf import PdfReader
 
 from munisense.catalogue.suppliers import SupplierCatalogue
 from munisense.domain.money import VatRate
 from munisense.domain.tariffs import TariffVersion
 from munisense.provenance import canonical
-from munisense.provenance.drafts import load_file, load_vat_table
+from munisense.provenance.drafts import load_file, load_vat_table, write_file
 from munisense.provenance.sources import SourceManifest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -34,12 +35,13 @@ def _ids(paths: list[Path]) -> list[str]:
 
 def test_the_layout_holds_the_expected_files() -> None:
     assert _ids(TARIFF_DRAFTS) == [
-        "drafts/city-of-ekurhuleni/2026-27/tariff-b-residential-1-phase.json",
-        "drafts/city-of-ekurhuleni/2026-27/tariff-b-residential-3-phase.json",
+        "drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json",
+        "drafts/city-of-ekurhuleni/2026-27/b-residential-3-phase.json",
     ]
     assert _ids(VAT_DRAFTS) == ["drafts/vat/south-africa/2018-04-01.json"]
     assert _ids(MANIFESTS) == ["sources/ekurhuleni/sources.json", "sources/sars/sources.json"]
-    assert not list((DATA / "drafts").glob("*.json")), "no draft outside its folder"
+    every = sorted((DATA / "drafts").rglob("*.json"))
+    assert every == sorted([*TARIFF_DRAFTS, *VAT_DRAFTS]), "no draft outside its folder"
 
 
 @pytest.mark.parametrize("path", CANONICAL_FILES, ids=_ids(CANONICAL_FILES))
@@ -58,7 +60,7 @@ def test_a_tariff_draft_sits_where_its_content_says(path: Path) -> None:
     assert (path.parts[-3], path.parts[-2], path.stem) == (
         version.supplier,
         year,
-        f"tariff-{version.tariff_code}",
+        version.tariff_code,
     )
 
 
@@ -103,9 +105,27 @@ def test_each_manifest_agrees_with_its_readme() -> None:
     for folder, manifest in _manifests():
         readme = (folder / "README.md").read_text(encoding="utf-8")
         for document in manifest.documents:
-            assert document.file in readme
-            assert document.sha256 in readme
-            assert document.url in readme
+            for written in (
+                document.file,
+                document.sha256,
+                document.url,
+                document.retrieved_on.isoformat(),
+                document.approval,
+                f"{document.pages} pages",
+            ):
+                assert written in readme, (document.file, written)
+
+
+def test_each_text_layer_flag_matches_the_pdf() -> None:
+    """A scan yields no text on any page; a text document yields text on some page.
+
+    The flag decides the citation check's `no_text_layer` outcome (P2-7).
+    """
+    for folder, manifest in _manifests():
+        for document in manifest.documents:
+            pages = PdfReader(folder / document.file).pages
+            has_text = any(page.extract_text().strip() for page in pages)
+            assert has_text is document.text_layer, document.file
 
 
 def _cited_documents(value: object) -> Iterator[str]:
@@ -126,3 +146,19 @@ def test_every_citation_names_a_listed_document() -> None:
         cited |= set(_cited_documents(canonical.check_bytes(path.read_bytes())))
     assert cited
     assert cited <= listed
+
+
+MODELS: dict[Path, type[BaseModel]] = {
+    **dict.fromkeys(TARIFF_DRAFTS, TariffVersion),
+    **dict.fromkeys(VAT_DRAFTS, VatRate),
+    DATA / "catalogue" / "suppliers.json": SupplierCatalogue,
+    **dict.fromkeys(MANIFESTS, SourceManifest),
+}
+
+
+@pytest.mark.parametrize("path", list(MODELS), ids=_ids(list(MODELS)))
+def test_every_data_file_is_what_its_model_writes(path: Path, tmp_path: Path) -> None:
+    """Keys in the model's order, and nothing the model would normalise (ADR-0012 s.1)."""
+    target = tmp_path / path.name
+    write_file(target, load_file(path, MODELS[path]))
+    assert target.read_bytes() == path.read_bytes()

@@ -25,7 +25,7 @@ from munisense.provenance.publication import (
 
 ROOT = Path(__file__).resolve().parents[3]
 TARIFF = TariffVersion.model_validate_json(
-    (ROOT / "data/drafts/city-of-ekurhuleni/2026-27/tariff-b-residential-1-phase.json").read_text(
+    (ROOT / "data/drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json").read_text(
         encoding="utf-8"
     )
 )
