@@ -1,6 +1,7 @@
 """The committed data files agree with each other and with ADR-0012's layout (P2-6)."""
 
 import hashlib
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -109,11 +110,15 @@ def test_each_manifest_agrees_with_its_readme() -> None:
                 document.file,
                 document.sha256,
                 document.url,
+                document.title,
                 document.retrieved_on.isoformat(),
                 document.approval,
                 f"{document.pages} pages",
             ):
-                assert written in readme, (document.file, written)
+                # Whole words only: "E3" must not pass inside "E33", nor "2 pages" in "32 pages".
+                pattern = rf"(?<![\w.-]){re.escape(written)}(?![\w-])"
+                assert re.search(pattern, readme), (document.file, written)
+            assert manifest.publisher in readme
 
 
 def test_each_text_layer_flag_matches_the_pdf() -> None:
