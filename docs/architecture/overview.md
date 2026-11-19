@@ -28,8 +28,8 @@ src/munisense/
     money/        ExactDecimal, exact(), Money, Rate, RateUnit, CanonicalUnit, VatRate, VatTable, Quantisation, RoundingPolicy (Decimal only)
     tariffs/      TariffVersion (header + ordered components; PriceBasis), FixedCharge, FlatEnergy, BlockEnergy, SeasonalEnergy (Season, SeasonDates), Levy, FreeBasicAllocation, VatTreatment, BillingPolicy; later TOU calendars
     billing/      calculate_bill() -> Bill (LineItem with Sources by role, BillWarning); calculate_period() -> PeriodBill (split at months, versions, seasons and VAT changes; ADR-0011); ConsumptionProfile (PeriodTotal; TimeOfUseBuckets refused until P4), BillingPeriod; calculate_purchase() / calculate_month() -> Purchase (prepaid, P1-14)
-  catalogue/      suppliers, customer classes, supply areas
-  provenance/     canonical JSON (canonical.py) and the publication envelope: PublicationRecord, TariffPublication, VatRatePublication, withdrawals (publication.py, ADR-0012, P2-4); later SourceDocument records. The per-value Citation and status types live in domain/citations, because the domain may not import this package
+  catalogue/      suppliers (SupplierCatalogue, suppliers.py, P2-6), customer classes, supply areas
+  provenance/     canonical JSON (canonical.py) and the publication envelope: PublicationRecord, TariffPublication, VatRatePublication, withdrawals (publication.py, ADR-0012, P2-4); source manifests (SourceManifest, sources.py) and reading and writing data files in canonical form (drafts.py, P2-6). The per-value Citation and status types live in domain/citations, because the domain may not import this package
   ingestion/      draft format, parsers/helpers, validator, review-and-publish
   persistence/    SQLAlchemy models, repositories, Alembic migrations, as-of queries
   services/       use cases: calculate_bill, compare_tariffs, publish_version, ... (from P2). Today only
@@ -42,13 +42,16 @@ tests/
   unit/  property/  integration/  contract/  golden/
 migrations/       Alembic (P2)
 data/
-  drafts/         structured tariff drafts (committed; not reviewed or published), including
-                  the cited VAT table (drafts/vat/) and the P1-9 Ekurhuleni transcription
-  tariffs/        published tariff files, reviewed and committed: the source of truth
-                  (name and layout confirmed by the P2 storage ADR)
+  catalogue/      suppliers.json: supplier codes, names, kind, cited tariff-year start month
+  drafts/         bare versions in canonical form (committed; not published):
+                  <supplier>/<tariff-year>/<tariff-code>.json, and vat/south-africa/<start>.json
+                  (one VAT rate per file)
+  tariffs/        publications, immutable: <supplier>/<tariff-code>/<effective-from>.r<N>.json
+  vat/            VAT publications, immutable: south-africa/<effective-from>.r<N>.json
   golden/         anonymised golden bills (committed)
   observations/   user-provided figures that are not tariff data (committed; figures only)
-  sources/        source PDFs (committed; identified by SHA-256)
+  sources/        <publisher>/sources.json (the manifest) and the source PDFs (committed;
+                  identified by SHA-256), with a README of human notes per publisher
   private/        un-anonymised bills (git-ignored; never committed)
 ```
 

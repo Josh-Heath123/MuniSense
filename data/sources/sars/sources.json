@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "publisher": "South African Revenue Service",
+  "documents": [
+    {
+      "sha256": "5f6e4225703d6ba2f0d19bd0911fe580f787bcab4d1f8d6f421525051366ad1e",
+      "file": "rates-and-monetary-amounts-act-3-of-2026.pdf",
+      "title": "Rates and Monetary Amounts and Amendment of Revenue Laws Act 3 of 2026",
+      "url": "https://www.sars.gov.za/wp-content/uploads/Legal/AmendActs/Legal-LPrim-AA-2026-01-Rates-and-Monetary-Amounts-and-Amendment-of-Revenue-Laws-Act-3-of-2026-GG-54446-1-April-2026.pdf",
+      "retrieved_on": "2026-11-18",
+      "approval": "E33",
+      "pages": 32,
+      "text_layer": true
+    },
+    {
+      "sha256": "9204c3f8d0cea0200b84559f19bfa638d2f6eb6e2083ac633da4938eec52c31a",
+      "file": "vat-404-guide-for-vendors-2025-01.pdf",
+      "title": "VAT 404 Guide for Vendors",
+      "url": "https://www.sars.gov.za/wp-content/uploads/Ops/Guides/Legal-Pub-Guide-VAT404-VAT-404-Guide-for-Vendors.pdf",
+      "retrieved_on": "2026-11-18",
+      "approval": "E33",
+      "pages": 176,
+      "text_layer": true
+    }
+  ]
+}

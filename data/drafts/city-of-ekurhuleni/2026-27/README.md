@@ -4,8 +4,8 @@ Transcribed by Claude Code in P1-9 from the signed Schedule 2 (`data/sources/eku
 
 | File | Tariff | Basic charge | Energy |
 | --- | --- | --- | --- |
-| `tariff-b-residential-1-phase.json` | Tariff B (Residential), single-phase | R109.78 per point of supply per month (R1.1, page 4) | R3.3700 per kWh (R.3 and R.4, page 4) |
-| `tariff-b-residential-3-phase.json` | Tariff B (Residential), three-phase | R203.89 per point of supply per month (R1.2, page 4) | R3.3700 per kWh |
+| `b-residential-1-phase.json` | Tariff B (Residential), single-phase | R109.78 per point of supply per month (R1.1, page 4) | R3.3700 per kWh (R.3 and R.4, page 4) |
+| `b-residential-3-phase.json` | Tariff B (Residential), three-phase | R203.89 per point of supply per month (R1.2, page 4) | R3.3700 per kWh |
 
 Tariff B was chosen as the Ekurhuleni example tariff for P1 (E32). It was first described as the tariff of the owner's prepaid meter; that was wrong (E34): the owner's meter is not in Ekurhuleni and its supplier and tariff are unknown.
 

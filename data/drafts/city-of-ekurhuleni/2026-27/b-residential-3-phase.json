@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "supplier": "city-of-ekurhuleni",
-  "tariff_code": "b-residential-1-phase",
+  "tariff_code": "b-residential-3-phase",
   "customer_class": "residential",
   "printed_name": {
     "value": "TARIFF B (RESIDENTIAL)",
@@ -125,15 +125,14 @@
   "components": [
     {
       "schema_version": 1,
-      "kind": "fixed_charge",
       "name": "basic",
       "label": {
         "value": "Basic charge",
         "citation": {
           "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
           "page": 4,
-          "locator": "Basic Charge (Rand/month), R1.1",
-          "printed_text": "R1.1 Basic charge: 1 Phase: R/POS/month"
+          "locator": "Basic Charge (Rand/month), R1.2",
+          "printed_text": "R1.2 Basic charge: 3 Phase: R/POS/month"
         },
         "status": {
           "kind": "estimated",
@@ -153,16 +152,17 @@
           "reason": "citation check not built until P2; scanned page, no text layer; standard rating inferred: the schedule says only that VAT is excluded"
         }
       },
+      "kind": "fixed_charge",
       "rate": {
         "value": {
-          "value": "109.78",
+          "value": "203.89",
           "unit": "R/month"
         },
         "citation": {
           "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
           "page": 4,
-          "locator": "Basic Charge (Rand/month), R1.1, R/POS/month",
-          "printed_text": "R109.78"
+          "locator": "Basic Charge (Rand/month), R1.2, R/POS/month",
+          "printed_text": "R203.89"
         },
         "status": {
           "kind": "estimated",
@@ -172,7 +172,6 @@
     },
     {
       "schema_version": 1,
-      "kind": "seasonal_energy",
       "name": "energy",
       "label": {
         "value": "Energy charge",
@@ -200,6 +199,7 @@
           "reason": "citation check not built until P2; scanned page, no text layer; standard rating inferred: the schedule says only that VAT is excluded"
         }
       },
+      "kind": "seasonal_energy",
       "seasons": [
         {
           "name": "high_demand",

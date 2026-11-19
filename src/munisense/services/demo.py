@@ -10,13 +10,14 @@ from decimal import Decimal
 from pathlib import Path
 
 from munisense.domain.billing import Bill, BillingPeriod, PeriodTotal, SourceRole, calculate_bill
-from munisense.domain.money import Money, VatTable
+from munisense.domain.money import Money
 from munisense.domain.tariffs import TariffVersion
+from munisense.provenance.drafts import load_file, load_vat_table
 
 ROOT = Path(__file__).resolve().parents[3]
 DRAFTS = ROOT / "data" / "drafts"
-TARIFF = DRAFTS / "ekurhuleni" / "2026-27" / "tariff-b-residential-1-phase.json"
-VAT = DRAFTS / "vat" / "south-africa.json"
+TARIFF = DRAFTS / "city-of-ekurhuleni" / "2026-27" / "b-residential-1-phase.json"
+VAT = DRAFTS / "vat" / "south-africa"
 JULY_2026 = BillingPeriod(start=date(2026, 7, 1), end=date(2026, 8, 1))
 KWH = Decimal(350)
 
@@ -29,8 +30,8 @@ DOCUMENTS = {
 
 def example_bill() -> Bill:
     """Tariff B, single-phase, July 2026, 350 kWh, priced from the drafts."""
-    version = TariffVersion.model_validate_json(TARIFF.read_text(encoding="utf-8"))
-    vat_table = VatTable.model_validate_json(VAT.read_text(encoding="utf-8"))
+    version = load_file(TARIFF, TariffVersion)
+    vat_table = load_vat_table(VAT)
     return calculate_bill(version, JULY_2026, PeriodTotal(kwh=KWH), vat_table)
 
 

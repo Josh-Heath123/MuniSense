@@ -1,6 +1,6 @@
 # City of Ekurhuleni: source documents
 
-Committed source PDFs (ADR-0006). Each is identified by its SHA-256; citations name that hash, not the file name. Downloaded only from the official municipal website (E26).
+Committed source PDFs (ADR-0006), listed for machines in `sources.json` (P2-6; a test checks that it agrees with this file). Each is identified by its SHA-256; citations name that hash, not the file name. Downloaded only from the official municipal website (E26).
 
 ## Electricity tariffs 2026/27 (the document we cite)
 
