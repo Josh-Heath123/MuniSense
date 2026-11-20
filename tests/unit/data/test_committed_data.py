@@ -214,7 +214,11 @@ def _cited_documents(value: object) -> Iterator[str]:
 def test_every_citation_names_a_listed_document() -> None:
     listed = {d.sha256 for _, m in _manifests() for d in m.documents}
     cited: set[str] = set()
-    drafts = [*_tariff_drafts(DATA / "drafts"), *_vat_drafts(DATA / "drafts")]
+    drafts = [
+        path
+        for root in DRAFT_ROOTS.values()
+        for path in [*_tariff_drafts(root), *_vat_drafts(root)]
+    ]
     for path in [
         *TARIFF_PUBLICATIONS,
         *VAT_PUBLICATIONS,
