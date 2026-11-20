@@ -10,6 +10,7 @@ environment: setting up a deployed database is a P9 decision.
   the migration role creates, now or later. Its sessions are read-only by default. It
   cannot create, write, create temporary tables or run functions the migration role makes.
 - Neither role is a superuser, and neither may create databases or roles.
+- The `btree_gist` extension, which the schema's exclusion constraints need (P2-10).
 
 Passwords are turned into SCRAM verifiers on the client, so the plaintext never reaches the
 server or its log. Statements go to the driver directly, so a `:word` in a verifier is
@@ -69,6 +70,9 @@ def bootstrap(admin: DatabaseUrl, app: DatabaseUrl, migration: DatabaseUrl) -> N
         statements = [
             f"REVOKE ALL ON DATABASE {database} FROM PUBLIC",
             f"GRANT CONNECT ON DATABASE {database} TO {reader}, {owner}",
+            # The exclusion constraints on valid and record time need btree_gist, and only
+            # the superuser may create it (the migration role lacks CREATE on the database).
+            "CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public",
             f"CREATE SCHEMA IF NOT EXISTS {SCHEMA} AUTHORIZATION {owner}",
             f"ALTER SCHEMA {SCHEMA} OWNER TO {owner}",
             f"REVOKE ALL ON SCHEMA {SCHEMA} FROM PUBLIC",

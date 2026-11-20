@@ -129,7 +129,8 @@ markers = [
 # --------------------------------------------------------------- coverage
 
 [tool.coverage.run]
-source = ["munisense"]
+# Alembic loads migrations by file path, so they are measured by path (P2-10).
+source = ["munisense", "src/munisense/persistence/migrations"]
 branch = true
 
 [tool.coverage.report]
