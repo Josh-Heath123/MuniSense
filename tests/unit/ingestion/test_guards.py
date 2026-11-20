@@ -318,17 +318,50 @@ def test_an_added_publication_that_overlapped_when_published_is_refused(repo: Pa
     )
 
 
-def test_an_added_withdrawal_must_record_zero_counts(repo: Path) -> None:
-    second = _second(repo, Clock(START + timedelta(minutes=30)), withdraw=True)
-    body = json.loads(second.read_text("utf-8"))
-    body["publication"]["checks"]["citation_check"]["passed"] = 3
-    second.write_text(canonical.dumps(body), encoding="utf-8")
+def test_a_revision_gap_is_refused(repo: Path) -> None:
+    (repo / FOLDER / "2026-07-01.r1.json").rename(repo / FOLDER / "2026-07-01.r3.json")
+    body = json.loads((repo / FOLDER / "2026-07-01.r3.json").read_text("utf-8"))
+    body["publication"]["id"] = f"{TARIFF}/2026-07-01/r3"
+    (repo / FOLDER / "2026-07-01.r3.json").write_text(canonical.dumps(body), encoding="utf-8")
+    assert problems(repo) == [
+        f"{TARIFF}/2026-07-01: revisions are not r1 to r3 without gaps (missing r1, r2; ADR-0013)"
+    ]
+
+
+def test_an_added_withdrawal_and_a_restore_pass(
+    repo: Path,
+) -> None:
+    clock = Clock(START + timedelta(minutes=30))
+    data = repo / "data"
+    publish(data, Request(reason="t", withdraw=f"{TARIFF}/2026-07-01/r1"), clock, checker())
+    publish(data, Request(reason="t", draft=_draft(repo)), clock, checker())  # restore: r3
     git(repo, "add", "-A")
-    git(repo, "commit", "-q", "-m", "withdrawal")
+    git(repo, "commit", "-q", "-m", "withdraw and restore")
+    assert (repo / FOLDER / "2026-07-01.r3.json").exists()
+    assert (
+        problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+        == []
+    )
+
+
+def test_a_publication_pull_request_may_change_nothing_outside_data(repo: Path) -> None:
+    _second(repo, Clock(START + timedelta(minutes=30)))
+    (repo / "README.md").write_text("also changed\n", encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "publication and code")
     found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
-    assert any(
-        "differs from this run's {'passed': 0, 'no_text_layer': 0, 'failed': 0}" in p for p in found
-    ), found
+    assert (
+        "a pull request that adds or changes publications may change nothing outside data/"
+        " (W20); it also changes README.md"
+    ) in found
+
+
+def test_a_code_pull_request_without_publications_may_change_anything(repo: Path) -> None:
+    (repo / "README.md").write_text("code only\n", encoding="utf-8")
+    (repo / "data/drafts/note.md").write_text("draft notes\n", encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "code")
+    assert problems(repo, base="main", pull_request=True, clock=lambda: START) == []
 
 
 # --- the command -----------------------------------------------------------------------

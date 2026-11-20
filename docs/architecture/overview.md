@@ -1,6 +1,6 @@
 # Architecture overview
 
-_Status: binding. Decided in ADR-0002 to ADR-0011, accepted by the owner on 2026-11-17 (ADR-0011 on 2026-11-18)._
+_Status: binding. Decided in ADR-0002 to ADR-0013, accepted by the owner on 2026-11-17 (ADR-0011 and ADR-0012 on 2026-11-18 and 2026-11-19, ADR-0013 on 2026-11-19)._
 
 ## Shape
 

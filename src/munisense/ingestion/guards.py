@@ -58,6 +58,7 @@ from munisense.provenance.errors import ProvenanceError
 from munisense.provenance.publication import (
     VAT_CODE,
     ParsedId,
+    PublishChecks,
     TariffPublication,
     VatRatePublication,
     load_bytes,
@@ -205,6 +206,19 @@ def check_set(data: Path, loaded: list[Loaded]) -> list[str]:  # one rule per bl
     for target, ids in sorted(successors.items()):
         if len(ids) > 1:
             problems.append(f"{target} has more than one successor: {', '.join(sorted(ids))}")
+    revisions: dict[tuple[str, str, str], set[int]] = {}
+    for publication in loaded:
+        parsed = ParsedId.of(publication.id)
+        revisions.setdefault((*parsed.key, parsed.effective_from.isoformat()), set()).add(
+            parsed.revision
+        )
+    for (scope, code, day), found in sorted(revisions.items()):
+        if found != set(range(1, max(found) + 1)):
+            missing = sorted(set(range(1, max(found) + 1)) - found)
+            problems.append(
+                f"{scope}/{code}/{day}: revisions are not r1 to r{max(found)} without gaps"
+                f" (missing {', '.join(f'r{n}' for n in missing)}; ADR-0013)"
+            )
     return problems
 
 
@@ -333,13 +347,39 @@ def check_added(  # one list of problems, check by check
                     problems.append(
                         f"{publication.id}: overlaps {other.id}, current when it was published"
                     )
-        recorded = record.checks.citation_check.model_dump()
+        if version is None:
+            continue  # a withdrawal's own checks: its target is checked in check_set
+        checks = record.checks
+        recorded = checks.citation_check.model_dump() if isinstance(checks, PublishChecks) else None
         if recorded != counts:
             problems.append(
                 f"{publication.id}: the recorded citation check {recorded} differs from"
                 f" this run's {counts}"
             )
     return problems
+
+
+def data_only(repo: Path, base: str) -> list[str]:
+    """W20 (E51): a pull request that adds or changes a publication changes nothing outside
+    `data/`. It runs the pull request's own code: it catches accidents, not tampering."""
+    commit = _git(repo, "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}").strip()
+    merge_base = _git(repo, "merge-base", commit, "HEAD").strip()
+    names = [
+        n
+        for n in _git(repo, "diff", "--name-only", "-z", "--no-renames", merge_base, "HEAD").split(
+            "\0"
+        )
+        if n
+    ]
+    publications = [n for n in names if n.casefold().startswith(("data/tariffs/", "data/vat/"))]
+    outside = sorted(n for n in names if not n.startswith("data/"))
+    if publications and outside:
+        return [
+            "a pull request that adds or changes publications may change nothing outside"
+            f" data/ (W20); it also changes {', '.join(outside[:5])}"
+            + (" and more" if len(outside) > 5 else "")
+        ]
+    return []
 
 
 def run_checks(
@@ -356,6 +396,7 @@ def run_checks(
         added, changed = changes_since(data.parent, base)
         problems += changed
         if pull_request:
+            problems += data_only(data.parent, base)
             problems += check_added(data, loaded, added, clock(), checker)
     return problems
 

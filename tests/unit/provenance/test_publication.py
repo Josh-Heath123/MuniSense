@@ -34,27 +34,39 @@ TARIFF_ID = "city-of-ekurhuleni/b-residential-1-phase/2026-07-01"
 VAT_ID = "vat/south-africa/2018-04-01"
 
 
-def _record(publication_id: str, supersedes: str | None = None) -> dict[str, Any]:
+def _record(
+    publication_id: str, supersedes: str | None = None, *, withdrawal: bool = False
+) -> dict[str, Any]:
+    checks: dict[str, Any] = (
+        {
+            "kind": "withdrawal",
+            "tool_version": "munisense 0.0.0",
+            "withdrawn": "exists and is current",
+        }
+        if withdrawal
+        else {
+            "kind": "version",
+            "tool_version": "munisense 0.0.0",
+            "schema": "valid",
+            "documents": "all cited documents in a manifest; hashes match",
+            "overlap": "none",
+            "citation_check": {"passed": 0, "no_text_layer": 31, "failed": 0},
+        }
+    )
     return {
         "id": publication_id,
         "published_at": "2026-12-01T09:30:00+02:00",
         "published_by": "owner",
         "supersedes": supersedes,
         "reason": "test publication",
-        "checks": {
-            "tool_version": "munisense 0.0.0",
-            "schema": "valid",
-            "documents": "all cited documents in a manifest; hashes match",
-            "overlap": "none",
-            "citation_check": {"passed": 0, "no_text_layer": 31, "failed": 0},
-        },
+        "checks": checks,
     }
 
 
 def _tariff(publication_id: str, supersedes: str | None = None, *, version: bool = True) -> str:
     body = {
         "schema_version": 1,
-        "publication": _record(publication_id, supersedes),
+        "publication": _record(publication_id, supersedes, withdrawal=not version),
         "version": json.loads(TARIFF.model_dump_json()) if version else None,
     }
     return canonical.dumps(body)
@@ -63,7 +75,7 @@ def _tariff(publication_id: str, supersedes: str | None = None, *, version: bool
 def _vat(publication_id: str, supersedes: str | None = None, *, version: bool = True) -> str:
     body = {
         "schema_version": 1,
-        "publication": _record(publication_id, supersedes),
+        "publication": _record(publication_id, supersedes, withdrawal=not version),
         "version": json.loads(VAT.rates[-1].model_dump_json()) if version else None,
     }
     return canonical.dumps(body)
@@ -103,12 +115,6 @@ def test_a_correction_may_move_to_another_effective_date() -> None:
 @pytest.mark.parametrize(
     ("publication_id", "supersedes", "message"),
     [
-        (
-            f"{TARIFF_ID}/r1",
-            "city-of-ekurhuleni/b-residential-1-phase/2026-06-01/r1",
-            "must be the revision after",
-        ),
-        (f"{TARIFF_ID}/r3", f"{TARIFF_ID}/r1", "must be the revision after"),
         (
             f"{TARIFF_ID}/r2",
             "city-of-ekurhuleni/b-residential-3-phase/2026-07-01/r1",
@@ -269,3 +275,33 @@ def test_load_bytes_reads_strict_utf8() -> None:
     assert load_bytes(text.encode("utf-8"), TariffPublication) == load(text, TariffPublication)
     with pytest.raises(CanonicalJsonError, match="byte-order mark"):
         load_bytes(b"\xef\xbb\xbf" + text.encode("utf-8"), TariffPublication)
+
+
+def test_any_revision_may_supersede_and_the_set_decides_the_number() -> None:
+    """ADR-0013: the number is the next free one under the date, which one file cannot see."""
+    publication = load(_tariff(f"{TARIFF_ID}/r5", f"{TARIFF_ID}/r1"), TariffPublication)
+    assert publication.publication.supersedes == f"{TARIFF_ID}/r1"
+
+
+@pytest.mark.parametrize("withdrawal", [True, False])
+def test_the_checks_must_match_what_the_file_holds(withdrawal: bool) -> None:
+    body = json.loads(_tariff(f"{TARIFF_ID}/r2", f"{TARIFF_ID}/r1", version=not withdrawal))
+    body["publication"]["checks"] = _record("x", withdrawal=not withdrawal)["checks"]
+    message = (
+        "a withdrawal records withdrawal checks"
+        if withdrawal
+        else "a version records version checks"
+    )
+    with pytest.raises(ValidationError, match=message):
+        load(canonical.dumps(body), TariffPublication)
+
+
+def test_a_withdrawal_checks_record_names_what_was_checked() -> None:
+    publication = load(
+        _tariff(f"{TARIFF_ID}/r2", f"{TARIFF_ID}/r1", version=False), TariffPublication
+    )
+    assert publication.publication.checks.model_dump() == {
+        "kind": "withdrawal",
+        "tool_version": "munisense 0.0.0",
+        "withdrawn": "exists and is current",
+    }
