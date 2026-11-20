@@ -10,10 +10,11 @@ from pydantic import BaseModel
 from pypdf import PdfReader
 
 from munisense.catalogue.suppliers import SupplierCatalogue
-from munisense.domain.money import VatTable
+from munisense.domain.money import VatRate, VatTable
+from munisense.domain.tariffs import TariffVersion
 from munisense.ingestion.guards import check_set, load_all
 from munisense.provenance import canonical
-from munisense.provenance.drafts import load_file, write_file
+from munisense.provenance.drafts import load_file, load_vat_table, write_file
 from munisense.provenance.publication import (
     TariffPublication,
     VatRatePublication,
@@ -21,6 +22,7 @@ from munisense.provenance.publication import (
     render,
 )
 from munisense.provenance.sources import SourceManifest
+from support.publishing import DRAFTS as FIXTURE_DRAFTS
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "data"
@@ -46,8 +48,81 @@ def test_the_layout_holds_the_expected_files() -> None:
     ]
     assert _ids(VAT_PUBLICATIONS) == ["vat/south-africa/2018-04-01.r1.json"]
     assert _ids(MANIFESTS) == ["sources/ekurhuleni/sources.json", "sources/sars/sources.json"]
-    # Every draft committed before P2-13 was published, then deleted (E55).
+    # Every draft committed before P2-13 was published, then deleted (E55). A draft
+    # committed later is checked by the draft tests below.
     assert not list((DATA / "drafts").rglob("*.json"))
+
+
+# ------------------------------------------------- drafts (committed ones, and the fixtures)
+#
+# `data/drafts/` holds no draft since P2-13, so each check also runs on the fixture drafts
+# (`tests/fixtures/drafts/`): a check that never meets a draft could not fail.
+
+DRAFT_ROOTS = {"committed": DATA / "drafts", "fixtures": FIXTURE_DRAFTS}
+
+
+def _tariff_drafts(root: Path) -> list[Path]:
+    return [p for p in sorted(root.glob("*/*/*.json")) if p.parts[-3] != "vat"]
+
+
+def _vat_drafts(root: Path) -> list[Path]:
+    return sorted((root / "vat" / "south-africa").glob("*.json"))
+
+
+def _catalogue() -> SupplierCatalogue:
+    return load_file(DATA / "catalogue" / "suppliers.json", SupplierCatalogue)
+
+
+def test_the_fixture_drafts_are_the_three_published_ones() -> None:
+    assert [str(p.relative_to(FIXTURE_DRAFTS)) for p in _tariff_drafts(FIXTURE_DRAFTS)] == [
+        "city-of-ekurhuleni/2026-27/b-residential-1-phase.json",
+        "city-of-ekurhuleni/2026-27/b-residential-3-phase.json",
+    ]
+    assert [p.name for p in _vat_drafts(FIXTURE_DRAFTS)] == ["2018-04-01.json"]
+
+
+@pytest.mark.parametrize("root", DRAFT_ROOTS.values(), ids=DRAFT_ROOTS.keys())
+def test_no_draft_sits_outside_its_folder(root: Path) -> None:
+    every = sorted(root.rglob("*.json"))
+    assert every == sorted([*_tariff_drafts(root), *_vat_drafts(root)])
+
+
+@pytest.mark.parametrize("root", DRAFT_ROOTS.values(), ids=DRAFT_ROOTS.keys())
+def test_each_draft_is_canonical_and_what_its_model_writes(root: Path, tmp_path: Path) -> None:
+    drafts: list[tuple[Path, type[BaseModel]]] = [
+        *((p, TariffVersion) for p in _tariff_drafts(root)),
+        *((p, VatRate) for p in _vat_drafts(root)),
+    ]
+    for path, model in drafts:
+        canonical.check_bytes(path.read_bytes())
+        target = tmp_path / path.name
+        write_file(target, load_file(path, model))
+        assert target.read_bytes() == path.read_bytes(), path
+
+
+@pytest.mark.parametrize("root", DRAFT_ROOTS.values(), ids=DRAFT_ROOTS.keys())
+def test_each_tariff_draft_sits_where_its_content_says(root: Path) -> None:
+    catalogue = _catalogue()
+    for path in _tariff_drafts(root):
+        version = load_file(path, TariffVersion)  # its supplier must be in the catalogue
+        first_month = catalogue.by_code(version.supplier).tariff_year_start_month.value
+        start = version.effective_from.value
+        first_year = start.year if start.month >= first_month else start.year - 1
+        year = f"{first_year}-{(first_year + 1) % 100:02d}"
+        assert (path.parts[-3], path.parts[-2], path.stem) == (
+            version.supplier,
+            year,
+            version.tariff_code,
+        )
+
+
+@pytest.mark.parametrize("root", DRAFT_ROOTS.values(), ids=DRAFT_ROOTS.keys())
+def test_each_vat_draft_is_named_after_its_start_and_the_rates_join_up(root: Path) -> None:
+    for path in _vat_drafts(root):
+        assert path.stem == load_file(path, VatRate).start.isoformat()
+    if _vat_drafts(root):
+        folder = root / "vat" / "south-africa"
+        assert len(load_vat_table(folder).rates) == len(_vat_drafts(root))
 
 
 @pytest.mark.parametrize("path", CANONICAL_FILES, ids=_ids(CANONICAL_FILES))
@@ -139,7 +214,13 @@ def _cited_documents(value: object) -> Iterator[str]:
 def test_every_citation_names_a_listed_document() -> None:
     listed = {d.sha256 for _, m in _manifests() for d in m.documents}
     cited: set[str] = set()
-    for path in [*TARIFF_PUBLICATIONS, *VAT_PUBLICATIONS, DATA / "catalogue" / "suppliers.json"]:
+    drafts = [*_tariff_drafts(DATA / "drafts"), *_vat_drafts(DATA / "drafts")]
+    for path in [
+        *TARIFF_PUBLICATIONS,
+        *VAT_PUBLICATIONS,
+        *drafts,
+        DATA / "catalogue" / "suppliers.json",
+    ]:
         cited |= set(_cited_documents(canonical.check_bytes(path.read_bytes())))
     assert cited
     assert cited <= listed

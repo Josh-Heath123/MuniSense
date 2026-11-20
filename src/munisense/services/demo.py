@@ -16,7 +16,11 @@ from decimal import Decimal
 
 from munisense.domain.billing import Bill, BillingPeriod, PeriodTotal, SourceRole, calculate_bill
 from munisense.domain.money import Money
-from munisense.persistence.connection import DatabaseUnavailableError, connect
+from munisense.persistence.connection import (
+    DatabaseNotReadyError,
+    DatabaseUnavailableError,
+    connect,
+)
 from munisense.persistence.repository import NotRecordedError, tariff_version, vat_table
 from munisense.platform.settings import DatabaseUrl, SettingsError, database_url
 
@@ -93,14 +97,26 @@ def _now() -> datetime:
 
 
 def main(env: Mapping[str, str] = os.environ, now: Callable[[], datetime] = _now) -> int:
-    """Print the example bill as currently recorded; 1 when it cannot, with the reason."""
+    """Print the example bill as currently recorded.
+
+    Returns 2 for unsafe settings, and 1 with the reason and what to do when the database
+    cannot be reached, has no tables or holds nothing recorded.
+    """
     try:
         bill = example_bill(database_url(env, "MUNISENSE_DATABASE_URL"), now())
     except SettingsError as error:
         sys.stderr.write(f"demo: {error}\n")
         return 2
     except DatabaseUnavailableError as error:
-        sys.stderr.write(f"demo: {error}; start it with `docker compose up -d db`\n")
+        sys.stderr.write(
+            f"demo: {error}; is it running (`docker compose up -d db`), and do the"
+            " MUNISENSE_DATABASE_URL settings match it?\n"
+        )
+        return 1
+    except DatabaseNotReadyError as error:
+        sys.stderr.write(
+            f"demo: {error}; run `uv run poe db-bootstrap` once, then `uv run poe db-rebuild`\n"
+        )
         return 1
     except NotRecordedError as error:
         sys.stderr.write(f"demo: {error}; load the publications with `uv run poe db-rebuild`\n")

@@ -33,10 +33,10 @@ from munisense.ingestion.citation_check import (
 )
 from munisense.provenance.drafts import load_file
 from munisense.provenance.sources import SourceDocument, SourceManifest
+from support.publishing import DRAFTS
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "data"
-DRAFTS = ROOT / "tests/fixtures/drafts"  # the drafts as before P2-13 (E55)
 VAT_DRAFT = DRAFTS / "vat/south-africa/2018-04-01.json"
 TARIFF_DRAFTS = sorted((DRAFTS / "city-of-ekurhuleni").glob("*/*.json"))
 VAT_404 = DATA / "sources/sars/vat-404-guide-for-vendors-2025-01.pdf"

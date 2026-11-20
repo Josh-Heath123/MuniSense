@@ -22,8 +22,8 @@ from munisense.provenance import canonical
 from munisense.provenance.drafts import load_file
 from support.database import TestDatabase, dump
 from support.publishing import (
+    DRAFTS,
     R1,
-    ROOT,
     TARIFF,
     draft_b1,
     publish_all,
@@ -31,7 +31,7 @@ from support.publishing import (
     replace_draft,
 )
 
-DRAFT_B1 = ROOT / "tests/fixtures/drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json"
+DRAFT_B1 = DRAFTS / "city-of-ekurhuleni/2026-27/b-residential-1-phase.json"
 
 
 def _rows(engine: Engine, sql: str) -> list[tuple[object, ...]]:

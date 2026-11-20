@@ -26,7 +26,7 @@ Phase 1, the calculation core, is **Built** and passed its gate on 2026-11-18. I
 | Forward bills: fixed charges, flat, block and seasonal energy, levies, free basic allocations, VAT | Built |
 | Billing periods split across months, tariff versions, seasons and VAT changes, pro-rated by a named policy | Built |
 | Prepaid purchases: the kWh a rand amount buys, given the month's earlier purchases | Built |
-| City of Ekurhuleni 2026/27 Tariff B (Residential) and the SARS VAT rate, published with a citation per value | Built; values checked by hand by the owner are `verified`, VAT treatment and season dates `estimated` |
+| City of Ekurhuleni 2026/27 Tariff B (Residential) and the SARS VAT rate, published with a citation per value | Built; values checked by hand by the owner are `verified`; VAT treatment, season dates and the rounding and billing policies `estimated` |
 | Versioned storage, the publish step, an automatic citation check, publication guards | Built (P2, gate pending) |
 | REST API, staff console, MCP server for AI agents | Planned (P5, P6, P7) |
 
@@ -49,7 +49,7 @@ Warnings on the bill:
 - Rounding policy 'ekurhuleni-estimated' is estimated; cent-level differences from a real bill are possible.
 <!-- demo:end -->
 
-This table is the engine's own output, read from the published data through the database, and a test keeps it identical to the code. The rates and the VAT rate were checked by hand by the owner against the City of Ekurhuleni's signed 2026/27 schedule (a scan) and SARS's VAT guide, and are `verified`. The basic and energy lines are still `estimated`, because the schedule says only that its prices exclude VAT, so each charge's VAT treatment is an inference; the season dates and the rounding policy are also assumptions until they can be confirmed from real Ekurhuleni bills or receipts.
+This table is the engine's own output, read from the published data through the database, and a test keeps it identical to the code. The rates and the VAT rate were checked by hand by the owner against the City of Ekurhuleni's signed 2026/27 schedule (a scan) and SARS's VAT guide, and are `verified`. The basic and energy lines are still `estimated`, because the schedule says only that its prices exclude VAT, so each charge's VAT treatment is an inference; the season dates and the rounding and billing policies are also assumptions until they can be confirmed from real Ekurhuleni bills or receipts.
 
 ## Engineering highlights
 

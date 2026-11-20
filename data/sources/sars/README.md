@@ -10,7 +10,7 @@ Committed source PDFs for the VAT rate (ADR-0006), listed for machines in `sourc
 ## What each supports
 
 - **VAT 404, page 15** (Chapter 1, 1.2 "How does VAT work?"): "at the standard rate of 15%", and footnote 5: "The standard rate of VAT changed from 14% to 15% with effect from 1 April 2018." Cited for the percentage and the start date in `data/vat/south-africa/2018-04-01.r1.json` (published in P2-13).
-- **Act 3 of 2026, page 10, section 13**: the VAT rate increase announced in the 2025 national budget "does not come into effect", deemed from 1 May 2025. This is why the 15% entry has no end date. The domain model cites one document per value, so this Act is named, with its full SHA-256, in the status reason of the percentage, not as a citation; a test checks that hash against the committed file.
+- **Act 3 of 2026, page 10, section 13**: the VAT rate increase announced in the 2025 national budget "does not come into effect", deemed from 1 May 2025. This is why the 15% entry has no end date. The domain model cites one document per value, so this Act is named, with its full SHA-256, in the VAT publication's reason (the percentage is `verified`, and a verified status has no reason field), not as a citation; a test checks that hash against the committed file.
 
 ## Why not the VAT Act itself
 

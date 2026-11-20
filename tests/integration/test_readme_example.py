@@ -6,7 +6,6 @@ themselves (`data/`, read only), so the README cannot drift from the code, the p
 data or the path through the repository.
 """
 
-import os
 import runpy
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -16,7 +15,6 @@ import pytest
 
 from munisense.domain.citations import StatusKind
 from munisense.persistence.loader import rebuild
-from munisense.platform.settings import LOCAL_DEFAULTS
 from munisense.services import demo
 from support.database import TestDatabase
 
@@ -41,10 +39,13 @@ def loaded(test_database: TestDatabase) -> TestDatabase:
     return test_database
 
 
-def _env() -> dict[str, str]:
-    """The demo's setting, pointed at the test database as the application role."""
-    name = "MUNISENSE_TEST_DATABASE_URL"
-    return {"MUNISENSE_DATABASE_URL": os.environ.get(name, LOCAL_DEFAULTS[name])}
+def _env(database: TestDatabase) -> dict[str, str]:
+    """The demo's setting: the test database's checked URL, as the application role.
+
+    Never the raw variable: set but empty, it would make the demo fall back to the dev
+    database's default (security review).
+    """
+    return {"MUNISENSE_DATABASE_URL": database.app.url}
 
 
 def test_the_readme_example_is_the_engine_output(loaded: TestDatabase) -> None:
@@ -64,14 +65,14 @@ def test_the_example_is_the_hand_checked_tariff_b_bill(loaded: TestDatabase) -> 
 def test_poe_demo_prints_the_example(
     loaded: TestDatabase, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert demo.main(_env(), lambda: NOW) == 0
+    assert demo.main(_env(loaded), lambda: NOW) == 0
     assert capsys.readouterr().out.rstrip("\n") == _readme_block()
 
 
 def test_the_demo_says_what_to_run_when_nothing_is_recorded(
     loaded: TestDatabase, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert demo.main(_env(), lambda: BEFORE) == 1
+    assert demo.main(_env(loaded), lambda: BEFORE) == 1
     error = capsys.readouterr().err
     assert "no version of city-of-ekurhuleni/b-residential-1-phase" in error
     assert "uv run poe db-rebuild" in error
@@ -82,7 +83,7 @@ def test_the_demo_says_what_to_run_when_nothing_is_recorded(
 def test_the_module_runs_as_a_script(
     loaded: TestDatabase, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    for name, value in _env().items():
+    for name, value in _env(loaded).items():
         monkeypatch.setenv(name, value)
     with pytest.raises(SystemExit) as exit_:
         runpy.run_module("munisense.services.demo", run_name="__main__")

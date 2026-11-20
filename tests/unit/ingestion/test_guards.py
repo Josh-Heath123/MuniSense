@@ -24,11 +24,11 @@ from munisense.provenance import canonical
 from munisense.provenance.drafts import load_file, write_file
 from munisense.provenance.sources import SourceDocument
 from support.builders import fixture_free_basic
+from support.publishing import DRAFTS
 
 pytestmark = pytest.mark.slow
 
 ROOT = Path(__file__).resolve().parents[3]
-DRAFTS = ROOT / "tests/fixtures/drafts"  # the drafts as before P2-13 (E55)
 TARIFF = "city-of-ekurhuleni/b-residential-1-phase"
 FOLDER = Path("data/tariffs") / TARIFF
 START = datetime(2026, 12, 1, 9, 30, tzinfo=UTC)

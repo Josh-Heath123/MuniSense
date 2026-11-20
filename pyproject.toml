@@ -64,7 +64,7 @@ db-rebuild = { cmd = "python -m munisense.persistence.loader", env = { PYTHONPAT
 db-bootstrap = { cmd = "python -m munisense.persistence.bootstrap", env = { PYTHONPATH = "src" }, help = "Create the database roles and schema in the local dev and test databases (idempotent)" }
 publications-check = { cmd = "python -m munisense.ingestion.guards", env = { PYTHONPATH = "src" }, help = "Check every publication; --base <ref> refuses changes to published files; --pull-request re-checks added ones (P2-9)" }
 publish = { cmd = "python -m munisense.ingestion.publish", env = { PYTHONPATH = "src" }, help = "Publish a draft (or --withdraw an id); --check writes nothing (ADR-0012)" }
-demo = { cmd = "python -m munisense.services.demo", env = { PYTHONPATH = "src" }, help = "Print the README's example bill: Ekurhuleni Tariff B, July 2026, 350 kWh, from the real data and engine" }
+demo = { cmd = "python -m munisense.services.demo", env = { PYTHONPATH = "src" }, help = "Print the README's example bill: Ekurhuleni Tariff B, July 2026, 350 kWh, from the published data via the dev database (run db-rebuild first)" }
 audit = { shell = "uv export --frozen --all-groups --no-emit-project --format requirements-txt | pip-audit --strict --disable-pip --require-hashes --progress-spinner off -r /dev/stdin", help = "Audit every locked package, all platforms (needs network)" }
 
 # ------------------------------------------------------------------- ruff
