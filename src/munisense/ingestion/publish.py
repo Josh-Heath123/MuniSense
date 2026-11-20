@@ -60,8 +60,8 @@ from munisense.provenance.publication import (
 )
 from munisense.provenance.sources import SourceDocument, SourceManifest
 
-TOOL_VERSION = "munisense publish 1"
-"""A fixed label (the package has no version yet); raise the number when the checks change."""
+TOOL_VERSION = "munisense publish 2"
+"""A fixed label (the package has no version yet); raised when the checks change (2: ADR-0013)."""
 DOCUMENTS_CHECKED = "all cited documents in a manifest; hashes match"
 
 Checker = Callable[[BaseModel, dict[str, tuple[Path, SourceDocument]]], list[CitationResult]]

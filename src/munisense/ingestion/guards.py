@@ -212,6 +212,20 @@ def check_set(data: Path, loaded: list[Loaded]) -> list[str]:  # one rule per bl
         revisions.setdefault((*parsed.key, parsed.effective_from.isoformat()), set()).add(
             parsed.revision
         )
+    by_revision = {
+        (
+            *ParsedId.of(p.id).key,
+            ParsedId.of(p.id).effective_from.isoformat(),
+            ParsedId.of(p.id).revision,
+        ): p
+        for p in loaded
+    }
+    for (scope, code, day, revision), publication in sorted(by_revision.items()):
+        before = by_revision.get((scope, code, day, revision - 1))
+        if before is not None and publication.published_at <= before.published_at:
+            problems.append(
+                f"{publication.id} is not recorded later than {before.id}, the revision before it"
+            )
     for (scope, code, day), found in sorted(revisions.items()):
         if found != set(range(1, max(found) + 1)):
             missing = sorted(set(range(1, max(found) + 1)) - found)
@@ -350,7 +364,8 @@ def check_added(  # one list of problems, check by check
         if version is None:
             continue  # a withdrawal's own checks: its target is checked in check_set
         checks = record.checks
-        recorded = checks.citation_check.model_dump() if isinstance(checks, PublishChecks) else None
+        assert isinstance(checks, PublishChecks)  # noqa: S101  # the envelope ties checks to a version
+        recorded = checks.citation_check.model_dump()
         if recorded != counts:
             problems.append(
                 f"{publication.id}: the recorded citation check {recorded} differs from"

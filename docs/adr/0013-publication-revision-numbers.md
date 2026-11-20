@@ -1,6 +1,6 @@
 # ADR-0013: Number every publication by the next free revision under its date
 
-- **Status:** Accepted. Supersedes ADR-0012's revision rule only (section 2, "File name", and the revision sentences of sections 3 and 7); everything else in ADR-0012 stands.
+- **Status:** Accepted. Supersedes ADR-0012's revision rule (section 2, "File name", and the revision sentences of sections 3 and 7) and the shape of `checks` (section 3); everything else in ADR-0012 stands.
 - **Date:** 2026-11-19 (proposed and accepted by the owner at the P2 checkpoint, W18, E51)
 - **Deciders:** Josh Heath (owner)
 
@@ -16,7 +16,7 @@ ADR-0012 numbers a publication that supersedes another as "the superseded one's 
 
 - **Every publication, of any kind, takes the next free revision number under the date it is filed under:** one more than the highest revision under that date, or `r1` if there is none. `supersedes` alone records what a publication corrects or withdraws; the revision number carries no link to it. A correction is filed under its own (possibly new) effective-from date; a withdrawal under the withdrawn version's date; a restore of a withdrawn version under its date, with `supersedes: null`.
 - **No revision gaps.** Under each date of each tariff, the revisions are `r1` to `rN` with none missing. The publication guards refuse a gap (P2-9's check, extended).
-- **A withdrawal records what was checked for a withdrawal.** Its `checks` hold the tool label and `withdrawn: "exists and is current"` (the withdrawn publication exists, is not itself a withdrawal and has no successor), not the version-only fields. A version's `checks` keep the shape of ADR-0012 section 3. Changed under `schema_version` 1: nothing is published yet, so no converter is needed.
+- **A withdrawal records what was checked for a withdrawal.** Every `checks` object now starts with `kind`, which says which shape it is. A withdrawal's `checks` are `kind: "withdrawal"`, the tool label and `withdrawn: "exists and is current"` (the withdrawn publication exists, is not itself a withdrawal and has no successor). A version's `checks` are `kind: "version"` followed by ADR-0012 section 3's fields (tool label, `schema`, `documents`, `overlap`, `citation_check`). Each envelope refuses the other kind. Changed under `schema_version` 1: nothing is published yet, so no converter is needed. The `kind` key and the literal `exists and is current` are implementation details chosen when this was built (W18 follow-up), not part of the owner's specification.
 
 ## Consequences
 

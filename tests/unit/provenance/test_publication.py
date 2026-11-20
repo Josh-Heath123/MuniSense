@@ -213,7 +213,7 @@ def test_a_malformed_id_is_refused() -> None:
 
 
 def test_a_withdrawn_version_can_be_restored_with_a_later_revision() -> None:
-    """Provisional reading of ADR-0012 (module docstring): r3 restores after r1 and r2."""
+    """ADR-0013: a restore takes the next free revision under its date (r3 after r1 and r2)."""
     restored = load(_tariff(f"{TARIFF_ID}/r3"), TariffPublication)
     assert restored.publication.supersedes is None
     assert ParsedId.of(restored.publication.id).revision == 3
@@ -305,3 +305,38 @@ def test_a_withdrawal_checks_record_names_what_was_checked() -> None:
         "tool_version": "munisense 0.0.0",
         "withdrawn": "exists and is current",
     }
+
+
+@pytest.mark.parametrize("make", ["tariff", "vat"])
+@pytest.mark.parametrize("withdrawal", [True, False])
+def test_both_envelopes_refuse_checks_of_the_wrong_kind(make: str, withdrawal: bool) -> None:
+    build, key, kind = (
+        (_tariff, TARIFF_ID, TariffPublication)
+        if make == "tariff"
+        else (_vat, VAT_ID, VatRatePublication)
+    )
+    body = json.loads(build(f"{key}/r2", f"{key}/r1", version=not withdrawal))
+    body["publication"]["checks"] = _record("x", withdrawal=not withdrawal)["checks"]
+    with pytest.raises(ValidationError, match=r"records (withdrawal|version) checks"):
+        load(canonical.dumps(body), kind)  # type: ignore[type-var]
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ("missing", "Unable to extract tag using discriminator 'kind'"),
+        ("other", "does not match any of the expected tags"),
+        ("mixed", "Extra inputs are not permitted"),
+    ],
+)
+def test_checks_need_a_known_kind_and_only_its_own_fields(change: str, message: str) -> None:
+    body = json.loads(_tariff(f"{TARIFF_ID}/r2", f"{TARIFF_ID}/r1", version=False))
+    checks = body["publication"]["checks"]
+    if change == "missing":
+        del checks["kind"]
+    elif change == "other":
+        checks["kind"] = "other"
+    else:
+        checks["citation_check"] = {"passed": 0, "no_text_layer": 0, "failed": 0}
+    with pytest.raises(ValidationError, match=message):
+        load(canonical.dumps(body), TariffPublication)

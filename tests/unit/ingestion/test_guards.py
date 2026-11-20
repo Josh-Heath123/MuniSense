@@ -208,9 +208,11 @@ def test_two_successors_are_refused(repo: Path) -> None:
 def test_a_successor_recorded_earlier_is_refused(repo: Path) -> None:
     second = _second(repo, Clock(START + timedelta(days=1)))
     _rewrite(second, {"published_at": "2026-11-01T00:00:00+00:00"})
-    assert problems(repo) == [
+    assert problems(repo) == [  # both orders fail: the successor and the next revision
         f"{TARIFF}/2026-07-01/r2 is not recorded later than {TARIFF}/2026-07-01/r1,"
-        " which it supersedes"
+        " which it supersedes",
+        f"{TARIFF}/2026-07-01/r2 is not recorded later than {TARIFF}/2026-07-01/r1,"
+        " the revision before it",
     ]
 
 
@@ -566,7 +568,7 @@ def test_a_changed_tool_label_is_refused(repo: Path) -> None:
     path.write_text(canonical.dumps(body), encoding="utf-8")
     git(repo, "commit", "-qam", "label")
     found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
-    assert f"{TARIFF}/2026-07-01/r2: tool label 'hand made', not 'munisense publish 1'" in found
+    assert f"{TARIFF}/2026-07-01/r2: tool label 'hand made', not 'munisense publish 2'" in found
 
 
 def test_unreadable_manifests_are_reported_not_raised(repo: Path) -> None:
@@ -663,3 +665,20 @@ def test_unreadable_manifests_do_not_hide_the_other_checks(repo: Path) -> None:
     found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(days=3))
     assert found[0].startswith("source manifests: ProvenanceError")
     assert any("recorded more than 24 hours before this run" in p for p in found), found
+
+
+def test_a_later_revision_recorded_earlier_under_its_date_is_refused(repo: Path) -> None:
+    clock = Clock(START + timedelta(minutes=30))
+    publish(
+        repo / "data", Request(reason="t", withdraw=f"{TARIFF}/2026-07-01/r1"), clock, checker()
+    )
+    _rewrite(repo / FOLDER / "2026-07-01.r2.json", {"published_at": "2026-12-01T09:00:00+00:00"})
+    found = problems(repo)
+    assert (
+        f"{TARIFF}/2026-07-01/r2 is not recorded later than {TARIFF}/2026-07-01/r1,"
+        " the revision before it"
+    ) in found
+    assert (  # the withdrawal also supersedes r1, so the successor order fails too
+        f"{TARIFF}/2026-07-01/r2 is not recorded later than {TARIFF}/2026-07-01/r1,"
+        " which it supersedes" in found
+    )

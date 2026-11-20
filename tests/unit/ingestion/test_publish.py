@@ -334,7 +334,7 @@ def test_a_withdrawal_holds_no_version_and_ends_the_version(data: Path) -> None:
     assert withdrawal.version is None
     assert withdrawal.publication.checks.model_dump() == {
         "kind": "withdrawal",
-        "tool_version": "munisense publish 1",
+        "tool_version": "munisense publish 2",
         "withdrawn": "exists and is current",
     }
 
