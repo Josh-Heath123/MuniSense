@@ -34,7 +34,8 @@ src/munisense/
                   separate, resource-limited `python -I` process (pdf_text.py, stdlib and pypdf only);
                   the publish step (publish.py, `poe publish`; P2-8) and the publication guards
                   CI runs (guards.py, `poe publications-check`; P2-9); later the review workflow
-  persistence/    SQLAlchemy models, repositories, Alembic migrations, as-of queries
+  persistence/    Alembic migrations, the loader (`poe db-rebuild`; it reuses ingestion's
+                  publication guards, and ingestion never imports persistence), repositories, as-of queries
   services/       use cases: calculate_bill, compare_tariffs, publish_version, ... (from P2). Today only
                   demo.py: the `poe demo` entry point, which reads the Ekurhuleni drafts directly (TD-13)
   api/            FastAPI routers, schemas, auth, errors (P5)
