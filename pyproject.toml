@@ -48,6 +48,11 @@ no-build = true
 
 # ---------------------------------------------------------------- tasks (poe)
 
+# mypy does not expand ~ in its own cache_dir, so its cache moves through the environment
+# (W19). The other caches are set in their own sections.
+[tool.poe.env]
+MYPY_CACHE_DIR = "${HOME}/.cache/munisense/mypy"
+
 [tool.poe.tasks]
 _format-check = "ruff format --check"
 _lint = "ruff check"
@@ -70,6 +75,8 @@ audit = { shell = "uv export --frozen --all-groups --no-emit-project --format re
 
 [tool.ruff]
 line-length = 100
+# Caches live off /mnt/c, whose per-file overhead slowed `poe check` run by run (W19, E51).
+cache-dir = "~/.cache/munisense/ruff"
 target-version = "py313"
 src = ["src", "tests"]
 # Python only: ruff 0.17 would otherwise also format Markdown, including Accepted ADRs.
@@ -113,6 +120,7 @@ warn_required_dynamic_aliases = true
 
 [tool.pytest.ini_options]
 minversion = "9.0"
+cache_dir = "~/.cache/munisense/pytest"  # off /mnt/c (W19); pytest expands ~
 testpaths = ["tests"]
 pythonpath = ["src", "tests"]
 addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]

@@ -53,6 +53,10 @@ uv run poe audit            # dependency vulnerability audit (needs network)
 uv run mutmut run           # mutation testing of domain.billing (slow; see docs/quality/mutation-p1-15.md)
 ```
 
+## Caches
+
+The ruff, pytest, mypy and Hypothesis caches live in `~/.cache/munisense/`, off the `/mnt/c` disk, whose per-file overhead made `poe check` slower run by run (W19). mypy finds its cache through `MYPY_CACHE_DIR`, which `poe` sets; running `mypy` directly, outside `poe`, still uses `.mypy_cache/` in the repository.
+
 ## Database settings
 
 Settings are read from the process environment (`src/munisense/platform/settings.py`). Only docker compose reads the local settings file; Python does not, so if you change the port or a password there, export the matching `MUNISENSE_*` URLs too. While `MUNISENSE_ENVIRONMENT` is `local` (the default, which includes CI), every host must be loopback and unset URLs use the published local defaults. Any libpq `PG*` environment variable is refused. Run `uv run poe db-bootstrap` once per volume before the database tests (`tests/integration`, marked `db`). They refuse any database whose name does not end in `_test` and connect as:
