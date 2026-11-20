@@ -53,6 +53,10 @@ class SupplierCatalogue(DomainModel):
     @model_validator(mode="after")
     def _unique_codes(self) -> Self:
         codes = [s.code for s in self.suppliers]
+        if "vat" in codes:
+            # `vat` is the VAT publications' scope (ADR-0012); a supplier may not take it.
+            msg = "the supplier code 'vat' is reserved"
+            raise ValueError(msg)
         if len(set(codes)) != len(codes):
             msg = "supplier codes must be unique"
             raise ValueError(msg)

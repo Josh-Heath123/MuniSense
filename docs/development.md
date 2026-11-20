@@ -39,7 +39,8 @@ Everything runs inside WSL2 (Ubuntu), so local development matches CI and future
 cp .env.example .env        # optional: local settings (the defaults work)
 docker compose up -d db     # PostgreSQL 17: databases munisense_dev and munisense_test (needed from P2)
 uv sync                     # install locked dependencies
-uv run poe db-bootstrap     # once per volume, after uv sync: the two roles and the munisense schema
+uv run poe db-bootstrap     # once per volume, after uv sync: the two roles, the munisense schema, btree_gist
+uv run alembic upgrade head # the schema, as the migration role (MUNISENSE_MIGRATION_DATABASE_URL)
 uv run pre-commit install   # git hooks: file checks, ruff, gitleaks; refuses a push to main (needs Docker)
 uv run poe fmt              # format and auto-fix
 uv run poe check            # lint, types, fast tests (the Stop hook runs this)

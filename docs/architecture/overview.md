@@ -68,25 +68,25 @@ data/
 5. Nothing imports `api`, `console` or `mcp`.
 6. No production code imports the test-support package `support` (`tests/support`), which is importable only under pytest and mypy.
 
-## Data model (target for P2; ADR-0012 decides the details where they differ)
+## Data model (built in P2-10; ADR-0003, ADR-0012, ADR-0013)
 
-The database is a deterministic projection of the committed tariff files (ADR-0003). It can be dropped and rebuilt from them at any time. ADR-0012 sets the file format and layout, the publish step and the loader. It adds a `publication` table (every publication, withdrawals included), stores VAT as one rate per publication, and defers a per-value citation table: citations are queried inside the JSONB payload.
+The database is a deterministic projection of the committed files (ADR-0003): the loader (P2-11) rebuilds it from them and inserts final rows; nothing is ever updated, and the application role has `SELECT` only. The generated source of truth for the schema is the migration, `src/munisense/persistence/migrations/versions/0001_initial_schema.py`; this table summarises it. Everything lives in the `munisense` schema.
 
 | Table | Purpose | Key points |
 | --- | --- | --- |
-| `supplier` | Municipality, municipal utility or Eskom | Code, name, type, tariff year start month |
-| `customer_class` | Domestic, small business, etc. | Per supplier |
-| `tariff` | Stable identity of a named tariff | Supplier, code, class, meter type, phase |
-| `tariff_version` | Published prices for one validity period | `valid_period` (daterange), `recorded_during` (tstzrange: from publication until superseded), `supersedes_id`, `schema_version`. Only published versions are stored here; drafts and checked versions stay in the ingestion area. Exclusion constraint (needs `btree_gist`): no two versions of the same tariff whose `valid_period` and `recorded_during` both overlap |
-| `tariff_component` | Typed component of a version | `type`, `position`, `payload` (JSONB, validated by the domain model). **Every value inside the payload carries its own citation reference and status.** The component's `status` column is a summary: the weakest status of its values |
-| `source_document` | An official document | URL, title, retrieved_at, SHA-256, approval reference, local path |
-| `citation` | Where a value came from | Document, page, table/row, original text as printed |
-| `vat_rate` | VAT by date | Rate, valid_period, citation |
-| `tou_calendar` | Day types and public holidays (P4); seasons for energy live inside each seasonal component since P1-12 (TD-11) | Versioned like tariffs |
-| `review_event` | Who checked or published what, when | Append-only |
-| `organisation`, `api_key`, `usage_event` | P5 only | Key hashes only; see the POPIA register |
+| `supplier` | Municipality, municipal utility or Eskom | `code`, `name`, `kind`, `tariff_year_start_month`; `status` and `payload` (JSONB, the supplier as the model writes it, so the start month keeps its citation) |
+| `customer_class` | Residential, small business, etc. | Per supplier |
+| `tariff` | Stable identity of a named tariff | `supplier_code`, `tariff_code` (unique together), `customer_class_code`; the phase is part of the tariff code |
+| `source_document` | A committed source document, from the source manifests | `sha256` (key), `publisher`, `file`, `title`, `url`, `retrieved_on`, `approval`, `pages`, `text_layer` |
+| `publication` | Every publication, withdrawals included | `id` (equal to its place `scope/code/effective_from/r<revision>`, unique), `kind` (`tariff` or `vat`), `published_at`, `published_by`, `supersedes` (same tariff, never a withdrawal, at most one successor), `is_withdrawal` (a withdrawal supersedes something), `reason`, `checks` (JSONB) |
+| `tariff_version` | Published prices for one validity period | One per publication that holds a version (never a withdrawal; a composite key ties it to a tariff publication). `valid_period` (daterange) and `recorded_during` (tstzrange: from publication until superseded or withdrawn), both non-empty, bounded below and `[lower, upper)`; `schema_version`; `status` (recomputed, the weakest of its values); `payload` (JSONB, the version as published). Exclusion constraint (`btree_gist`): no two versions of the same tariff whose `valid_period` and `recorded_during` both overlap |
+| `tariff_component` | One component of a version | `position`, `name`, `kind`, `status` (recomputed), `payload` (JSONB). Every value inside a payload carries its own citation and status |
+| `vat_rate` | One VAT rate per publication (ADR-0012 section 2) | Like `tariff_version`, per `country`, with the same exclusion constraint |
+| `alembic_version` | The migration state | Readable by the app role (harmless) |
 
-**Two timelines.** Valid time (`valid_period`) says when a price applies. Record time (`recorded_during`) says when MuniSense believed it. **Record time starts at publication**, and the publish step writes it explicitly into the tariff file; it is never derived from git history. Published rows are never updated in place, except to close `recorded_during` when a version is superseded. "As recorded on D" means: rows where `recorded_during` contains D. Because the exclusion constraint covers record time too, every past snapshot is free of overlaps.
+Not built, and why: a per-value `citation` table (deferred to P6 if needed; citations are queried inside the JSONB payloads, ADR-0012 section 4); `tou_calendar` (P4); `review_event` (not planned: human verification lives in each value's `Verified` status and review evidence in pull requests, ADR-0012 sections 3 and 4); `organisation`, `api_key`, `usage_event` (P5).
+
+**Two timelines.** Valid time (`valid_period`) says when a price applies. Record time (`recorded_during`) says when MuniSense believed it. **Record time starts at publication**, and the publish step writes it explicitly into the file; it is never derived from git history. Rows are never updated: a rebuild computes each `recorded_during` from the publication that supersedes or withdraws it. "As recorded on D" means: rows where `recorded_during` contains D. Because the exclusion constraint covers record time too, every past snapshot is free of overlaps.
 
 ## Money rules
 
