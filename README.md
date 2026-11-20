@@ -53,15 +53,15 @@ This table is the engine's own output, read from the published data through the 
 
 ## Engineering highlights
 
-Figures are from the [P2 gate report](docs/reports/2026-11-20-P2-gate.md), except the mutation score, which is from the [P1 gate report](docs/reports/2026-11-18-P1-gate.md): the engine has not changed since.
+Figures are from the [P2 gate report](docs/reports/2026-11-20-P2-gate.md).
 
 - **1,170 tests, 100% line and branch coverage** of the code built so far, run in CI on every pull request.
-- **90.2% mutation score** on the billing engine: 1,380 of 1,530 injected bugs caught. Every surviving mutant is reviewed and listed in [mutation-p1-15.md](docs/quality/mutation-p1-15.md).
+- **90.2% mutation score** on the billing engine: 1,380 of 1,530 injected bugs caught. Re-run at the P2 gate with the same result. Every surviving mutant is reviewed and listed in [mutation-p1-15.md](docs/quality/mutation-p1-15.md).
 - **No floats, no silent rounding.** Arithmetic is exact or refused. Rounding happens only at points a supplier's policy names ([ADR-0005](docs/adr/0005-decimal-money-and-rounding-policies.md), [ADR-0011](docs/adr/0011-pro-rating-quantisation-point.md)). Tests: [`test_money.py`](tests/unit/domain/money/test_money.py), [`test_rounding.py`](tests/unit/domain/money/test_rounding.py).
 - **A citation on every value.** Each value has its own citation and status, and every result reports the weakest status of what it used ([ADR-0006](docs/adr/0006-provenance-and-verification-status.md); [`test_cited_values.py`](tests/unit/domain/citations/test_cited_values.py)).
 - **A pure domain.** The calculation core does no I/O and imports only the standard library and Pydantic. This is enforced by import-linter and a purity test ([ADR-0004](docs/adr/0004-declarative-tariff-components.md); [`test_domain_purity.py`](tests/unit/test_domain_purity.py)).
 - **Published tariff data is immutable and has two timelines.** A tariff version is published once, as a file with its record time; a correction supersedes it and never edits it. The database is rebuilt from the files, and an exclusion constraint refuses two versions of a tariff valid at the same time, now or in any past snapshot ([ADR-0003](docs/adr/0003-postgresql-bitemporal-tariff-versions.md), [ADR-0012](docs/adr/0012-tariff-files-and-database-projection.md); [`test_schema.py`](tests/integration/persistence/test_schema.py), [`test_loader.py`](tests/integration/persistence/test_loader.py)).
-- **A deterministic citation check.** Before anything is published, each printed text must be found verbatim on its cited page, or the page must be shown to have no text layer, in which case only a person can verify it ([`test_citation_check.py`](tests/unit/ingestion/test_citation_check.py)).
+- **A deterministic citation check.** Before anything is published, each printed text must be found verbatim on its cited page (after whitespace is normalised), or the page must be shown to have no text layer, in which case only a person can verify it ([`test_citation_check.py`](tests/unit/ingestion/test_citation_check.py)).
 - **Property tests against independent references.** A bill is never negative and never falls as use rises. VAT adds up. Splitting a period changes the total by no more than the named roundings. A month of prepaid purchases costs what the month is billed ([`tests/property/`](tests/property/domain/billing/)).
 
 ## How it works
@@ -108,7 +108,7 @@ flowchart TB
   classDef planned fill:#F4F4F2,stroke:#767671,stroke-dasharray:5 4,color:#52524E
 ```
 
-Arrows point at what a module may use. Solid dark modules are built; dashed light ones are planned, with the phase that builds them. Pine green is kept for what is verified or important, so it is not used for "built".
+Arrows point at what a module may use; only the interface, service and domain edges are drawn (within the data layer, persistence uses ingestion, which uses provenance and the domain; import-linter enforces the rules). Solid dark modules are built; dashed light ones are planned, with the phase that builds them. Pine green is kept for what is verified or important, so it is not used for "built".
 
 ## Status
 
@@ -134,9 +134,9 @@ MuniSense is built by Claude Code, working under the direction of the owner, Jos
 
 Every pull request is reviewed by an independent code-review agent before it is merged. When tariff data changes, a tariff-verifier agent also recalculates each value and compares it with the source page. An agent's check never makes a value verified; that takes a person.
 
-Pull requests are merged only when continuous integration is green, and GitHub enforces it: a ruleset on `main` requires a pull request and the green CI check, and blocks force pushes ([ADR-0014](docs/adr/0014-github-ruleset-protects-main.md)). A pull request that publishes tariff data may change nothing outside `data/`, and the owner approves each one.
+Pull requests are merged only when continuous integration is green, and GitHub enforces it: a ruleset on `main` requires a pull request and the green CI check, and blocks force pushes ([ADR-0014](docs/adr/0014-github-ruleset-protects-main.md)). A pull request that publishes tariff data may change nothing outside `data/` (checked in CI), and by a working rule the owner approves each one.
 
-Mutation testing measures whether the billing engine's tests catch injected bugs. It was last run at the end of Phase 1 (90.2%), and is re-run before each phase gate that changes the engine.
+Mutation testing measures whether the billing engine's tests catch injected bugs. It was last run at the P2 gate (90.2%, unchanged since Phase 1), and is re-run before each phase gate that changes the engine or its tests.
 
 The rules are in [`CLAUDE.md`](CLAUDE.md).
 
