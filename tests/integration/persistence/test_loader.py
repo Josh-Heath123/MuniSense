@@ -8,89 +8,30 @@ import json
 import os
 import shutil
 from dataclasses import replace
-from datetime import UTC, date, datetime, timedelta
+from datetime import date
 from pathlib import Path
 
 import pytest
-from pydantic import BaseModel
 from sqlalchemy import Connection, Engine, text
 
-from munisense.domain.money import VatRate
 from munisense.domain.tariffs import TariffVersion
-from munisense.ingestion.citation_check import CitationResult, Outcome, iter_cited
 from munisense.ingestion.guards import Loaded, load_all
-from munisense.ingestion.publish import Request, publish
 from munisense.persistence import loader
 from munisense.persistence.loader import LoadError, rebuild
 from munisense.provenance import canonical
-from munisense.provenance.drafts import load_file, write_file
-from munisense.provenance.sources import SourceDocument
+from munisense.provenance.drafts import load_file
 from support.database import TestDatabase, dump
+from support.publishing import (
+    R1,
+    ROOT,
+    TARIFF,
+    draft_b1,
+    publish_all,
+    publish_one,
+    replace_draft,
+)
 
-ROOT = Path(__file__).resolve().parents[3]
-TARIFF = "city-of-ekurhuleni/b-residential-1-phase"
-R1 = f"{TARIFF}/2026-07-01/r1"
 DRAFT_B1 = ROOT / "data/drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json"
-START = datetime(2026, 12, 1, 9, 30, tzinfo=UTC)
-
-
-class Clock:
-    def __init__(self, start: datetime = START) -> None:
-        self.now = start
-
-    def __call__(self) -> datetime:
-        self.now += timedelta(minutes=1)
-        return self.now
-
-
-def checker(
-    model: BaseModel, _sources: dict[str, tuple[Path, SourceDocument]]
-) -> list[CitationResult]:
-    ok = Outcome.PASSED if isinstance(model, VatRate) else Outcome.NO_TEXT_LAYER
-    return [CitationResult(p, c.citation.page, ok, "stand-in") for p, c in iter_cited(model)]
-
-
-@pytest.fixture(scope="module")
-def base(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """One copy of the committed data for the module; tests link to it."""
-    target = tmp_path_factory.mktemp("base") / "data"
-    for part in ("catalogue", "sources", "drafts"):
-        shutil.copytree(ROOT / "data" / part, target / part)
-    return target
-
-
-@pytest.fixture
-def data(base: Path, tmp_path: Path) -> Path:
-    """A test's own data folder: hard links to the shared copy (regular files, same bytes).
-
-    A test that changes a file replaces it (unlink, then write), never writes through a link.
-    """
-    target = tmp_path / "data"
-    shutil.copytree(base, target, copy_function=os.link)
-    return target
-
-
-def _draft(data: Path) -> Path:
-    return data / "drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json"
-
-
-def _replace_draft(data: Path, version: TariffVersion) -> None:
-    _draft(data).unlink(missing_ok=True)
-    write_file(_draft(data), version)
-
-
-def _publish(data: Path, clock: Clock, **request: object) -> None:
-    publish(data, Request(reason="t", **request), clock, checker)  # type: ignore[arg-type]
-
-
-def _publish_all(data: Path) -> Clock:
-    clock = Clock()
-    _publish(data, clock, draft=data / "drafts/vat/south-africa/2018-04-01.json")
-    _publish(data, clock, draft=_draft(data))
-    _publish(
-        data, clock, draft=data / "drafts/city-of-ekurhuleni/2026-27/b-residential-3-phase.json"
-    )
-    return clock
 
 
 def _rows(engine: Engine, sql: str) -> list[tuple[object, ...]]:
@@ -103,7 +44,7 @@ def test_two_rebuilds_give_identical_tables(
 ) -> None:
     """The second rebuild reads a copy at another path, in reverse file order; the rows must
     not change. The dump pins its own time zone (shown by dumping under another one)."""
-    _publish_all(data)
+    publish_all(data)
     summary = rebuild(data, test_database.migration)
     first = dump(test_database.migration)
     elsewhere = tmp_path / "elsewhere" / "data"
@@ -137,7 +78,7 @@ def test_two_rebuilds_give_identical_tables(
 def test_rows_hold_what_the_files_say(
     data: Path, test_database: TestDatabase, app_engine: Engine
 ) -> None:
-    _publish_all(data)
+    publish_all(data)
     rebuild(data, test_database.migration)
     ((payload, status, valid, recorded),) = _rows(
         app_engine,
@@ -177,10 +118,10 @@ def _record_times(engine: Engine) -> dict[str, tuple[object, ...]]:
 def test_a_correction_and_a_withdrawal_close_record_time(
     data: Path, test_database: TestDatabase, app_engine: Engine
 ) -> None:
-    clock = _publish_all(data)
-    _replace_draft(data, load_file(DRAFT_B1, TariffVersion))
-    _publish(data, clock, draft=_draft(data), supersedes=R1)
-    _publish(data, clock, withdraw=f"{TARIFF}/2026-07-01/r2")
+    clock = publish_all(data)
+    replace_draft(data, load_file(DRAFT_B1, TariffVersion))
+    publish_one(data, clock, draft=draft_b1(data), supersedes=R1)
+    publish_one(data, clock, withdraw=f"{TARIFF}/2026-07-01/r2")
     rebuild(data, test_database.migration)
     times = _record_times(app_engine)
     r1, r2, r3 = (times[f"{TARIFF}/2026-07-01/r{n}"] for n in (1, 2, 3))
@@ -192,10 +133,10 @@ def test_a_correction_and_a_withdrawal_close_record_time(
 def test_a_restore_after_a_withdrawal_is_open(
     data: Path, test_database: TestDatabase, app_engine: Engine
 ) -> None:
-    clock = _publish_all(data)
-    _publish(data, clock, withdraw=R1)
-    _replace_draft(data, load_file(DRAFT_B1, TariffVersion))
-    _publish(data, clock, draft=_draft(data))
+    clock = publish_all(data)
+    publish_one(data, clock, withdraw=R1)
+    replace_draft(data, load_file(DRAFT_B1, TariffVersion))
+    publish_one(data, clock, draft=draft_b1(data))
     rebuild(data, test_database.migration)
     times = _record_times(app_engine)
     r1, r2, r3 = (times[f"{TARIFF}/2026-07-01/r{n}"] for n in (1, 2, 3))
@@ -215,7 +156,7 @@ def test_only_dev_and_test_databases_are_rebuilt(
 def test_a_bad_file_aborts_before_the_database_is_touched(
     data: Path, test_database: TestDatabase
 ) -> None:
-    _publish_all(data)
+    publish_all(data)
     rebuild(data, test_database.migration)
     before = dump(test_database.migration)
     path = data / "tariffs" / TARIFF / "2026-07-01.r1.json"
@@ -229,7 +170,7 @@ def test_a_database_refusal_rolls_the_whole_load_back(
     data: Path, test_database: TestDatabase
 ) -> None:
     """Two current versions of one tariff overlap: only the database sees it."""
-    _publish_all(data)
+    publish_all(data)
     rebuild(data, test_database.migration)
     before = dump(test_database.migration)
     folder = data / "tariffs" / TARIFF
@@ -289,7 +230,7 @@ def _edit_r1(data: Path, change: str) -> None:
     "change", ["hash", "missing", "class", "gap", "path", "supersedes", "unlisted", "twice"]
 )
 def test_refusals_found_in_the_files(data: Path, test_database: TestDatabase, change: str) -> None:
-    clock = _publish_all(data)
+    clock = publish_all(data)
     pdf = data / "sources/sars/vat-404-guide-for-vendors-2025-01.pdf"
     messages = {
         "hash": "SHA-256 differs from the manifest",
@@ -308,8 +249,8 @@ def test_refusals_found_in_the_files(data: Path, test_database: TestDatabase, ch
             pdf.write_bytes(b"not the guide")
     elif change == "class":
         version = load_file(DRAFT_B1, TariffVersion)
-        _replace_draft(data, version.model_copy(update={"customer_class": "business"}))
-        _publish(data, clock, draft=_draft(data), supersedes=R1)
+        replace_draft(data, version.model_copy(update={"customer_class": "business"}))
+        publish_one(data, clock, draft=draft_b1(data), supersedes=R1)
     elif change == "gap":
         _gap(data)
     elif change in {"unlisted", "twice"}:
@@ -326,7 +267,7 @@ def test_the_command_rebuilds_and_reports(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _publish_all(data)
+    publish_all(data)
     monkeypatch.chdir(data.parent)
     env = {"MUNISENSE_MIGRATION_DATABASE_URL": test_database.migration.url}
     assert loader.main([], env) == 0
@@ -379,7 +320,7 @@ def test_the_loaded_rows_are_checked(
     data: Path, test_database: TestDatabase, monkeypatch: pytest.MonkeyPatch, rule: str
 ) -> None:
     """Each row check finds its rule broken inside the load, and the load rolls back."""
-    _publish_all(data)
+    publish_all(data)
     rebuild(data, test_database.migration)
     before = dump(test_database.migration)
     real = loader._load
