@@ -1,6 +1,6 @@
 # ADR-0010: Free tooling, GitHub Actions CI and WSL2 for development
 
-- **Status:** Accepted
+- **Status:** Accepted. Its "Protecting `main`" point: Superseded by ADR-0014; everything else in this ADR stands.
 - **Date:** 2026-11-17 (proposed); 2026-11-17 (accepted by the owner)
 - **Deciders:** Josh Heath (owner)
 
