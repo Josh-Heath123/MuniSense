@@ -70,6 +70,8 @@ audit = { shell = "uv export --frozen --all-groups --no-emit-project --format re
 
 [tool.ruff]
 line-length = 100
+# Caches live off /mnt/c, whose per-file overhead slowed `poe check` run by run (W19, E51).
+cache-dir = "~/.cache/munisense/ruff"
 target-version = "py313"
 src = ["src", "tests"]
 # Python only: ruff 0.17 would otherwise also format Markdown, including Accepted ADRs.
@@ -96,6 +98,7 @@ select = [
 
 [tool.mypy]
 python_version = "3.13"
+cache_dir = "~/.cache/munisense/mypy"  # off /mnt/c (W19); mypy expands ~
 strict = true
 mypy_path = "src:tests"
 files = ["src", "tests"]
@@ -113,6 +116,7 @@ warn_required_dynamic_aliases = true
 
 [tool.pytest.ini_options]
 minversion = "9.0"
+cache_dir = "~/.cache/munisense/pytest"  # off /mnt/c (W19); pytest expands ~
 testpaths = ["tests"]
 pythonpath = ["src", "tests"]
 addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
