@@ -373,6 +373,7 @@ def test_a_vat_rate_belongs_to_a_vat_publication(connection: Connection) -> None
 # --- the application role -------------------------------------------------------------
 
 UPDATE_COLUMN = {
+    "alembic_version": "version_num",
     "supplier": "name",
     "customer_class": "code",
     "tariff": "tariff_code",

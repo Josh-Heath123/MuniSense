@@ -59,3 +59,9 @@ def test_the_tariff_year_folder_follows_the_start_month(month: int, day: date, y
     body["suppliers"][0]["tariff_year_start_month"]["value"] = month
     supplier = SupplierCatalogue.model_validate_json(json.dumps(body)).suppliers[0]
     assert supplier.tariff_year(day) == year
+
+
+def test_the_code_vat_is_reserved() -> None:
+    supplier = {**BODY["suppliers"][0], "code": "vat"}
+    with pytest.raises(ValidationError, match="the supplier code 'vat' is reserved"):
+        SupplierCatalogue.model_validate_json(_with([supplier]))
