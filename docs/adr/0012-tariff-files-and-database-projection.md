@@ -1,6 +1,6 @@
 # ADR-0012: Keep published tariffs as immutable JSON files and rebuild the database from them
 
-- **Status:** Accepted. Its revision rule (section 2 "File name", and the revision sentences of sections 3 and 7) and the shape of `checks` (section 3): Superseded by ADR-0013; everything else in this ADR stands.
+- **Status:** Accepted. Its revision rule (section 2 "File name", and the revision sentences of sections 3 and 7) and the shape of `checks` (section 3): Superseded by ADR-0013. In section 6, "drops and recreates the schema" and the load order of publications (sorted path order, VAT before tariffs): Superseded by ADR-0015. Everything else in this ADR stands.
 - **Date:** 2026-11-18 (proposed; revised after the architect's review); 2026-11-19 (accepted by the owner, W16)
 - **Deciders:** Josh Heath (owner)
 
