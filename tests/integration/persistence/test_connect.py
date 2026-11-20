@@ -50,8 +50,11 @@ def test_a_missing_privilege_means_the_database_is_not_ready(
     test_database: TestDatabase,
 ) -> None:
     # pg_authid is readable by superusers only, so the app role gets SQLSTATE 42501.
-    with pytest.raises(DatabaseNotReadyError), connect(test_database.app) as c:
+    with pytest.raises(DatabaseNotReadyError) as not_ready, connect(test_database.app) as c:
         c.execute(text("SELECT rolname FROM pg_catalog.pg_authid"))
+    assert str(not_ready.value) == (
+        f"the database {test_database.app.database!r} has no tables, or the role cannot read them"
+    )
 
 
 def test_other_query_errors_pass_through(test_database: TestDatabase) -> None:
