@@ -1,0 +1,387 @@
+{
+  "schema_version": 1,
+  "publication": {
+    "id": "city-of-ekurhuleni/b-residential-3-phase/2026-07-01/r1",
+    "published_at": "2026-11-20T14:59:38.958544Z",
+    "published_by": "owner",
+    "supersedes": null,
+    "reason": "Ekurhuleni Tariff B (Residential) 3-phase, 2026/27; owner hand check E56. VAT treatment and season dates stay estimated.",
+    "checks": {
+      "kind": "version",
+      "tool_version": "munisense publish 2",
+      "schema": "valid",
+      "documents": "all cited documents in a manifest; hashes match",
+      "overlap": "none",
+      "citation_check": {
+        "passed": 0,
+        "no_text_layer": 16,
+        "failed": 0
+      }
+    }
+  },
+  "version": {
+    "schema_version": 1,
+    "supplier": "city-of-ekurhuleni",
+    "tariff_code": "b-residential-3-phase",
+    "customer_class": "residential",
+    "printed_name": {
+      "value": "TARIFF B (RESIDENTIAL)",
+      "citation": {
+        "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+        "page": 4,
+        "locator": "Tariff heading",
+        "printed_text": "TARIFF B (RESIDENTIAL)"
+      },
+      "status": {
+        "kind": "verified",
+        "verifier": "owner",
+        "verifier_kind": "human",
+        "method": "visual comparison with the scanned page",
+        "verified_on": "2026-11-20",
+        "text_check": "no_text_layer"
+      }
+    },
+    "applies_to": {
+      "value": "Full title residential customers, single-phase 230 V or multi-phase 400/230 V, used and zoned exclusively for residential purposes; not bulk residential complexes, body corporates or blocks of flats",
+      "citation": {
+        "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+        "page": 4,
+        "locator": "Tariff B (Residential), first bullet",
+        "printed_text": "This tariff is available for all full title residential customers single-phase 230 V or multi-phase 400/230 V connections that are used and zoned exclusively for residential purposes (excluding - bulk residential complexes, body corporate, blocks of flats, etc.)."
+      },
+      "status": {
+        "kind": "verified",
+        "verifier": "owner",
+        "verifier_kind": "human",
+        "method": "visual comparison with the scanned page",
+        "verified_on": "2026-11-20",
+        "text_check": "no_text_layer"
+      }
+    },
+    "effective_from": {
+      "value": "2026-07-01",
+      "citation": {
+        "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+        "page": 1,
+        "locator": "Start date",
+        "printed_text": "01 JULY 2026"
+      },
+      "status": {
+        "kind": "verified",
+        "verifier": "owner",
+        "verifier_kind": "human",
+        "method": "visual comparison with the scanned page",
+        "verified_on": "2026-11-20",
+        "text_check": "no_text_layer"
+      }
+    },
+    "effective_to": {
+      "value": "2027-07-01",
+      "citation": {
+        "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+        "page": 1,
+        "locator": "End date (printed as the last day; stored as the exclusive end, the next day)",
+        "printed_text": "30 JUNE 2027"
+      },
+      "status": {
+        "kind": "verified",
+        "verifier": "owner",
+        "verifier_kind": "human",
+        "method": "visual comparison with the scanned page",
+        "verified_on": "2026-11-20",
+        "text_check": "no_text_layer"
+      }
+    },
+    "price_basis": {
+      "value": "excluding_vat",
+      "citation": {
+        "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+        "page": 1,
+        "locator": "General, first bullet; also 'VAT EXCLUDED' beside the dates",
+        "printed_text": "All tariffs listed below, show VAT excluded."
+      },
+      "status": {
+        "kind": "verified",
+        "verifier": "owner",
+        "verifier_kind": "human",
+        "method": "visual comparison with the scanned page",
+        "verified_on": "2026-11-20",
+        "text_check": "no_text_layer"
+      }
+    },
+    "rounding_policy": {
+      "name": "ekurhuleni-estimated",
+      "line_amount": {
+        "step": "0.01",
+        "mode": "half_up"
+      },
+      "vat_application": "on_subtotal",
+      "vat_amount": {
+        "step": "0.01",
+        "mode": "half_up"
+      },
+      "total": {
+        "step": "0.01",
+        "mode": "half_up"
+      },
+      "pro_rating": {
+        "step": "0.000001",
+        "mode": "half_up"
+      },
+      "prepaid_kwh": {
+        "step": "0.01",
+        "mode": "half_up"
+      },
+      "status": {
+        "kind": "estimated",
+        "reason": "not in the schedule; cents half up, VAT on the subtotal, pro-rating factors to millionths and prepaid kWh to hundredths (both half up) assumed until learnt from real bills or receipts (P3)"
+      },
+      "evidence": []
+    },
+    "billing_policy": {
+      "name": "ekurhuleni-estimated",
+      "pro_rating": "by_days",
+      "consumption_split": "by_days",
+      "block_reset": "calendar_month",
+      "prepaid_fixed_charges": "first_purchase_of_month",
+      "status": {
+        "kind": "estimated",
+        "reason": "scanned pages; page 1 bills the cross-over to new tariffs pro rata and page 4 charges the basic charge once per month; sharing by days, a monthly block reset and first-purchase recovery assumed (P3)"
+      },
+      "evidence": [
+        {
+          "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+          "page": 1,
+          "locator": "General, fourth bullet",
+          "printed_text": "The cross-over from existing tariffs to new tariffs will be billed pro rata."
+        },
+        {
+          "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+          "page": 4,
+          "locator": "Tariff B (Residential), Basic Charge (Rand/month), R.1",
+          "printed_text": "The amount is charged once per month only per point of supply,"
+        }
+      ]
+    },
+    "components": [
+      {
+        "schema_version": 1,
+        "name": "basic",
+        "label": {
+          "value": "Basic charge",
+          "citation": {
+            "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+            "page": 4,
+            "locator": "Basic Charge (Rand/month), R1.2",
+            "printed_text": "R1.2 Basic charge: 3 Phase: R/POS/month"
+          },
+          "status": {
+            "kind": "verified",
+            "verifier": "owner",
+            "verifier_kind": "human",
+            "method": "visual comparison with the scanned page",
+            "verified_on": "2026-11-20",
+            "text_check": "no_text_layer"
+          }
+        },
+        "vat": {
+          "value": "standard",
+          "citation": {
+            "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+            "page": 1,
+            "locator": "General, first bullet",
+            "printed_text": "All tariffs listed below, show VAT excluded."
+          },
+          "status": {
+            "kind": "estimated",
+            "reason": "citation check not built until P2; scanned page, no text layer; standard rating inferred: the schedule says only that VAT is excluded"
+          }
+        },
+        "kind": "fixed_charge",
+        "rate": {
+          "value": {
+            "value": "203.89",
+            "unit": "R/month"
+          },
+          "citation": {
+            "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+            "page": 4,
+            "locator": "Basic Charge (Rand/month), R1.2, R/POS/month",
+            "printed_text": "R203.89"
+          },
+          "status": {
+            "kind": "verified",
+            "verifier": "owner",
+            "verifier_kind": "human",
+            "method": "visual comparison with the scanned page",
+            "verified_on": "2026-11-20",
+            "text_check": "no_text_layer"
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "name": "energy",
+        "label": {
+          "value": "Energy charge",
+          "citation": {
+            "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+            "page": 4,
+            "locator": "Energy Charge (R/kWh), table heading",
+            "printed_text": "Energy Charge (R/kWh)"
+          },
+          "status": {
+            "kind": "verified",
+            "verifier": "owner",
+            "verifier_kind": "human",
+            "method": "visual comparison with the scanned page",
+            "verified_on": "2026-11-20",
+            "text_check": "no_text_layer"
+          }
+        },
+        "vat": {
+          "value": "standard",
+          "citation": {
+            "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+            "page": 1,
+            "locator": "General, first bullet",
+            "printed_text": "All tariffs listed below, show VAT excluded."
+          },
+          "status": {
+            "kind": "estimated",
+            "reason": "citation check not built until P2; scanned page, no text layer; standard rating inferred: the schedule says only that VAT is excluded"
+          }
+        },
+        "kind": "seasonal_energy",
+        "seasons": [
+          {
+            "name": "high_demand",
+            "label": {
+              "value": "High Demand Season",
+              "citation": {
+                "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+                "page": 4,
+                "locator": "Energy Charge (R/kWh), R.3",
+                "printed_text": "R.3. High Demand Season (June, July, and August)"
+              },
+              "status": {
+                "kind": "verified",
+                "verifier": "owner",
+                "verifier_kind": "human",
+                "method": "visual comparison with the scanned page",
+                "verified_on": "2026-11-20",
+                "text_check": "no_text_layer"
+              }
+            },
+            "dates": {
+              "value": {
+                "start_month": 6,
+                "start_day": 1,
+                "end_month": 8,
+                "end_day": 31
+              },
+              "citation": {
+                "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+                "page": 4,
+                "locator": "Energy Charge (R/kWh), R.3",
+                "printed_text": "R.3. High Demand Season (June, July, and August)"
+              },
+              "status": {
+                "kind": "estimated",
+                "reason": "citation check not built until P2; scanned page, no text layer; season named by months; read as whole months, first to last day"
+              }
+            },
+            "blocks": [
+              {
+                "up_to_kwh": null,
+                "rate": {
+                  "value": {
+                    "value": "3.3700",
+                    "unit": "R/kWh"
+                  },
+                  "citation": {
+                    "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+                    "page": 4,
+                    "locator": "Energy Charge (R/kWh), R.3, rate",
+                    "printed_text": "R3.37,00"
+                  },
+                  "status": {
+                    "kind": "verified",
+                    "verifier": "owner",
+                    "verifier_kind": "human",
+                    "method": "visual comparison with the scanned page",
+                    "verified_on": "2026-11-20",
+                    "text_check": "no_text_layer"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "low_demand",
+            "label": {
+              "value": "Low Demand Season",
+              "citation": {
+                "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+                "page": 4,
+                "locator": "Energy Charge (R/kWh), R.4",
+                "printed_text": "R.4. Low Demand Season (September to May)"
+              },
+              "status": {
+                "kind": "verified",
+                "verifier": "owner",
+                "verifier_kind": "human",
+                "method": "visual comparison with the scanned page",
+                "verified_on": "2026-11-20",
+                "text_check": "no_text_layer"
+              }
+            },
+            "dates": {
+              "value": {
+                "start_month": 9,
+                "start_day": 1,
+                "end_month": 5,
+                "end_day": 31
+              },
+              "citation": {
+                "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+                "page": 4,
+                "locator": "Energy Charge (R/kWh), R.4",
+                "printed_text": "R.4. Low Demand Season (September to May)"
+              },
+              "status": {
+                "kind": "estimated",
+                "reason": "citation check not built until P2; scanned page, no text layer; season named by months; read as whole months, first to last day"
+              }
+            },
+            "blocks": [
+              {
+                "up_to_kwh": null,
+                "rate": {
+                  "value": {
+                    "value": "3.3700",
+                    "unit": "R/kWh"
+                  },
+                  "citation": {
+                    "document_sha256": "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73",
+                    "page": 4,
+                    "locator": "Energy Charge (R/kWh), R.4, rate",
+                    "printed_text": "R3.37,00"
+                  },
+                  "status": {
+                    "kind": "verified",
+                    "verifier": "owner",
+                    "verifier_kind": "human",
+                    "method": "visual comparison with the scanned page",
+                    "verified_on": "2026-11-20",
+                    "text_check": "no_text_layer"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
