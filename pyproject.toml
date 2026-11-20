@@ -48,11 +48,6 @@ no-build = true
 
 # ---------------------------------------------------------------- tasks (poe)
 
-# mypy does not expand ~ in its own cache_dir, so its cache moves through the environment
-# (W19). The other caches are set in their own sections.
-[tool.poe.env]
-MYPY_CACHE_DIR = "${HOME}/.cache/munisense/mypy"
-
 [tool.poe.tasks]
 _format-check = "ruff format --check"
 _lint = "ruff check"
@@ -103,6 +98,7 @@ select = [
 
 [tool.mypy]
 python_version = "3.13"
+cache_dir = "~/.cache/munisense/mypy"  # off /mnt/c (W19); mypy expands ~
 strict = true
 mypy_path = "src:tests"
 files = ["src", "tests"]

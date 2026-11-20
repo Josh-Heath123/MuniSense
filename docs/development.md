@@ -55,7 +55,7 @@ uv run mutmut run           # mutation testing of domain.billing (slow; see docs
 
 ## Caches
 
-The ruff, pytest, mypy and Hypothesis caches live in `~/.cache/munisense/`, off the `/mnt/c` disk, whose per-file overhead made `poe check` slower run by run (W19). mypy finds its cache through `MYPY_CACHE_DIR`, which `poe` sets; running `mypy` directly, outside `poe`, still uses `.mypy_cache/` in the repository.
+The ruff, pytest, mypy and Hypothesis caches live in `~/.cache/munisense/`, off the `/mnt/c` disk, whose per-file overhead slowed `poe check` (W19). Each tool reads the location from `pyproject.toml` (`[tool.ruff] cache-dir`, `[tool.pytest.ini_options] cache_dir`, `[tool.mypy] cache_dir`) or, for Hypothesis, from `tests/conftest.py`, so it holds whatever runs the tool. One shared Hypothesis database serves every clone under the same home folder; CI starts with an empty one. The import-linter cache (`verify` only) still sits in the repository. Do not pass `-p no:cacheprovider` to pytest: it removes the `cache_dir` setting, which strict config then refuses.
 
 ## Database settings
 
