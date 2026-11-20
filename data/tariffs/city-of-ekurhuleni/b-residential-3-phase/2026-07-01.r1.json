@@ -2,7 +2,7 @@
   "schema_version": 1,
   "publication": {
     "id": "city-of-ekurhuleni/b-residential-3-phase/2026-07-01/r1",
-    "published_at": "2026-11-20T14:59:38.958544Z",
+    "published_at": "2026-11-20T19:14:57.832566Z",
     "published_by": "owner",
     "supersedes": null,
     "reason": "Ekurhuleni Tariff B (Residential) 3-phase, 2026/27; owner hand check E56. VAT treatment and season dates stay estimated.",
@@ -194,7 +194,7 @@
           },
           "status": {
             "kind": "estimated",
-            "reason": "citation check not built until P2; scanned page, no text layer; standard rating inferred: the schedule says only that VAT is excluded"
+            "reason": "standard rating inferred: the schedule says only that VAT is excluded; a City of Ekurhuleni bill or receipt showing VAT would confirm it (P3)"
           }
         },
         "kind": "fixed_charge",
@@ -249,7 +249,7 @@
           },
           "status": {
             "kind": "estimated",
-            "reason": "citation check not built until P2; scanned page, no text layer; standard rating inferred: the schedule says only that VAT is excluded"
+            "reason": "standard rating inferred: the schedule says only that VAT is excluded; a City of Ekurhuleni bill or receipt showing VAT would confirm it (P3)"
           }
         },
         "kind": "seasonal_energy",
@@ -288,7 +288,7 @@
               },
               "status": {
                 "kind": "estimated",
-                "reason": "citation check not built until P2; scanned page, no text layer; season named by months; read as whole months, first to last day"
+                "reason": "season named by months, read as whole months, first to last day; a City of Ekurhuleni bill or receipt spanning a season change would confirm it (P3)"
               }
             },
             "blocks": [
@@ -351,7 +351,7 @@
               },
               "status": {
                 "kind": "estimated",
-                "reason": "citation check not built until P2; scanned page, no text layer; season named by months; read as whole months, first to last day"
+                "reason": "season named by months, read as whole months, first to last day; a City of Ekurhuleni bill or receipt spanning a season change would confirm it (P3)"
               }
             },
             "blocks": [

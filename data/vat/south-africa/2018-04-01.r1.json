@@ -2,7 +2,7 @@
   "schema_version": 1,
   "publication": {
     "id": "vat/south-africa/2018-04-01/r1",
-    "published_at": "2026-11-20T14:59:35.693054Z",
+    "published_at": "2026-11-20T19:14:54.953015Z",
     "published_by": "owner",
     "supersedes": null,
     "reason": "SARS standard VAT rate; owner hand check E56. No end: Act 3 of 2026 s13 stops the 2025 increase (sha256 5f6e4225703d6ba2f0d19bd0911fe580f787bcab4d1f8d6f421525051366ad1e).",
@@ -32,7 +32,7 @@
         "kind": "verified",
         "verifier": "owner",
         "verifier_kind": "human",
-        "method": "visual comparison with the scanned page",
+        "method": "visual comparison with the source page",
         "verified_on": "2026-11-20",
         "text_check": "passed"
       }
@@ -50,7 +50,7 @@
         "kind": "verified",
         "verifier": "owner",
         "verifier_kind": "human",
-        "method": "visual comparison with the scanned page",
+        "method": "visual comparison with the source page",
         "verified_on": "2026-11-20",
         "text_check": "passed"
       }
