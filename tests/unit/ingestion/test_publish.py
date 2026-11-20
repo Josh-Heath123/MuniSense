@@ -33,6 +33,7 @@ from munisense.provenance.publication import (
 )
 from munisense.provenance.sources import SourceDocument
 from support.builders import fixture_free_basic
+from support.publishing import DRAFTS
 
 ROOT = Path(__file__).resolve().parents[3]
 TARIFF = "city-of-ekurhuleni/b-residential-1-phase"
@@ -47,8 +48,8 @@ def data(tmp_path: Path) -> Path:
     The stand-in checker reads no PDF; `with_pdfs` adds them for the end-to-end tests.
     """
     target = tmp_path / "data"
-    for part in ("catalogue", "drafts"):
-        shutil.copytree(ROOT / "data" / part, target / part)
+    shutil.copytree(ROOT / "data" / "catalogue", target / "catalogue")
+    shutil.copytree(DRAFTS, target / "drafts")
     shutil.copytree(
         ROOT / "data" / "sources", target / "sources", ignore=shutil.ignore_patterns("*.pdf")
     )
@@ -154,9 +155,7 @@ def test_a_vat_rate_is_published_with_its_record_time(data: Path) -> None:
         clock.now,
     )
     assert _counts(record.checks).passed == 2
-    assert publication.version == load_file(
-        ROOT / "data/drafts/vat/south-africa/2018-04-01.json", VatRate
-    )
+    assert publication.version == load_file(DRAFTS / "vat/south-africa/2018-04-01.json", VatRate)
     assert not vat_draft(data).exists()
     canonical.check_bytes(path.read_bytes())
 
@@ -238,7 +237,7 @@ def test_a_supplier_not_in_the_catalogue_refuses(data: Path) -> None:
 def test_a_file_that_is_not_a_publication_in_the_folder_refuses(data: Path) -> None:
     target = data / "vat" / "south-africa" / "2018-04-01.r1.json"
     target.parent.mkdir(parents=True)
-    shutil.copy(ROOT / "data/drafts/vat/south-africa/2018-04-01.json", target)
+    shutil.copy(DRAFTS / "vat/south-africa/2018-04-01.json", target)
     with pytest.raises(ProvenanceError):  # not a publication: refused while reading
         _publish(data, draft=vat_draft(data))
 
@@ -392,7 +391,7 @@ def test_a_publication_file_whose_name_disagrees_with_its_id_is_refused(data: Pa
     _write_tariff(
         data,
         load_file(
-            ROOT / "data/drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json",
+            DRAFTS / "city-of-ekurhuleni/2026-27/b-residential-1-phase.json",
             TariffVersion,
         ),
     )
@@ -557,7 +556,7 @@ def test_record_time_never_goes_back_within_a_tariff(data: Path, original: Tarif
 
 
 def _vat_rate(data: Path, start: date, end: date | None) -> Path:
-    rate = load_file(ROOT / "data/drafts/vat/south-africa/2018-04-01.json", VatRate)
+    rate = load_file(DRAFTS / "vat/south-africa/2018-04-01.json", VatRate)
     start_cited = rate.start_cited.model_copy(update={"value": start})
     end_cited = None if end is None else rate.start_cited.model_copy(update={"value": end})
     path = data / "drafts" / "vat" / "south-africa" / f"{start.isoformat()}.json"

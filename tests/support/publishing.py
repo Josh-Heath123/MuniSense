@@ -16,6 +16,8 @@ from munisense.provenance.drafts import write_file
 from munisense.provenance.sources import SourceDocument
 
 ROOT = Path(__file__).resolve().parents[2]
+# The three drafts as they were before their first publication (P2-13, E55).
+DRAFTS = ROOT / "tests" / "fixtures" / "drafts"
 TARIFF = "city-of-ekurhuleni/b-residential-1-phase"
 R1 = f"{TARIFF}/2026-07-01/r1"
 START = datetime(2026, 12, 1, 9, 30, tzinfo=UTC)

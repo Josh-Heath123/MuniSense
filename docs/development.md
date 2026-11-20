@@ -46,7 +46,7 @@ uv run alembic downgrade base  # first, if you edited a migration you had alread
 uv run pre-commit install   # git hooks: file checks, ruff, gitleaks; refuses a push to main (needs Docker)
 uv run poe fmt              # format and auto-fix
 uv run poe check            # lint, types, fast tests (the Stop hook runs this)
-uv run poe demo             # the README's example bill, from the real data and engine
+uv run poe demo             # the README's example bill, from the published data via the dev database (after db-rebuild)
 uv run poe publish <draft> --reason "..." [--supersedes <id>] [--check]
                             # publish a draft (ADR-0012); --check runs every check, writes nothing
 uv run poe publish --withdraw <id> --reason "..."   # withdraw a publication

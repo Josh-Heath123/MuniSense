@@ -1,10 +1,11 @@
 """P1-9: City of Ekurhuleni Tariff B (Residential), 2026/27, end to end.
 
 The Ekurhuleni example tariff for P1 (E32; not the owner's meter, E34), transcribed from
-the signed schedule in `data/sources/ekurhuleni/` into the drafts
-`data/drafts/city-of-ekurhuleni/2026-27/` (not reviewed or published; P3), with the VAT rate from
-SARS (`data/sources/sars/`, `data/drafts/vat/south-africa/`). Every value is `estimated` (E29) until
-the citation check (P2) and a human check exist.
+the signed schedule in `data/sources/ekurhuleni/`, with the VAT rate from SARS
+(`data/sources/sars/`). Published in P2-13 under `data/tariffs/city-of-ekurhuleni/` and
+`data/vat/south-africa/`; the values the owner checked by hand against the source pages are
+`verified` (E56), the rest `estimated` with a reason. Transcription notes:
+`docs/domain/ekurhuleni-2026-27.md`.
 
 Hand calculations use only the printed values:
 
@@ -32,27 +33,48 @@ from munisense.domain.billing import (
     calculate_month,
     calculate_period,
 )
-from munisense.domain.citations import Estimated, StatusKind, cited_statuses
+from munisense.domain.citations import Estimated, StatusKind, Verified, cited_statuses
 from munisense.domain.money import Money, VatTable
 from munisense.domain.tariffs import FixedCharge, SeasonalEnergy, TariffVersion
-from munisense.provenance.drafts import load_file, load_vat_table
+from munisense.ingestion.citation_check import iter_cited
+from munisense.provenance.publication import TariffPublication, VatRatePublication, load_bytes
 from support.ekurhuleni import BILL_CASES, month
 
 ROOT = Path(__file__).resolve().parents[3]
-DRAFTS = ROOT / "data" / "drafts"
-TARIFFS = DRAFTS / "city-of-ekurhuleni" / "2026-27"
+TARIFFS = ROOT / "data" / "tariffs" / "city-of-ekurhuleni"
+VAT_FILE = ROOT / "data" / "vat" / "south-africa" / "2018-04-01.r1.json"
 SCHEDULE_SHA = "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73"
 VAT_GUIDE_SHA = "9204c3f8d0cea0200b84559f19bfa638d2f6eb6e2083ac633da4938eec52c31a"
 VAT_ACT_SHA = "5f6e4225703d6ba2f0d19bd0911fe580f787bcab4d1f8d6f421525051366ad1e"
-E29_REASON = "citation check not built until P2"
+VAT_REASON = (
+    "standard rating inferred: the schedule says only that VAT is excluded; a City of"
+    " Ekurhuleni bill or receipt showing VAT would confirm it (P3)"
+)
+SEASON_REASON = (
+    "season named by months, read as whole months, first to last day; a City of Ekurhuleni"
+    " bill or receipt spanning a season change would confirm it (P3)"
+)
+
+
+def tariff_publication(phase: str) -> TariffPublication:
+    path = TARIFFS / f"b-residential-{phase}" / "2026-07-01.r1.json"
+    return load_bytes(path.read_bytes(), TariffPublication)
+
+
+def vat_publication() -> VatRatePublication:
+    return load_bytes(VAT_FILE.read_bytes(), VatRatePublication)
 
 
 def tariff(phase: str) -> TariffVersion:
-    return load_file(TARIFFS / f"b-residential-{phase}.json", TariffVersion)
+    version = tariff_publication(phase).version
+    assert version is not None  # r1 is not a withdrawal
+    return version
 
 
 def vat_table() -> VatTable:
-    return load_vat_table(DRAFTS / "vat" / "south-africa")
+    rate = vat_publication().version
+    assert rate is not None  # r1 is not a withdrawal
+    return VatTable(rates=(rate,))
 
 
 def rand(value: str) -> Money:
@@ -94,23 +116,57 @@ def test_the_vat_rate_cites_a_committed_source_document() -> None:
     table = vat_table()
     assert _cited_documents(table.model_dump(mode="json")) == {VAT_GUIDE_SHA}
     assert VAT_GUIDE_SHA in _committed_sources()
-    # The Act that stopped the 2025 increase is named (in full) in the status reason.
-    reason = table.rates[0].percent.status
-    assert isinstance(reason, Estimated)
-    assert VAT_ACT_SHA in reason.reason
+    # The Act that stopped the 2025 increase is named (in full) in the publication's reason,
+    # because a verified value has no reason field (E56).
+    assert VAT_ACT_SHA in vat_publication().publication.reason
     assert VAT_ACT_SHA in _committed_sources()
 
 
+def _owner_check(status: object, text_check: str) -> None:
+    assert isinstance(status, Verified)
+    assert (status.verifier, status.verifier_kind, status.verified_on) == (
+        "owner",
+        "human",
+        date(2026, 11, 20),
+    )
+    assert status.text_check.value == text_check
+
+
 @pytest.mark.parametrize("phase", ["1-phase", "3-phase"])
-def test_every_value_is_estimated_with_the_agreed_reason(phase: str) -> None:
-    statuses = cited_statuses(tariff(phase)) + cited_statuses(vat_table())
-    assert statuses
+def test_only_the_hand_checked_values_are_verified(phase: str) -> None:
+    """E56: 12 values verified by the owner; VAT treatment and season dates stay estimated."""
+    version = tariff(phase)
+    estimated = {
+        "components[0].vat": VAT_REASON,
+        "components[1].vat": VAT_REASON,
+        "components[1].seasons[0].dates": SEASON_REASON,
+        "components[1].seasons[1].dates": SEASON_REASON,
+    }
+    statuses = [(path, cited.status) for path, cited in iter_cited(version)]
+    assert len(statuses) == 16
+    assert estimated.keys() <= {path for path, _ in statuses}
+    for path, status in statuses:
+        if path in estimated:
+            assert isinstance(status, Estimated)
+            assert status.reason == estimated[path]
+        else:
+            _owner_check(status, "no_text_layer")
+            assert isinstance(status, Verified)
+            assert status.method == "visual comparison with the scanned page"
+    assert sum(isinstance(s, Verified) for _, s in statuses) == 12
+    rounding, billing = version.rounding_policy.status, version.billing_policy.status
+    assert isinstance(rounding, Estimated)
+    assert isinstance(billing, Estimated)
+    assert "not in the schedule" in rounding.reason
+
+
+def test_both_vat_values_are_verified_against_the_source_page() -> None:
+    statuses = cited_statuses(vat_table())
+    assert len(statuses) == 2
     for status in statuses:
-        assert isinstance(status, Estimated)
-        assert status.reason.startswith(E29_REASON)
-    policy = tariff(phase).rounding_policy.status
-    assert isinstance(policy, Estimated)
-    assert "not in the schedule" in policy.reason
+        _owner_check(status, "passed")
+        assert isinstance(status, Verified)
+        assert status.method == "visual comparison with the source page"
 
 
 def test_the_transcribed_values_are_the_printed_ones() -> None:
@@ -189,7 +245,7 @@ def test_each_month_is_priced_from_its_own_season(period: BillingPeriod, season:
     assert cited[0].startswith(season)
 
 
-def test_a_bill_names_its_sources_and_warns_that_nothing_is_verified() -> None:
+def test_a_bill_names_its_sources_and_warns_of_unverified_values() -> None:
     bill = calculate_bill(
         tariff("1-phase"), month(2026, 7), PeriodTotal(kwh=Decimal(350)), vat_table()
     )

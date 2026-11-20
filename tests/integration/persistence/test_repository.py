@@ -38,8 +38,8 @@ from munisense.provenance.drafts import load_file, load_vat_table, write_file
 from support.database import TestDatabase
 from support.ekurhuleni import BILL_CASES, month
 from support.publishing import (
+    DRAFTS,
     R1,
-    ROOT,
     TARIFF,
     draft_b1,
     publish_all,
@@ -49,8 +49,8 @@ from support.publishing import (
 
 SUPPLIER, B1 = TARIFF.split("/")
 B3 = "b-residential-3-phase"
-DRAFTS = ROOT / "data/drafts/city-of-ekurhuleni/2026-27"
-VAT_DRAFT = ROOT / "data/drafts/vat/south-africa/2018-04-01.json"
+TARIFF_DRAFTS = DRAFTS / "city-of-ekurhuleni/2026-27"
+VAT_DRAFT = DRAFTS / "vat/south-africa/2018-04-01.json"
 LATER = datetime(2027, 1, 1, tzinfo=UTC)  # after every test publication
 TICK = timedelta(microseconds=1)
 SCHEDULE = "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73"  # Ekurhuleni
@@ -81,11 +81,11 @@ def test_versions_and_vat_survive_the_round_trip(
 ) -> None:
     """Equal as JSON text, not only as models: a Decimal's scale (3.3700) must survive too."""
     _loaded(data, test_database)
-    file_vat = load_vat_table(ROOT / "data/drafts/vat/south-africa")
+    file_vat = load_vat_table(DRAFTS / "vat/south-africa")
     database_vat = vat_table(connection, "south-africa", LATER)
     assert database_vat.model_dump_json() == file_vat.model_dump_json()
     for code in (B1, B3):
-        version = load_file(DRAFTS / f"{code}.json", TariffVersion)
+        version = load_file(TARIFF_DRAFTS / f"{code}.json", TariffVersion)
         for period in _months():
             recorded = tariff_version(connection, SUPPLIER, code, period.start, LATER)
             assert recorded.version.model_dump_json() == version.model_dump_json()
@@ -149,10 +149,12 @@ def test_a_correction_and_a_withdrawal_change_answers_only_from_their_published_
     data: Path, test_database: TestDatabase, connection: Connection
 ) -> None:
     clock = publish_all(data)
-    replace_draft(data, load_file(DRAFTS / f"{B1}.json", TariffVersion))
+    replace_draft(data, load_file(TARIFF_DRAFTS / f"{B1}.json", TariffVersion))
     publish_one(data, clock, draft=draft_b1(data), supersedes=R1)
     publish_one(data, clock, withdraw=f"{TARIFF}/2026-07-01/r2")
-    replace_draft(data, load_file(DRAFTS / f"{B1}.json", TariffVersion))  # publishing used it
+    replace_draft(
+        data, load_file(TARIFF_DRAFTS / f"{B1}.json", TariffVersion)
+    )  # publishing used it
     publish_one(data, clock, draft=draft_b1(data))  # restored, superseding nothing
     rebuild(data, test_database.migration)
     at = _published_at(connection)
@@ -273,7 +275,7 @@ def test_citation_and_status_queries_find_every_cited_value(
     """Test data only (a temporary copy): one 3-phase value is marked user-provided, so the
     status query is shown to select by kind, not to return everything."""
     clock = publish_all(data)
-    b3 = load_file(DRAFTS / f"{B3}.json", TariffVersion)
+    b3 = load_file(TARIFF_DRAFTS / f"{B3}.json", TariffVersion)
     basic = b3.components[0]
     weak = basic.label.model_copy(
         update={"status": UserProvided(provided_by=ProvidedBy.OWNER_BILL)}
@@ -287,7 +289,7 @@ def test_citation_and_status_queries_find_every_cited_value(
     publish_one(data, clock, draft=draft, supersedes=f"{SUPPLIER}/{B3}/2026-07-01/r1")
     rebuild(data, test_database.migration)
     models: list[tuple[str, object]] = [
-        (R1, load_file(DRAFTS / f"{B1}.json", TariffVersion)),
+        (R1, load_file(TARIFF_DRAFTS / f"{B1}.json", TariffVersion)),
         (f"{SUPPLIER}/{B3}/2026-07-01/r2", corrected),
         ("vat/south-africa/2018-04-01/r1", load_file(VAT_DRAFT, VatRate)),
     ]

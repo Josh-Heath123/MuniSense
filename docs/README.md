@@ -9,6 +9,7 @@ Each fact lives in exactly one place. Other documents link to it rather than rep
 | [`product/prd.md`](product/prd.md) | Problem, users, MVP scope, requirements, success measures | Changes only with the owner's approval |
 | [`product/glossary.md`](product/glossary.md) | Domain terms | Claude Code, when a new term appears |
 | [`domain/sa-tariffs.md`](domain/sa-tariffs.md) | How South African tariffs work, with sources. Research notes, **not data** | Claude Code, when research adds or corrects something |
+| [`domain/ekurhuleni-2026-27.md`](domain/ekurhuleni-2026-27.md) | Transcription notes for the published Ekurhuleni 2026/27 Tariff B: choices, inferences, what was left out. **Not data** | Claude Code, when a Tariff B publication is corrected or superseded |
 | [`architecture/overview.md`](architecture/overview.md) | Modules, dependency rules, data model, API conventions | Claude Code, when structure changes |
 | [`adr/`](adr/) | Decisions and their reasons. Never edited once Accepted | New ADR via `/adr`; the owner accepts |
 | [`quality/standards.md`](quality/standards.md) | Coding standards | Changes only with the owner's approval |

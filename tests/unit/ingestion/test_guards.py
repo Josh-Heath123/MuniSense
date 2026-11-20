@@ -24,6 +24,7 @@ from munisense.provenance import canonical
 from munisense.provenance.drafts import load_file, write_file
 from munisense.provenance.sources import SourceDocument
 from support.builders import fixture_free_basic
+from support.publishing import DRAFTS
 
 pytestmark = pytest.mark.slow
 
@@ -68,8 +69,8 @@ def git(repo: Path, *args: str) -> str:
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """A repository whose main branch holds Tariff B r1 and the VAT rate r1."""
-    for part in ("catalogue", "drafts"):
-        shutil.copytree(ROOT / "data" / part, tmp_path / "data" / part)
+    shutil.copytree(ROOT / "data" / "catalogue", tmp_path / "data" / "catalogue")
+    shutil.copytree(DRAFTS, tmp_path / "data" / "drafts")
     shutil.copytree(
         ROOT / "data" / "sources",
         tmp_path / "data" / "sources",
@@ -103,7 +104,7 @@ def _draft(repo: Path) -> Path:
     write_file(
         path,
         load_file(
-            ROOT / "data/drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json",
+            DRAFTS / "city-of-ekurhuleni/2026-27/b-residential-1-phase.json",
             TariffVersion,
         ),
     )
@@ -601,7 +602,7 @@ def test_the_real_citation_check_runs_on_an_added_vat_publication(repo: Path) ->
     for pdf in (ROOT / "data" / "sources").glob("*/*.pdf"):
         shutil.copy(pdf, repo / "data" / "sources" / pdf.parent.name / pdf.name)
     data = repo / "data"
-    rate = load_file(ROOT / "data/drafts/vat/south-africa/2018-04-01.json", VatRate)
+    rate = load_file(DRAFTS / "vat/south-africa/2018-04-01.json", VatRate)
     shortened = rate.model_copy(
         update={"end_cited": rate.start_cited.model_copy(update={"value": date(2027, 1, 1)})}
     )
