@@ -9,7 +9,7 @@
 | **Supplier catalogue** | `data/catalogue/suppliers.json`: every supplier's code, name, kind and cited tariff-year start month |
 | **Source manifest** | `data/sources/<publisher>/sources.json`: the committed source documents of one publisher, by SHA-256, with URL, retrieval date, approval, page count and text layer |
 | **Publication** | One committed, immutable file under `data/tariffs/` or `data/vat/`: a tariff version or VAT rate in an envelope that records when it was published (record time) and the publish step's own checks (ADR-0012) |
-| **Revision** | The `r<N>` in a publication's id and file name. A correction or withdrawal is the next revision of what it supersedes |
+| **Revision** | The `r<N>` in a publication's id and file name. Every publication takes the next free revision under the date it is filed under; `supersedes` records what it replaces (ADR-0013) |
 | **Withdrawal** | A publication with no version: it ends what MuniSense believes about a published version, from its own record time, and puts nothing in its place |
 | **Canonical form** | The one byte layout every committed tariff file must have: the JSON written with two-space indentation, non-ASCII characters as themselves and one final newline, keys in the order the file already has |
 | **Tariff component** | One typed building block of a tariff: fixed charge, flat energy, block energy, time-of-use energy, demand, capacity, levy, export credit, free basic allocation |

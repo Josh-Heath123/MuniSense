@@ -21,9 +21,9 @@ Refusals (each tested):
 - the record time is not later than that of the publication it supersedes;
 - the target path already exists.
 
-A publication that supersedes nothing takes the next free revision under its date (the
-provisional reading in `munisense.provenance.publication`, W18). A withdrawal records the
-publish step's checks with zero citation counts: it holds no values to check.
+Every publication takes the next free revision under the date it is filed under
+(ADR-0013). A withdrawal records `WithdrawalChecks`: the withdrawn publication exists, is not
+a withdrawal and has no successor.
 """
 
 import argparse
@@ -60,8 +60,8 @@ from munisense.provenance.publication import (
 )
 from munisense.provenance.sources import SourceDocument, SourceManifest
 
-TOOL_VERSION = "munisense publish 1"
-"""A fixed label (the package has no version yet); raise the number when the checks change."""
+TOOL_VERSION = "munisense publish 2"
+"""A fixed label (the package has no version yet); raised when the checks change (2: ADR-0013)."""
 DOCUMENTS_CHECKED = "all cited documents in a manifest; hashes match"
 
 Checker = Callable[[BaseModel, dict[str, tuple[Path, SourceDocument]]], list[CitationResult]]
@@ -267,7 +267,7 @@ def publish(  # one refusal list, built in order
     existing = _load_existing(data, scope, code)
     if supersedes is not None:
         _check_target(existing, supersedes, reasons)
-    revision = ParsedId.of(supersedes).revision + 1 if supersedes else _next_revision(existing, day)
+    revision = _next_revision(existing, day)  # ADR-0013: whatever it supersedes
     publication_id = f"{scope}/{code}/{day.isoformat()}/r{revision}"
     target_path = publication_folder(data, scope, code) / f"{day.isoformat()}.r{revision}.json"
     result = Result(target_path, publication_id)
@@ -306,13 +306,22 @@ def publish(  # one refusal list, built in order
             "published_by": request.published_by,
             "supersedes": supersedes,
             "reason": request.reason,
-            "checks": {
-                "tool_version": TOOL_VERSION,
-                "schema": "valid",
-                "documents": DOCUMENTS_CHECKED,
-                "overlap": "none",
-                "citation_check": counts,
-            },
+            "checks": (
+                {
+                    "kind": "version",
+                    "tool_version": TOOL_VERSION,
+                    "schema": "valid",
+                    "documents": DOCUMENTS_CHECKED,
+                    "overlap": "none",
+                    "citation_check": counts,
+                }
+                if version is not None
+                else {
+                    "kind": "withdrawal",
+                    "tool_version": TOOL_VERSION,
+                    "withdrawn": "exists and is current",
+                }
+            ),
         },
         "version": canonical.parse(version.model_dump_json()) if version is not None else None,
     }

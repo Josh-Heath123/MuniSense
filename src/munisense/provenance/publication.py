@@ -11,19 +11,16 @@ publish step's own automatic results (`checks`); human verification lives in eac
 
 - the id is `<scope>/<code>/<effective-from>/r<N>` (ASCII digits only), and matches the
   content it holds;
-- a publication that supersedes another is the revision after it (`r<N+1>`) of the same
-  tariff, possibly filed under another date;
-- a withdrawal has no version, supersedes something, and is filed under the same date.
-
-**Provisional reading (for the architect, P2-9 checkpoint):** ADR-0012 says a first
-publication is `r1`, and that a withdrawn version is restored by publishing it again with
-`supersedes: null`. Under its own date `r1` already exists, so a publication that supersedes
-nothing may have any revision here; the publish step gives it the next free revision.
+- a publication may supersede only a publication of the same tariff; its revision number is
+  the next free one under the date it is filed under (ADR-0013), which only the whole set of
+  files can show;
+- a withdrawal has no version, supersedes something, is filed under the same date, and
+  records `WithdrawalChecks`; a version records `PublishChecks` (ADR-0013).
 
 Rules about the whole set of files are not visible to one file: the superseded publication
 exists, is not a withdrawal and has only this successor; the file's path agrees with its id;
-the next free revision. The publish step (P2-8), the CI check (P2-9) and the loader (P2-11)
-check them.
+the revision is the next free one, with no gaps. The publish step (P2-8), the CI check
+(P2-9) and the loader (P2-11) check them.
 
 `load` raises `CanonicalJsonError`, `PublicationError` (both `ProvenanceError`) or Pydantic's
 `ValidationError`.
@@ -99,11 +96,21 @@ class PublishChecks(DomainModel):
         serialize_by_alias=True,
     )
 
+    kind: Literal["version"] = "version"
     tool_version: Text
     schema_check: Annotated[Literal["valid"], Field(alias="schema")]
     documents: Literal["all cited documents in a manifest; hashes match"]
     overlap: Literal["none"]
     citation_check: CitationCheckCounts
+
+
+class WithdrawalChecks(DomainModel):
+    """What the publish step checks for a withdrawal (ADR-0013): the withdrawn publication
+    exists, is not a withdrawal and has no successor."""
+
+    kind: Literal["withdrawal"] = "withdrawal"
+    tool_version: Text
+    withdrawn: Literal["exists and is current"]
 
 
 class PublicationRecord(DomainModel):
@@ -112,21 +119,26 @@ class PublicationRecord(DomainModel):
     published_by: Handle
     supersedes: PublicationId | None
     reason: Text
-    checks: PublishChecks
+    checks: Annotated[PublishChecks | WithdrawalChecks, Field(discriminator="kind")]
 
     @model_validator(mode="after")
     def _revision_chain(self) -> Self:
         own = ParsedId.of(self.id)
-        if self.supersedes is None:
-            return self  # any revision: see the provisional reading in the module docstring
-        previous = ParsedId.of(self.supersedes)
-        if previous.key != own.key:
+        if self.supersedes is not None and ParsedId.of(self.supersedes).key != own.key:
             msg = f"{self.id}: may supersede only a publication of the same tariff"
             raise ValueError(msg)
-        if own.revision != previous.revision + 1:
-            msg = f"{self.id}: must be the revision after {self.supersedes}"
-            raise ValueError(msg)
         return self
+
+
+def _check_kind(record: PublicationRecord, *, withdrawal: bool) -> None:
+    if withdrawal != isinstance(record.checks, WithdrawalChecks):
+        what = (
+            "a withdrawal records withdrawal checks"
+            if withdrawal
+            else "a version records version checks"
+        )
+        msg = f"{record.id}: {what}"
+        raise ValueError(msg)
 
 
 def _check_withdrawal(record: PublicationRecord) -> None:
@@ -153,6 +165,7 @@ class TariffPublication(DomainModel):
         if own.scope == VAT_SCOPE:
             msg = f"{self.publication.id}: a tariff publication cannot use the VAT scope"
             raise ValueError(msg)
+        _check_kind(self.publication, withdrawal=self.version is None)
         if self.version is None:
             _check_withdrawal(self.publication)
             return self
@@ -178,6 +191,7 @@ class VatRatePublication(DomainModel):
         if own.key != (VAT_SCOPE, VAT_CODE):
             msg = f"{self.publication.id}: a VAT publication's id starts with vat/south-africa/"
             raise ValueError(msg)
+        _check_kind(self.publication, withdrawal=self.version is None)
         if self.version is None:
             _check_withdrawal(self.publication)
             return self

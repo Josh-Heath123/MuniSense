@@ -24,7 +24,13 @@ from munisense.ingestion.publish import PublishRefusedError, Request, publish
 from munisense.provenance import canonical
 from munisense.provenance.drafts import load_file, write_file
 from munisense.provenance.errors import ProvenanceError
-from munisense.provenance.publication import TariffPublication, VatRatePublication, load_bytes
+from munisense.provenance.publication import (
+    CitationCheckCounts,
+    PublishChecks,
+    TariffPublication,
+    VatRatePublication,
+    load_bytes,
+)
 from munisense.provenance.sources import SourceDocument
 from support.builders import fixture_free_basic
 
@@ -126,6 +132,11 @@ def _tariff_file(data: Path, name: str) -> TariffPublication:
     return load_bytes((data / "tariffs" / TARIFF / name).read_bytes(), TariffPublication)
 
 
+def _counts(checks: object) -> CitationCheckCounts:
+    assert isinstance(checks, PublishChecks)
+    return checks.citation_check
+
+
 # --- first publications --------------------------------------------------------------
 
 
@@ -142,7 +153,7 @@ def test_a_vat_rate_is_published_with_its_record_time(data: Path) -> None:
         None,
         clock.now,
     )
-    assert record.checks.citation_check.passed == 2
+    assert _counts(record.checks).passed == 2
     assert publication.version == load_file(
         ROOT / "data/drafts/vat/south-africa/2018-04-01.json", VatRate
     )
@@ -154,7 +165,7 @@ def test_a_tariff_is_published_at_its_path(data: Path, original: TariffVersion) 
     _publish(data, draft=tariff_draft(data))
     publication = _tariff_file(data, "2026-07-01.r1.json")
     assert publication.version == original
-    assert publication.publication.checks.citation_check.no_text_layer == 16
+    assert _counts(publication.publication.checks).no_text_layer == 16
 
 
 def test_check_only_writes_nothing_and_keeps_the_draft(data: Path) -> None:
@@ -270,7 +281,7 @@ def test_a_correction_may_move_its_effective_date(data: Path, original: TariffVe
     _publish(data, clock, draft=tariff_draft(data))
     _write_tariff(data, _dated(original, start=date(2026, 8, 1)))
     result = _publish(data, clock, draft=tariff_draft(data), supersedes=f"{TARIFF}/2026-07-01/r1")
-    assert result.target.name == "2026-08-01.r2.json"
+    assert result.target.name == "2026-08-01.r1.json"  # ADR-0013: next free under its date
 
 
 def test_an_overlapping_version_must_supersede(data: Path, original: TariffVersion) -> None:
@@ -321,10 +332,10 @@ def test_a_withdrawal_holds_no_version_and_ends_the_version(data: Path) -> None:
     withdrawal = _tariff_file(data, "2026-07-01.r2.json")
     assert result.publication_id == f"{TARIFF}/2026-07-01/r2"
     assert withdrawal.version is None
-    assert withdrawal.publication.checks.citation_check.model_dump() == {
-        "passed": 0,
-        "no_text_layer": 0,
-        "failed": 0,
+    assert withdrawal.publication.checks.model_dump() == {
+        "kind": "withdrawal",
+        "tool_version": "munisense publish 2",
+        "withdrawn": "exists and is current",
     }
 
 
@@ -465,11 +476,10 @@ def test_the_command_reports_a_draft_it_could_not_remove(
 # --- more refusals (P2-8 review) ------------------------------------------------------
 
 
-def test_the_existing_target_path_refuses_and_nothing_is_overwritten(
+def test_a_moved_correction_under_a_date_with_revisions_takes_the_next_free_one(
     data: Path, original: TariffVersion
 ) -> None:
-    """ADR-0012's revision rule can collide (W18): D/r2 is a withdrawal, then a correction
-    of C/r1 moved to date D would also be D/r2."""
+    """The ADR-0012 deadlock, now publishable (ADR-0013): D has r1 and r2 already."""
     clock = Clock()
     later = _dated(original, start=date(2027, 1, 1))
     _write_tariff(data, later)
@@ -477,13 +487,25 @@ def test_the_existing_target_path_refuses_and_nothing_is_overwritten(
     _publish(data, clock, withdraw=f"{TARIFF}/2027-01-01/r1")  # D/r2
     _write_tariff(data, _dated(original, end=date(2027, 1, 1)))
     _publish(data, clock, draft=tariff_draft(data))  # C/r1, C = 2026-07-01
-    before = (data / "tariffs" / TARIFF / "2027-01-01.r2.json").read_bytes()
     _write_tariff(data, later)
-    reasons = _refused(
-        data, clock=clock, draft=tariff_draft(data), supersedes=f"{TARIFF}/2026-07-01/r1"
+    result = _publish(data, clock, draft=tariff_draft(data), supersedes=f"{TARIFF}/2026-07-01/r1")
+    assert result.publication_id == f"{TARIFF}/2027-01-01/r3"
+    assert _tariff_file(data, "2027-01-01.r3.json").publication.supersedes == (
+        f"{TARIFF}/2026-07-01/r1"
     )
-    assert reasons == ["2027-01-01.r2.json already exists"]
-    assert (data / "tariffs" / TARIFF / "2027-01-01.r2.json").read_bytes() == before
+
+
+def test_an_existing_target_path_refuses_and_nothing_is_overwritten(
+    data: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Defensive: a numbering race. The next free revision is forced to one that exists."""
+    clock = Clock()
+    _publish(data, clock, draft=vat_draft(data))
+    before = (data / "vat/south-africa/2018-04-01.r1.json").read_bytes()
+    monkeypatch.setattr(publish_module, "_next_revision", lambda *_: 1)
+    reasons = _refused(data, clock=clock, withdraw="vat/south-africa/2018-04-01/r1")
+    assert reasons == ["2018-04-01.r1.json already exists"]
+    assert (data / "vat/south-africa/2018-04-01.r1.json").read_bytes() == before
 
 
 def test_a_withdrawal_cannot_be_withdrawn(data: Path) -> None:
@@ -659,9 +681,9 @@ def test_the_real_vat_draft_and_tariff_b_publish_end_to_end(data: Path) -> None:
     vat = load_bytes(
         (data / "vat/south-africa/2018-04-01.r1.json").read_bytes(), VatRatePublication
     )
-    assert vat.publication.checks.citation_check.passed == 2
+    assert _counts(vat.publication.checks).passed == 2
     tariff = _tariff_file(data, "2026-07-01.r1.json")
-    assert tariff.publication.checks.citation_check.no_text_layer == 16
+    assert _counts(tariff.publication.checks).no_text_layer == 16
 
 
 def test_a_changed_printed_text_is_refused_end_to_end(data: Path) -> None:

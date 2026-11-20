@@ -1,6 +1,6 @@
 # Architecture overview
 
-_Status: binding. Decided in ADR-0002 to ADR-0011, accepted by the owner on 2026-11-17 (ADR-0011 on 2026-11-18)._
+_Status: binding. Decided in ADR-0002 to ADR-0013, accepted by the owner on 2026-11-17 (ADR-0011 and ADR-0012 on 2026-11-18 and 2026-11-19, ADR-0013 on 2026-11-19)._
 
 ## Shape
 
@@ -29,7 +29,7 @@ src/munisense/
     tariffs/      TariffVersion (header + ordered components; PriceBasis), FixedCharge, FlatEnergy, BlockEnergy, SeasonalEnergy (Season, SeasonDates), Levy, FreeBasicAllocation, VatTreatment, BillingPolicy; later TOU calendars
     billing/      calculate_bill() -> Bill (LineItem with Sources by role, BillWarning); calculate_period() -> PeriodBill (split at months, versions, seasons and VAT changes; ADR-0011); ConsumptionProfile (PeriodTotal; TimeOfUseBuckets refused until P4), BillingPeriod; calculate_purchase() / calculate_month() -> Purchase (prepaid, P1-14)
   catalogue/      suppliers (SupplierCatalogue, suppliers.py, P2-6), customer classes, supply areas
-  provenance/     canonical JSON (canonical.py) and the publication envelope: PublicationRecord, TariffPublication, VatRatePublication, withdrawals (publication.py, ADR-0012, P2-4); source manifests (SourceManifest, sources.py) and reading and writing data files in canonical form (drafts.py, P2-6). The per-value Citation and status types live in domain/citations, because the domain may not import this package
+  provenance/     canonical JSON (canonical.py) and the publication envelope: PublicationRecord, TariffPublication, VatRatePublication, withdrawals (publication.py, ADR-0012, ADR-0013, P2-4); source manifests (SourceManifest, sources.py) and reading and writing data files in canonical form (drafts.py, P2-6). The per-value Citation and status types live in domain/citations, because the domain may not import this package
   ingestion/      the citation check (citation_check.py; P2-7), whose PDF text extraction runs in a
                   separate, resource-limited `python -I` process (pdf_text.py, stdlib and pypdf only);
                   the publish step (publish.py, `poe publish`; P2-8) and the publication guards
