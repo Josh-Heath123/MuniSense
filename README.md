@@ -17,7 +17,7 @@ Software and AI agents need exact answers that can be traced back to the page th
 
 ## What it does now
 
-Phase 1, the calculation core, is **Built** and passed its gate on 2026-11-18. It is a pure Python library; there is no API or user interface yet.
+Phase 1, the calculation core, passed its gate on 2026-11-18. Phase 2, versioned storage, is **Built**: its gate report (2026-11-20) awaits the owner's approval. MuniSense is a Python library with a local database; there is no API or user interface yet.
 
 | Capability | Status |
 | --- | --- |
@@ -53,13 +53,15 @@ This table is the engine's own output, read from the published data through the 
 
 ## Engineering highlights
 
-All figures are from the [P1 gate report](docs/reports/2026-11-18-P1-gate.md).
+Figures are from the [P2 gate report](docs/reports/2026-11-20-P2-gate.md), except the mutation score, which is from the [P1 gate report](docs/reports/2026-11-18-P1-gate.md): the engine has not changed since.
 
-- **578 tests, 100% line and branch coverage** of the code built so far, run in CI on every pull request.
+- **1,170 tests, 100% line and branch coverage** of the code built so far, run in CI on every pull request.
 - **90.2% mutation score** on the billing engine: 1,380 of 1,530 injected bugs caught. Every surviving mutant is reviewed and listed in [mutation-p1-15.md](docs/quality/mutation-p1-15.md).
 - **No floats, no silent rounding.** Arithmetic is exact or refused. Rounding happens only at points a supplier's policy names ([ADR-0005](docs/adr/0005-decimal-money-and-rounding-policies.md), [ADR-0011](docs/adr/0011-pro-rating-quantisation-point.md)). Tests: [`test_money.py`](tests/unit/domain/money/test_money.py), [`test_rounding.py`](tests/unit/domain/money/test_rounding.py).
 - **A citation on every value.** Each value has its own citation and status, and every result reports the weakest status of what it used ([ADR-0006](docs/adr/0006-provenance-and-verification-status.md); [`test_cited_values.py`](tests/unit/domain/citations/test_cited_values.py)).
 - **A pure domain.** The calculation core does no I/O and imports only the standard library and Pydantic. This is enforced by import-linter and a purity test ([ADR-0004](docs/adr/0004-declarative-tariff-components.md); [`test_domain_purity.py`](tests/unit/test_domain_purity.py)).
+- **Published tariff data is immutable and has two timelines.** A tariff version is published once, as a file with its record time; a correction supersedes it and never edits it. The database is rebuilt from the files, and an exclusion constraint refuses two versions of a tariff valid at the same time, now or in any past snapshot ([ADR-0003](docs/adr/0003-postgresql-bitemporal-tariff-versions.md), [ADR-0012](docs/adr/0012-tariff-files-and-database-projection.md); [`test_schema.py`](tests/integration/persistence/test_schema.py), [`test_loader.py`](tests/integration/persistence/test_loader.py)).
+- **A deterministic citation check.** Before anything is published, each printed text must be found verbatim on its cited page, or the page must be shown to have no text layer, in which case only a person can verify it ([`test_citation_check.py`](tests/unit/ingestion/test_citation_check.py)).
 - **Property tests against independent references.** A bill is never negative and never falls as use rises. VAT adds up. Splitting a period changes the total by no more than the named roundings. A month of prepaid purchases costs what the month is billed ([`tests/property/`](tests/property/domain/billing/)).
 
 ## How it works
@@ -67,14 +69,16 @@ All figures are from the [P1 gate report](docs/reports/2026-11-18-P1-gate.md).
 ```mermaid
 flowchart LR
   pdf["Official tariff schedule (PDF)<br/>committed, identified by SHA-256<br/><i>Built</i>"]:::built
-  draft["Transcription<br/>a citation and status per value<br/><i>Built</i>"]:::built
-  agent["Independent recalculation<br/>tariff-verifier agent<br/><i>Built</i>"]:::built
-  check["Automatic citation check<br/>for PDFs with a text layer<br/><i>Planned: P2</i>"]:::planned
-  human["Human check: verified<br/><i>Planned: P2 to P3</i>"]:::planned
+  draft["Transcription (a draft)<br/>a citation and status per value<br/><i>Built</i>"]:::built
+  agent["Independent recalculation<br/>tariff-verifier agent, evidence only<br/><i>Built</i>"]:::built
+  check["Automatic citation check<br/>for PDFs with a text layer<br/><i>Built</i>"]:::built
+  human["Human check against the page:<br/>verified, by the owner<br/><i>Built</i>"]:::built
+  publish["Publish: an immutable file<br/>with its record time, guarded in CI<br/><i>Built</i>"]:::built
+  db["Database rebuilt from the files<br/>'as recorded on' queries<br/><i>Built</i>"]:::built
   engine["Engine<br/>bills, period splits, prepaid<br/><i>Built</i>"]:::built
   bill["Result: each line cites document,<br/>page and printed text, with a status<br/><i>Built</i>"]:::built
-  pdf --> draft --> agent --> engine --> bill
-  draft -.-> check -.-> human -.-> engine
+  pdf --> draft --> check --> human --> publish --> db --> engine --> bill
+  draft -.-> agent
   classDef built fill:#060606,stroke:#A8A8A3,color:#FDFDFD
   classDef planned fill:#F4F4F2,stroke:#767671,stroke-dasharray:5 4,color:#52524E
 ```
@@ -84,10 +88,10 @@ flowchart TB
   api["api: REST API<br/><i>Planned: P5</i>"]:::planned
   console["console: staff console<br/><i>Planned: P6</i>"]:::planned
   mcp["mcp: MCP server<br/><i>Planned: P7</i>"]:::planned
-  services["services: application use cases<br/><i>Planned: P2 · a demo entry point exists</i>"]:::planned
-  persistence["persistence: versioned storage<br/><i>Planned: P2</i>"]:::planned
-  provenance["provenance and catalogue<br/><i>Planned: P2</i>"]:::planned
-  ingestion["ingestion: drafts, review, publish<br/><i>Planned: P2 to P3</i>"]:::planned
+  services["services: application use cases<br/><i>Started: the demo · more from P5</i>"]:::built
+  persistence["persistence: schema, loader,<br/>'as recorded on' queries<br/><i>Built</i>"]:::built
+  provenance["provenance and catalogue<br/><i>Built</i>"]:::built
+  ingestion["ingestion: citation check, publish, guards<br/><i>Built · review workflow P3 to P6</i>"]:::built
   billing["domain.billing<br/>bills, periods, prepaid<br/><i>Built</i>"]:::built
   tariffs["domain.tariffs<br/>components, versions, policies<br/><i>Built</i>"]:::built
   money["domain.money<br/>Decimal, rates, VAT, rounding<br/><i>Built</i>"]:::built
@@ -112,7 +116,7 @@ Arrows point at what a module may use. Solid dark modules are built; dashed ligh
 | --- | --- | --- |
 | P0 | Foundation: tooling, CI, hooks, decisions | Built (gate 2026-11-17) |
 | P1 | Calculation core | Built (gate 2026-11-18) |
-| P2 | Versioned storage, provenance, citation check, publishing | Planned (next) |
+| P2 | Versioned storage, provenance, citation check, publishing | Built (gate report 2026-11-20, awaiting approval) |
 | P3 | Ekurhuleni pilot: schedules loaded, golden cases from real bills and receipts | Planned |
 | P4 | Time-of-use and demand | Planned |
 | P5 | REST API v1 | Planned |
@@ -130,7 +134,7 @@ MuniSense is built by Claude Code, working under the direction of the owner, Jos
 
 Every pull request is reviewed by an independent code-review agent before it is merged. When tariff data changes, a tariff-verifier agent also recalculates each value and compares it with the source page. An agent's check never makes a value verified; that takes a person.
 
-Pull requests are merged only when continuous integration is green. That is a working rule, not an enforced one: the free GitHub plan has no branch protection.
+Pull requests are merged only when continuous integration is green, and GitHub enforces it: a ruleset on `main` requires a pull request and the green CI check, and blocks force pushes ([ADR-0014](docs/adr/0014-github-ruleset-protects-main.md)). A pull request that publishes tariff data may change nothing outside `data/`, and the owner approves each one.
 
 Mutation testing measures whether the billing engine's tests catch injected bugs. It was last run at the end of Phase 1 (90.2%), and is re-run before each phase gate that changes the engine.
 
