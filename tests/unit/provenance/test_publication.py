@@ -25,11 +25,11 @@ from munisense.provenance.publication import (
 
 ROOT = Path(__file__).resolve().parents[3]
 TARIFF = TariffVersion.model_validate_json(
-    (ROOT / "data/drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json").read_text(
-        encoding="utf-8"
-    )
+    (
+        ROOT / "tests/fixtures/drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json"
+    ).read_text(encoding="utf-8")
 )
-VAT = load_vat_table(ROOT / "data/drafts/vat/south-africa")
+VAT = load_vat_table(ROOT / "tests/fixtures/drafts/vat/south-africa")
 TARIFF_ID = "city-of-ekurhuleni/b-residential-1-phase/2026-07-01"
 VAT_ID = "vat/south-africa/2018-04-01"
 

@@ -36,8 +36,9 @@ from munisense.provenance.sources import SourceDocument, SourceManifest
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "data"
-VAT_DRAFT = DATA / "drafts/vat/south-africa/2018-04-01.json"
-TARIFF_DRAFTS = sorted((DATA / "drafts/city-of-ekurhuleni").glob("*/*.json"))
+DRAFTS = ROOT / "tests/fixtures/drafts"  # the drafts as before P2-13 (E55)
+VAT_DRAFT = DRAFTS / "vat/south-africa/2018-04-01.json"
+TARIFF_DRAFTS = sorted((DRAFTS / "city-of-ekurhuleni").glob("*/*.json"))
 VAT_404 = DATA / "sources/sars/vat-404-guide-for-vendors-2025-01.pdf"
 SCHEDULE = DATA / "sources/ekurhuleni/electricity-tariffs-2026-27-signed.pdf"
 

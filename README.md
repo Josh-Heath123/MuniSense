@@ -26,8 +26,8 @@ Phase 1, the calculation core, is **Built** and passed its gate on 2026-11-18. I
 | Forward bills: fixed charges, flat, block and seasonal energy, levies, free basic allocations, VAT | Built |
 | Billing periods split across months, tariff versions, seasons and VAT changes, pro-rated by a named policy | Built |
 | Prepaid purchases: the kWh a rand amount buys, given the month's earlier purchases | Built |
-| City of Ekurhuleni 2026/27 Tariff B (Residential), transcribed with a citation per value | Built, all values `estimated` |
-| Versioned storage, publishing workflow, automatic citation check | Planned (P2) |
+| City of Ekurhuleni 2026/27 Tariff B (Residential) and the SARS VAT rate, published with a citation per value | Built; values checked by hand by the owner are `verified`, VAT treatment and season dates `estimated` |
+| Versioned storage, the publish step, an automatic citation check, publication guards | Built (P2, gate pending) |
 | REST API, staff console, MCP server for AI agents | Planned (P5, P6, P7) |
 
 ### An example from the real tariff
@@ -40,7 +40,7 @@ TARIFF B (RESIDENTIAL), single-phase, July 2026, 350 kWh (`uv run poe demo`):
 | Basic charge | 1 month | R109.78/month | R109.78 | Ekurhuleni schedule, p. 4 | estimated |
 | Energy charge | 350 kWh | R3.3700/kWh | R1,179.50 | Ekurhuleni schedule, p. 4 | estimated |
 | Subtotal | | | R1,289.28 | | |
-| VAT | 15% | | R193.39 | SARS VAT 404, p. 15 | estimated |
+| VAT | 15% | | R193.39 | SARS VAT 404, p. 15 | verified |
 | **Total** | | | **R1,482.67** | | **estimated** |
 
 Warnings on the bill:
@@ -49,7 +49,7 @@ Warnings on the bill:
 - Rounding policy 'ekurhuleni-estimated' is estimated; cent-level differences from a real bill are possible.
 <!-- demo:end -->
 
-This table is the engine's own output, and a test keeps it identical to the code. The values are **estimated**: they are transcribed from the City of Ekurhuleni's signed 2026/27 schedule, which is a scan, and nothing is marked verified until a person has checked it against the page. The rounding policy is an assumption until it can be confirmed from real Ekurhuleni bills or receipts.
+This table is the engine's own output, read from the published data through the database, and a test keeps it identical to the code. The rates and the VAT rate were checked by hand by the owner against the City of Ekurhuleni's signed 2026/27 schedule (a scan) and SARS's VAT guide, and are `verified`. The basic and energy lines are still `estimated`, because the schedule says only that its prices exclude VAT, so each charge's VAT treatment is an inference; the season dates and the rounding policy are also assumptions until they can be confirmed from real Ekurhuleni bills or receipts.
 
 ## Engineering highlights
 
@@ -143,7 +143,15 @@ You need [uv](https://docs.astral.sh/uv/) and git. uv installs Python 3.13 and e
 ```bash
 uv sync               # install the locked dependencies
 uv run poe check      # lint, type-check and fast tests
-uv run poe demo       # print the example bill above, from the real data and engine
+```
+
+The example bill above needs the local database (Docker, see [`docs/development.md`](docs/development.md)):
+
+```bash
+docker compose up -d db   # PostgreSQL
+uv run poe db-bootstrap   # once per volume: roles and schema
+uv run poe db-rebuild     # load the committed publications
+uv run poe demo           # print the example bill, from the published data and engine
 ```
 
 Setting up the owner's Windows and WSL2 machine, and running the Docker-based commands, is covered in [`docs/development.md`](docs/development.md).
@@ -164,7 +172,7 @@ Setting up the owner's Windows and WSL2 machine, and running the Docker-based co
 Proprietary. All rights reserved ([`LICENSE`](LICENSE)).
 
 - **Official documents.** The tariff schedules and other official documents in [`data/sources/`](data/sources/) belong to their publishers (the City of Ekurhuleni and the South African Revenue Service). They are kept so that every value can be cited to its page.
-- **Transcriptions.** The values in [`data/drafts/`](data/drafts/) are unreviewed transcriptions, all marked `estimated`.
+- **Published tariff data.** The versions in [`data/tariffs/`](data/tariffs/) and [`data/vat/`](data/vat/) are transcriptions with a citation and a status on every value: `verified` where the owner checked it by hand against the page, otherwise `estimated` with the reason.
 - **User-provided figures.** [`data/observations/`](data/observations/) holds user-provided figures only, with no personal details. These are not tariff data.
 
 MuniSense is not affiliated with any municipality, Eskom, NERSA or SARS. Its results are calculations, not bills.

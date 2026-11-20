@@ -1,23 +1,28 @@
-"""`uv run poe demo`: the README's example bill, priced by the engine from the real data.
+"""`uv run poe demo`: the README's example bill, priced by the engine from published data.
 
-City of Ekurhuleni Tariff B (Residential), single-phase, July 2026, 350 kWh, from the
-cited drafts in `data/drafts/` (P1-9). The rendered Markdown is the README's example
-table, and a test keeps the two identical, so the README cannot drift from the code.
+City of Ekurhuleni Tariff B (Residential), single-phase, July 2026, 350 kWh, read from the
+database as currently recorded (P2-12's repository, as the application role), so the dev
+database must be running and rebuilt from the committed publications first
+(`docker compose up -d db`, `uv run poe db-rebuild`). The rendered Markdown is the README's
+example table, and a test keeps the two identical, so the README cannot drift from the code
+or the published data (P2-13, closes TD-13).
 """
 
-from datetime import date
+import os
+import sys
+from collections.abc import Callable, Mapping
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from pathlib import Path
 
 from munisense.domain.billing import Bill, BillingPeriod, PeriodTotal, SourceRole, calculate_bill
 from munisense.domain.money import Money
-from munisense.domain.tariffs import TariffVersion
-from munisense.provenance.drafts import load_file, load_vat_table
+from munisense.persistence.connection import DatabaseUnavailableError, connect
+from munisense.persistence.repository import NotRecordedError, tariff_version, vat_table
+from munisense.platform.settings import DatabaseUrl, SettingsError, database_url
 
-ROOT = Path(__file__).resolve().parents[3]
-DRAFTS = ROOT / "data" / "drafts"
-TARIFF = DRAFTS / "city-of-ekurhuleni" / "2026-27" / "b-residential-1-phase.json"
-VAT = DRAFTS / "vat" / "south-africa"
+SUPPLIER = "city-of-ekurhuleni"
+TARIFF = "b-residential-1-phase"
+COUNTRY = "south-africa"
 JULY_2026 = BillingPeriod(start=date(2026, 7, 1), end=date(2026, 8, 1))
 KWH = Decimal(350)
 
@@ -28,11 +33,12 @@ DOCUMENTS = {
 }
 
 
-def example_bill() -> Bill:
-    """Tariff B, single-phase, July 2026, 350 kWh, priced from the drafts."""
-    version = load_file(TARIFF, TariffVersion)
-    vat_table = load_vat_table(VAT)
-    return calculate_bill(version, JULY_2026, PeriodTotal(kwh=KWH), vat_table)
+def example_bill(url: DatabaseUrl, recorded_on: datetime) -> Bill:
+    """Tariff B, single-phase, July 2026, 350 kWh, as recorded on `recorded_on`."""
+    with connect(url) as connection:
+        recorded = tariff_version(connection, SUPPLIER, TARIFF, JULY_2026.start, recorded_on)
+        vat = vat_table(connection, COUNTRY, recorded_on)
+    return calculate_bill(recorded.version, JULY_2026, PeriodTotal(kwh=KWH), vat)
 
 
 # The supply phase is part of the tariff code (one version per phase, P1-9).
@@ -82,9 +88,26 @@ def render(bill: Bill) -> str:
     return "\n".join([heading, "", *rows, "", "Warnings on the bill:", "", *warnings])
 
 
-def main() -> None:
-    print(render(example_bill()))  # noqa: T201  # a command-line demo prints its result
+def _now() -> datetime:
+    return datetime.now(UTC)
 
 
-if __name__ == "__main__":
-    main()
+def main(env: Mapping[str, str] = os.environ, now: Callable[[], datetime] = _now) -> int:
+    """Print the example bill as currently recorded; 1 when it cannot, with the reason."""
+    try:
+        bill = example_bill(database_url(env, "MUNISENSE_DATABASE_URL"), now())
+    except SettingsError as error:
+        sys.stderr.write(f"demo: {error}\n")
+        return 2
+    except DatabaseUnavailableError as error:
+        sys.stderr.write(f"demo: {error}; start it with `docker compose up -d db`\n")
+        return 1
+    except NotRecordedError as error:
+        sys.stderr.write(f"demo: {error}; load the publications with `uv run poe db-rebuild`\n")
+        return 1
+    sys.stdout.write(render(bill) + "\n")
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover  # the command line runs main()
+    raise SystemExit(main())

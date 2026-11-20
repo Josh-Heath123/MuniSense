@@ -41,12 +41,13 @@ def test_a_document_entry_refuses_bad_values(field: str, value: object) -> None:
 
 
 def test_write_file_writes_what_load_file_reads(tmp_path: Path) -> None:
-    rate = load_file(ROOT / "data/drafts/vat/south-africa/2018-04-01.json", VatRate)
+    rate = load_file(ROOT / "tests/fixtures/drafts/vat/south-africa/2018-04-01.json", VatRate)
     target = tmp_path / "rate.json"
     write_file(target, rate)
     assert load_file(target, VatRate) == rate
     assert (
-        target.read_bytes() == (ROOT / "data/drafts/vat/south-africa/2018-04-01.json").read_bytes()
+        target.read_bytes()
+        == (ROOT / "tests/fixtures/drafts/vat/south-africa/2018-04-01.json").read_bytes()
     )
 
 
@@ -58,7 +59,7 @@ def test_load_file_refuses_a_non_canonical_file(tmp_path: Path) -> None:
 
 
 def test_a_vat_draft_must_be_named_after_its_start(tmp_path: Path) -> None:
-    source = ROOT / "data/drafts/vat/south-africa/2018-04-01.json"
+    source = ROOT / "tests/fixtures/drafts/vat/south-africa/2018-04-01.json"
     (tmp_path / "2019-01-01.json").write_bytes(source.read_bytes())
     with pytest.raises(ValueError, match="named after its start date, 2018-04-01"):
         load_vat_table(tmp_path)

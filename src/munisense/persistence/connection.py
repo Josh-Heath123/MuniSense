@@ -1,13 +1,19 @@
 """SQLAlchemy engines from checked settings (P2-3)."""
 
 import os
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 
-from sqlalchemy import URL, Engine, create_engine
+from sqlalchemy import URL, Connection, Engine, create_engine
+from sqlalchemy.exc import OperationalError
 
 from munisense.platform.settings import DatabaseUrl, refuse_libpq_environment
 
 SCHEMA = "munisense"
+
+
+class DatabaseUnavailableError(ConnectionError):
+    """The database could not be reached. The message names the database, never the URL."""
 
 
 def engine(url: DatabaseUrl, env: Mapping[str, str] = os.environ) -> Engine:
@@ -35,3 +41,23 @@ def engine(url: DatabaseUrl, env: Mapping[str, str] = os.environ) -> Engine:
         pool_pre_ping=True,
         hide_parameters=True,
     )
+
+
+@contextmanager
+def connect(url: DatabaseUrl, env: Mapping[str, str] = os.environ) -> Iterator[Connection]:
+    """One connection for a service that only reads; the engine is disposed afterwards.
+
+    Lets a service read through the repository without importing SQLAlchemy (rule 4).
+    A refused connection becomes `DatabaseUnavailableError`.
+    """
+    target = engine(url, env)
+    try:
+        try:
+            connection = target.connect()
+        except OperationalError:
+            msg = f"cannot connect to the database {url.database!r}"
+            raise DatabaseUnavailableError(msg) from None
+        with connection:
+            yield connection
+    finally:
+        target.dispose()

@@ -49,8 +49,8 @@ from support.publishing import (
 
 SUPPLIER, B1 = TARIFF.split("/")
 B3 = "b-residential-3-phase"
-DRAFTS = ROOT / "data/drafts/city-of-ekurhuleni/2026-27"
-VAT_DRAFT = ROOT / "data/drafts/vat/south-africa/2018-04-01.json"
+DRAFTS = ROOT / "tests/fixtures/drafts/city-of-ekurhuleni/2026-27"
+VAT_DRAFT = ROOT / "tests/fixtures/drafts/vat/south-africa/2018-04-01.json"
 LATER = datetime(2027, 1, 1, tzinfo=UTC)  # after every test publication
 TICK = timedelta(microseconds=1)
 SCHEDULE = "db55c0d359b41469d766c6196c51b59cbfe469a139b334f9c87195a92dc07e73"  # Ekurhuleni
@@ -81,7 +81,7 @@ def test_versions_and_vat_survive_the_round_trip(
 ) -> None:
     """Equal as JSON text, not only as models: a Decimal's scale (3.3700) must survive too."""
     _loaded(data, test_database)
-    file_vat = load_vat_table(ROOT / "data/drafts/vat/south-africa")
+    file_vat = load_vat_table(ROOT / "tests/fixtures/drafts/vat/south-africa")
     database_vat = vat_table(connection, "south-africa", LATER)
     assert database_vat.model_dump_json() == file_vat.model_dump_json()
     for code in (B1, B3):

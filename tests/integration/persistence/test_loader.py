@@ -31,7 +31,7 @@ from support.publishing import (
     replace_draft,
 )
 
-DRAFT_B1 = ROOT / "data/drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json"
+DRAFT_B1 = ROOT / "tests/fixtures/drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json"
 
 
 def _rows(engine: Engine, sql: str) -> list[tuple[object, ...]]:

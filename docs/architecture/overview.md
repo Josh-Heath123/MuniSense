@@ -38,19 +38,22 @@ src/munisense/
                   publication guards, and ingestion never imports persistence), the
                   read-only repository ("as recorded on" queries, P2-12)
   services/       use cases: calculate_bill, compare_tariffs, publish_version, ... (from P2). Today only
-                  demo.py: the `poe demo` entry point, which reads the Ekurhuleni drafts directly (TD-13)
+                  demo.py: the `poe demo` entry point, which reads the published Tariff B and VAT
+                  rate through the repository as currently recorded (P2-13; `persistence.connection.connect`
+                  gives it a connection without importing SQLAlchemy)
   api/            FastAPI routers, schemas, auth, errors (P5)
   console/        Jinja2 + HTMX pages (P6)
   mcp/            MCP server (P7)
   platform/       settings (pydantic-settings), logging (structlog), health
 tests/
   unit/  property/  integration/  contract/  golden/
+  fixtures/drafts/  the three drafts as before their first publication (P2-13), test inputs only
 migrations/       Alembic (P2)
 data/
   catalogue/      suppliers.json: supplier codes, names, kind, cited tariff-year start month
-  drafts/         bare versions in canonical form (committed; not published):
-                  <supplier>/<tariff-year>/<tariff-code>.json, and vat/south-africa/<start>.json
-                  (one VAT rate per file)
+  drafts/         bare versions in canonical form, waiting to be published (none since P2-13;
+                  publishing removes the draft): <supplier>/<tariff-year>/<tariff-code>.json, and
+                  vat/south-africa/<start>.json (one VAT rate per file)
   tariffs/        publications, immutable: <supplier>/<tariff-code>/<effective-from>.r<N>.json
   vat/            VAT publications, immutable: south-africa/<effective-from>.r<N>.json
   golden/         anonymised golden bills (committed)
