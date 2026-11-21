@@ -55,9 +55,13 @@ class Limits:
     every page of every committed document under a fifth of each limit on every
     `poe verify`. A citation check itself reads only the cited pages, in well under a second.
 
-    Eskom's documents (P4-2, three runs each): the 7.2 MB schedule took 1.5 to 1.6 s of CPU
-    time and the book 1.1 s; each fits in 128 MB of address space and fails in 96 MB. The
-    margins above still hold.
+    Eskom's documents (P4-2, three runs each, `getrusage(RUSAGE_CHILDREN)` around a
+    whole-document `extract_pages`): the 7.2 MB schedule took 1.5 to 1.6 s of CPU time and
+    the book 1.1 s. Address space was found by retrying with a lower `address_space_bytes`:
+    each fits in 128 MB and fails in 96 MB (not the VmPeak method above, so not directly
+    comparable). With the schedule the margins shrink: file size about 9x (a fifth of the
+    limit, 12.8 MiB, leaves about 1.9x over the schedule), address space about 16x to 21x,
+    CPU and wall time still above 10x (set by VAT 404).
     """
 
     timeout_seconds: float = 300.0

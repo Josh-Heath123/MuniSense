@@ -7,12 +7,17 @@ from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
-from pypdf import PdfReader
 
 from munisense.catalogue.suppliers import SupplierCatalogue
 from munisense.domain.money import VatRate, VatTable
 from munisense.domain.tariffs import TariffVersion
-from munisense.ingestion.citation_check import Outcome, check_citations
+from munisense.ingestion.citation_check import (
+    Limits,
+    Outcome,
+    check_citations,
+    extract_pages,
+    read_document,
+)
 from munisense.ingestion.guards import check_set, load_all
 from munisense.provenance import canonical
 from munisense.provenance.drafts import load_file, load_vat_table, write_file
@@ -163,15 +168,33 @@ def _manifests() -> Iterator[tuple[Path, SourceManifest]]:
         yield path.parent, load_file(path, SourceManifest)
 
 
-def test_every_committed_pdf_is_listed_with_its_hash_and_page_count() -> None:
+def test_every_committed_pdf_is_listed_with_its_hash() -> None:
     listed = set()
     for folder, manifest in _manifests():
         for document in manifest.documents:
             path = folder / document.file
             assert hashlib.sha256(path.read_bytes()).hexdigest() == document.sha256
-            assert len(PdfReader(path).pages) == document.pages
             listed.add(path)
     assert listed == set((DATA / "sources").glob("*/*.pdf"))
+
+
+@pytest.mark.slow
+def test_each_page_count_and_text_layer_flag_matches_the_pdf() -> None:
+    """Read every page through the citation check's limited child process (P2-7), which
+    also checks the file's size and hash: these tests never parse a committed PDF in the
+    test process itself (P4-2 security review). Slow (whole documents), so it runs in
+    `poe verify` and CI, not in `poe check` (E43).
+
+    A scan yields no text on any page; a text document yields text on some page. The flag
+    decides the citation check's `no_text_layer` outcome.
+    """
+    for folder, manifest in _manifests():
+        for document in manifest.documents:
+            data = read_document(folder / document.file, document, Limits())
+            count, texts = extract_pages(data, list(range(1, document.pages + 1)), Limits())
+            assert count == document.pages, document.file
+            has_text = any(text.strip() for text in texts.values())
+            assert has_text is document.text_layer, document.file
 
 
 def test_each_manifest_agrees_with_its_readme() -> None:
@@ -191,18 +214,6 @@ def test_each_manifest_agrees_with_its_readme() -> None:
                 pattern = rf"(?<![\w.-]){re.escape(written)}(?![\w-])"
                 assert re.search(pattern, readme), (document.file, written)
             assert manifest.publisher in readme
-
-
-def test_each_text_layer_flag_matches_the_pdf() -> None:
-    """A scan yields no text on any page; a text document yields text on some page.
-
-    The flag decides the citation check's `no_text_layer` outcome (P2-7).
-    """
-    for folder, manifest in _manifests():
-        for document in manifest.documents:
-            pages = PdfReader(folder / document.file).pages
-            has_text = any(page.extract_text().strip() for page in pages)
-            assert has_text is document.text_layer, document.file
 
 
 def _cited_documents(value: object) -> Iterator[str]:
