@@ -23,6 +23,16 @@ def test_the_committed_catalogue_loads() -> None:
     assert catalogue.by_code("city-of-ekurhuleni").tariff_year_start_month.value == 7
 
 
+def test_eskom_direct_is_catalogued_with_an_april_tariff_year() -> None:
+    """Eskom's non-local-authority tariffs run from 1 April (P4-2, E60): 1 April 2026 to
+    31 March 2027 is one tariff year."""
+    eskom = SupplierCatalogue.model_validate_json(json.dumps(BODY)).by_code("eskom-direct")
+    assert eskom.kind == "eskom"
+    assert eskom.tariff_year_start_month.value == 4
+    assert eskom.tariff_year(date(2026, 4, 1)) == "2026-27"
+    assert eskom.tariff_year(date(2027, 3, 31)) == "2026-27"
+
+
 def test_duplicate_codes_are_refused() -> None:
     supplier = BODY["suppliers"][0]
     with pytest.raises(ValidationError, match="supplier codes must be unique"):

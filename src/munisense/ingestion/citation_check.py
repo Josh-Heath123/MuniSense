@@ -54,6 +54,10 @@ class Limits:
     30x, file size about 20x, pages about 28x. `test_the_limits_hold_a_wide_margin` re-runs
     every page of every committed document under a fifth of each limit on every
     `poe verify`. A citation check itself reads only the cited pages, in well under a second.
+
+    Eskom's documents (P4-2, three runs each): the 7.2 MB schedule took 1.5 to 1.6 s of CPU
+    time and the book 1.1 s; each fits in 128 MB of address space and fails in 96 MB. The
+    margins above still hold.
     """
 
     timeout_seconds: float = 300.0

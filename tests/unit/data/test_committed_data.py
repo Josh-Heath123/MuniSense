@@ -12,6 +12,7 @@ from pypdf import PdfReader
 from munisense.catalogue.suppliers import SupplierCatalogue
 from munisense.domain.money import VatRate, VatTable
 from munisense.domain.tariffs import TariffVersion
+from munisense.ingestion.citation_check import Outcome, check_citations
 from munisense.ingestion.guards import check_set, load_all
 from munisense.provenance import canonical
 from munisense.provenance.drafts import load_file, load_vat_table, write_file
@@ -47,7 +48,11 @@ def test_the_layout_holds_the_expected_files() -> None:
         "tariffs/city-of-ekurhuleni/b-residential-3-phase/2026-07-01.r1.json",
     ]
     assert _ids(VAT_PUBLICATIONS) == ["vat/south-africa/2018-04-01.r1.json"]
-    assert _ids(MANIFESTS) == ["sources/ekurhuleni/sources.json", "sources/sars/sources.json"]
+    assert _ids(MANIFESTS) == [
+        "sources/ekurhuleni/sources.json",
+        "sources/eskom/sources.json",
+        "sources/sars/sources.json",
+    ]
     # Every draft committed before P2-13 was published, then deleted (E55). A draft
     # committed later is checked by the draft tests below.
     assert not list((DATA / "drafts").rglob("*.json"))
@@ -209,6 +214,18 @@ def _cited_documents(value: object) -> Iterator[str]:
     elif isinstance(value, list):
         for inner in value:
             yield from _cited_documents(inner)
+
+
+def test_every_catalogue_citation_passes_the_citation_check() -> None:
+    """The catalogue's cited values are tariff data too (CLAUDE.md rule 1): each printed
+    text is on its cited page, or the page is a scan (Ekurhuleni)."""
+    documents = {d.sha256: (folder / d.file, d) for folder, m in _manifests() for d in m.documents}
+    results = check_citations(_catalogue(), documents)
+    assert results
+    assert {(r.path, r.outcome) for r in results} == {
+        ("suppliers[0].tariff_year_start_month", Outcome.NO_TEXT_LAYER),
+        ("suppliers[1].tariff_year_start_month", Outcome.PASSED),
+    }
 
 
 def test_every_citation_names_a_listed_document() -> None:
