@@ -14,7 +14,7 @@
 Phase 4 adds time-of-use (TOU) energy, export credits, and demand and capacity charges (roadmap; W29, E60). Its examples come from Eskom's Homeflex tariff. Two Eskom documents were read; page numbers throughout are 1-based PDF page numbers (in the book, the printed page number is one higher from PDF page 7 on):
 
 - the *Tariffs and Charges Booklet 2026/2027* ("the book", SHA-256 `eef82b07…`, 57 pages, made in InDesign; E59);
-- the *Schedule of Standard Prices for Eskom Tariffs*, effective 1 April 2026 ("the schedule", SHA-256 `915a93b2…`, 57 pages, made in Word; E60). Its prose is a text layer, but its **tariff rate tables (pages 14 to 43) are embedded pictures**, Table 13 (Homeflex, page 33) among them. The use-of-system tables on pages 44 to 48 are text.
+- the *Schedule of Standard Prices for Eskom Tariffs*, effective 1 April 2026 ("the schedule", SHA-256 `915a93b2…`, 57 pages, made in Word; E60). Its prose is a text layer, but its **tariff rate tables (pages 14 to 43) are embedded pictures**, Table 13 (Homeflex, page 33) among them. Tables 21 to 34 (use-of-system charges, pages 44 to 48) are text; Table 35 (page 48) and the Gen-offset rates (Table 43, page 54) are pictures.
 
 What they show:
 
@@ -27,9 +27,9 @@ What they show:
 - **Public holidays are tariff-specific.**
   - The book (Appendix D, page 50) lists the holidays from 1 April 2026 to 30 June 2027 and how Megaflex, Megaflex Gen, Municflex, Miniflex, WEPS and Nightsave Urban treat each one.
   - It says: "All public holidays for the Nightsave Rural, Homeflex, Ruraflex and Ruraflex Gen tariffs will be treated as the day of the week on which it falls".
-  - The schedule says the same (page 12). pypdf extracts some of its words split ("we ek"), and some of the book's too ("New Y ear's Day").
+  - The schedule says the same (page 12). pypdf extracts some of its words split ("we ek"), and some of the book's too ("New Y ear’s Day", page 50).
   - **Public holidays change nothing in a Homeflex bill.**
-- **Export credit (Gen-offset).** The book: "for energy exported up to and equal to the consumption per time-of-use period" (page 28). The schedule (page 53, paragraph 46): "the total exported energy per TOU credited shall not be greater than the active energy (kWh) measured by Eskom in peak, standard and off-peak periods for each month". It also credits the ancillary service charge on the energy exported and adds an administration charge per day. Whether "Gen-offset Homeflex" (book page 43) is part of Homeflex or a separate reconciliation tariff on the same account is not yet settled (P4-13).
+- **Export credit (Gen-offset).** The book: "for energy exported up to and equal to the consumption per time-of-use period" (page 28). The schedule (page 53, paragraph 46): "the total exported energy per TOU credited shall not be greater than the active energy (kWh) measured by Eskom in peak, standard and off-peak periods for each month". Paragraph 46 also lists a credit on the ancillary service charge and an administration charge per day, but the per-tariff summaries (schedule Table 42, pages 53 and 54; book page 42) list only an energy credit for Gen-offset Homeflex. Its rates are in the book's page 43 (text) and the schedule's Table 43 (page 54, a picture). Two questions are not yet settled (P4-13): whether those other two items apply to Homeflex, and whether Gen-offset Homeflex is part of Homeflex or a separate reconciliation tariff on the same account.
 - **Seasons are already in data, per component.** `SeasonalEnergy` carries its own seasons (TD-11).
 - **Consumption can already be given per bucket.** `TimeOfUseBuckets` is accepted and refused by the engine until P4; duplicate JSON keys in it are silently merged (a P4 note).
 - **Pro-rating** is by days "at times of price increase and seasonal charges" (book Appendix I, page 56). Its example divides a 31-day period into 15/30 and 16/30, so the method stays `estimated`.
@@ -45,7 +45,7 @@ Constraints:
 ## Decision
 
 1. **One calendar per tariff version that needs one.**
-   - **When it is required:** a version with a component that depends on time of use (`TimeOfUseEnergy`, `ExportCredit` with per-period rates, or a `QuantityCharge` limited to seasons or periods) carries one `TouCalendar` in its header, and is refused without one. A version with only a `SeasonalEnergy`, such as Tariff B, may omit the calendar.
+   - **When it is required:** a version with a component that depends on time of use (`TimeOfUseEnergy`, any `ExportCredit`, or a `QuantityCharge` limited to seasons or periods) carries one `TouCalendar` in its header, and is refused without one. A version with only a `SeasonalEnergy`, such as Tariff B, may omit the calendar.
    - **What the calendar holds:**
      - **seasons:** names and cited dates (the existing `SeasonDates`), covering every day of the year once;
      - **day types:** `weekday`, `saturday` and `sunday`, assigned from the date;
@@ -72,7 +72,7 @@ Constraints:
      - **Privacy:** readings show when people are at home. They are calculation inputs only, and are never stored or logged (ADR-0008). A refusal carries a fixed code and at most the interval's index, never a timestamp or a kWh figure.
 
 5. **A drawn value gets a new citation-check outcome, `drawn`, by explicit opt-in.** It is distinct from `no_text_layer`, which means the whole document is a scan.
-   - **The manifest lists each drawn item.** A source document's manifest entry gains an optional `drawn` list (following point 3's rule). Each item names a page, what is drawn there and the printed texts allowed as drawn on that page. It is allowed only for a document with `text_layer: true`, and its pages must be in range.
+   - **The manifest lists each drawn item.** A source document's manifest entry gains an optional `drawn` list (following point 3's rule). Each item names a page, what is drawn there and the printed texts allowed as drawn on that page. A citation's text matches an allowed text only exactly, after the citation check's whitespace rule; never as a substring or pattern. It is allowed only for a document with `text_layer: true`, and its pages must be in range.
    - **The citation says it is drawn.** A citation gains an optional `drawn: true`.
    - **The outcome is `drawn` only when all three hold:** the citation says drawn; its page and printed text are a listed drawn item; and the text is not in the page's text layer (an empty text layer counts as "not in it"). A citation that says drawn but whose text **is** in the text layer is `failed`, so the flag cannot be used by habit. A citation that does not say drawn behaves as now: a missing text is `failed`.
    - **Status.** A `drawn` value stays `estimated` until the owner checks it by eye against the page. It then becomes `Verified`, with `text_check: drawn` (a new `TextCheck` member) and method "visual comparison with the source page".
@@ -88,7 +88,7 @@ Constraints:
 
 6. **New component types** (the roadmap requires an ADR). Every rate is cited, and every name is checked against the calendar:
    - `TimeOfUseEnergy`: a rate per season and period, applied to the kWh used in that bucket.
-   - `ExportCredit`: a credit rate per season and period, or one rate for all periods (for credits such as the ancillary service charge on energy exported). The credited kWh in each period is at most the kWh used in that period over the same month. The sources say "each month"; reading that as the calendar month is a billing-policy reading, recorded `estimated` until a source confirms it. A credit is a negative line.
+   - `ExportCredit`: a credit rate per season and period, so it always needs the calendar. (A single-rate credit, such as paragraph 46's ancillary service credit, is not built: the Homeflex summaries do not list one. It would need its own decision.) The credited kWh in each period is at most the kWh used in that period over the same month. The sources say "each month"; reading that as the calendar month is a billing-policy reading, recorded `estimated` until a source confirms it. A credit is a negative line.
    - `QuantityCharge`: a monthly charge per unit of a quantity the customer gives for the month (a measured maximum demand in kVA, or a notified or available capacity). It has a new rate unit (for example R/kVA per month), and can be limited to seasons and to the periods in which the demand is chargeable. It covers the roadmap's "demand" and "capacity", and replaces ADR-0004's two planned names. Daily capacity charges that depend only on supply size, such as Homeflex's network and generation capacity charges in R/POD/day, stay `FixedCharge`s on a tariff code per supply size (E37, Q5).
 
 ## Consequences
