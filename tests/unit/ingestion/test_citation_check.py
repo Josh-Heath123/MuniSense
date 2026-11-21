@@ -409,7 +409,8 @@ def test_the_child_cannot_write_file_content(tmp_path: Path) -> None:
 def test_the_limits_hold_a_wide_margin() -> None:
     """Every page of every committed document, under a fifth of each limit (E50).
 
-    The tightest margin is CPU time: a fifth is 24 s, against 5.7 to 11.4 s measured.
+    The tightest margin is CPU time: a fifth is 24 s, against 5.7 to 11.4 s measured (VAT 404).
+    The tightest by size is Eskom's 7.2 MB schedule, against a fifth of 12.8 MiB (P4-2).
     """
     fifth = Limits(
         timeout_seconds=Limits().timeout_seconds / 5,

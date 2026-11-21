@@ -18,6 +18,24 @@
           "reason": "read from the 2026/27 schedule's printed start date; assumed the same each year; scanned page, no text layer"
         }
       }
+    },
+    {
+      "code": "eskom-direct",
+      "name": "Eskom (direct customers, non-local-authority tariffs)",
+      "kind": "eskom",
+      "tariff_year_start_month": {
+        "value": 4,
+        "citation": {
+          "document_sha256": "eef82b077d7df4dd7b157ce757e2e56368170cec3bb69614fd81042451a1be84",
+          "page": 1,
+          "locator": "Cover",
+          "printed_text": "Charges for non-local authorities effective from 1 April 2026 to 31 March 2027"
+        },
+        "status": {
+          "kind": "estimated",
+          "reason": "read from the 2026/27 tariff book's cover dates for non-local-authority charges; assumed the same each year; Eskom's local-authority tariffs start on 1 July and are not under this supplier code"
+        }
+      }
     }
   ]
 }

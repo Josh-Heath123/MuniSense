@@ -62,7 +62,7 @@ def test_two_rebuilds_give_identical_tables(
     assert johannesburg != first  # the rendering differs ...
     assert dump(test_database.migration) == first  # ... the stored instants do not
     counts = (summary.publications, summary.tariff_versions, summary.vat_rates, summary.documents)
-    assert counts == (3, 2, 1, 3)
+    assert counts == (3, 2, 1, 5)
     assert {table: len(rows) for table, rows in first.items()} == {
         "tariff_component": 4,
         "tariff_version": 2,
@@ -70,8 +70,8 @@ def test_two_rebuilds_give_identical_tables(
         "publication": 3,
         "tariff": 2,
         "customer_class": 1,
-        "source_document": 3,
-        "supplier": 1,
+        "source_document": 5,
+        "supplier": 2,
     }
 
 
@@ -273,7 +273,7 @@ def test_the_command_rebuilds_and_reports(
     assert loader.main([], env) == 0
     out = capsys.readouterr().out
     assert "munisense_test rebuilt: 3 publications (2 tariff versions, 1 VAT rates)" in out
-    assert "3 source documents" in out
+    assert "5 source documents" in out
     broken = data / "tariffs" / TARIFF / "2026-07-01.r1.json"
     broken.unlink()
     broken.write_text("{}", encoding="utf-8")
