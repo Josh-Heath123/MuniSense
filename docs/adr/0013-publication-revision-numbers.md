@@ -1,6 +1,6 @@
 # ADR-0013: Number every publication by the next free revision under its date
 
-- **Status:** Accepted. Supersedes ADR-0012's revision rule (section 2, "File name", and the revision sentences of sections 3 and 7) and the shape of `checks` (section 3); everything else in ADR-0012 stands.
+- **Status:** Accepted. Supersedes ADR-0012's revision rule (section 2, "File name", and the revision sentences of sections 3 and 7) and the shape of `checks` (section 3); everything else in ADR-0012 stands. The shape of a version's `checks` only: Superseded by ADR-0016 (point 5 amends it: `citation_check` gains a `drawn` count, absent in files written by "munisense publish 2"); everything else in this ADR stands.
 - **Date:** 2026-11-19 (proposed and accepted by the owner at the P2 checkpoint, W18, E51)
 - **Deciders:** Josh Heath (owner)
 

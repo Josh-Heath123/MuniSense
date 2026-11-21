@@ -1,6 +1,6 @@
 # ADR-0004: Model tariffs as declarative, typed components
 
-- **Status:** Accepted
+- **Status:** Accepted. The names `DemandCharge` and `CapacityCharge` in its list of initial component types only: Superseded by ADR-0016 (one `QuantityCharge` replaces them); everything else in this ADR stands.
 - **Date:** 2026-11-17 (proposed); 2026-11-17 (accepted by the owner)
 - **Deciders:** Josh Heath (owner)
 
