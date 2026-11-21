@@ -1,9 +1,9 @@
 # ADR-0016: Give each tariff version one cited time-of-use calendar
 
-- **Status:** Proposed (revised after the architect's review, E60, and the `/review` findings)
-- **Date:** 2026-11-21 (proposed)
+- **Status:** Accepted
+- **Date:** 2026-11-21 (proposed); 2026-11-21 (accepted by the owner after the architect's second review, E61)
 - **Deciders:** Josh Heath (owner)
-- **Relation to Accepted ADRs, if accepted:**
+- **Relation to other Accepted ADRs** (their status lines are marked, E61):
   - It supersedes ADR-0006's first condition for `verified` (the deterministic text check), only for citations of drawn items under point 5.
   - It amends ADR-0013's version `checks` shape (point 5).
   - It replaces ADR-0004's two planned names `DemandCharge` and `CapacityCharge` with one `QuantityCharge` (point 6).

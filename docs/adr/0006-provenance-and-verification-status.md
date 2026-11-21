@@ -1,6 +1,6 @@
 # ADR-0006: Every value carries provenance and a verification status
 
-- **Status:** Accepted
+- **Status:** Accepted. The first condition for `verified` (the deterministic text check), for citations of drawn items listed in a source manifest only: Superseded by ADR-0016 (point 5, the `drawn` outcome with the owner's visual check); everything else in this ADR stands.
 - **Date:** 2026-11-17 (proposed); 2026-11-17 (accepted by the owner)
 - **Deciders:** Josh Heath (owner)
 
