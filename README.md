@@ -17,7 +17,7 @@ Software and AI agents need exact answers that can be traced back to the page th
 
 ## What it does now
 
-Phase 1, the calculation core, passed its gate on 2026-11-18. Phase 2, versioned storage, is **Built**: its gate report (2026-11-20) awaits the owner's approval. MuniSense is a Python library with a local database; there is no API or user interface yet.
+Phase 2, versioned storage, passed its gate on 2026-11-21. Phase 4, time-of-use and demand, is being planned while Phase 3 waits for Ekurhuleni household bills and receipts. MuniSense is a Python library with a local database; there is no API or user interface yet.
 
 | Capability | Status |
 | --- | --- |
@@ -116,9 +116,9 @@ Arrows point at what a module may use; only the interface, service and domain ed
 | --- | --- | --- |
 | P0 | Foundation: tooling, CI, hooks, decisions | Built (gate 2026-11-17) |
 | P1 | Calculation core | Built (gate 2026-11-18) |
-| P2 | Versioned storage, provenance, citation check, publishing | Built (gate report 2026-11-20, awaiting approval) |
+| P2 | Versioned storage, provenance, citation check, publishing | Built (gate 2026-11-21) |
 | P3 | Ekurhuleni pilot: schedules loaded, golden cases from real bills and receipts | Planned |
-| P4 | Time-of-use and demand | Planned |
+| P4 | Time-of-use and demand | Planning (task list in review) |
 | P5 | REST API v1 | Planned |
 | P6 | Staff console | Planned |
 | P7 | MCP server for AI agents | Planned |
