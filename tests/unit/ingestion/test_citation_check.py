@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 from pypdf import Configuration
 
+from munisense.domain.citations import iter_cited
 from munisense.domain.money import VatRate
 from munisense.domain.tariffs import TariffVersion
 from munisense.ingestion import citation_check, pdf_text
@@ -27,7 +28,6 @@ from munisense.ingestion.citation_check import (
     _parse_output,  # the output checks are tested directly
     check_citations,
     extract_pages,
-    iter_cited,
     normalise,
     read_document,
 )

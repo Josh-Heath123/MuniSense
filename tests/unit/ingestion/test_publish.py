@@ -15,11 +15,11 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from munisense.domain.citations import TextCheck, Verified
+from munisense.domain.citations import TextCheck, Verified, iter_cited
 from munisense.domain.money import VatRate
 from munisense.domain.tariffs import TariffVersion
 from munisense.ingestion import publish as publish_module
-from munisense.ingestion.citation_check import CitationResult, Outcome, iter_cited
+from munisense.ingestion.citation_check import CitationResult, Outcome
 from munisense.ingestion.publish import PublishRefusedError, Request, publish
 from munisense.provenance import canonical
 from munisense.provenance.drafts import load_file, write_file
