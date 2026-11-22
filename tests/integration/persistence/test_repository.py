@@ -21,10 +21,9 @@ from munisense.domain.billing import (
     calculate_month,
     calculate_period,
 )
-from munisense.domain.citations import ProvidedBy, StatusKind, UserProvided
+from munisense.domain.citations import ProvidedBy, StatusKind, UserProvided, iter_cited
 from munisense.domain.money import Money, VatRate
 from munisense.domain.tariffs import TariffVersion
-from munisense.ingestion.citation_check import iter_cited
 from munisense.persistence.loader import rebuild
 from munisense.persistence.repository import (
     CitedValue,

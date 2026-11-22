@@ -27,15 +27,13 @@ import re
 import stat
 import subprocess
 import sys
-from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel
 
-from munisense.domain.citations import Cited
+from munisense.domain.citations import iter_cited
 from munisense.provenance.sources import SourceDocument
 
 CHILD = Path(__file__).with_name("pdf_text.py")
@@ -98,25 +96,6 @@ class ExtractionError(Exception):
 def normalise(text: str) -> str:
     """Every run of whitespace (`str.isspace`) to one space; the ends trimmed."""
     return re.sub(r"\s+", " ", text).strip()
-
-
-def iter_cited(value: object, path: str = "") -> Iterator[tuple[str, "Cited[Any]"]]:
-    """Every cited value in a model, depth first, with its path.
-
-    (A string annotation: building `Cited[Any]` at runtime is refused by the float guard.)
-    """
-    if isinstance(value, Cited):
-        yield path, value
-        return
-    if isinstance(value, BaseModel):
-        for name in type(value).model_fields:
-            yield from iter_cited(getattr(value, name), f"{path}.{name}" if path else name)
-    elif isinstance(value, tuple | list):
-        for index, inner in enumerate(value):
-            yield from iter_cited(inner, f"{path}[{index}]")
-    elif isinstance(value, dict):
-        for key, inner in value.items():
-            yield from iter_cited(inner, f"{path}[{key!r}]")
 
 
 def _clean(text: str) -> str:

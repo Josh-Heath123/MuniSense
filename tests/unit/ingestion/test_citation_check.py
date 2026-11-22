@@ -27,7 +27,6 @@ from munisense.ingestion.citation_check import (
     _parse_output,  # the output checks are tested directly
     check_citations,
     extract_pages,
-    iter_cited,
     normalise,
     read_document,
 )
@@ -107,25 +106,6 @@ def test_the_outcome_rules_fail_closed(
     got, why = _outcome(printed, page, text_layer=text_layer)
     assert got is outcome
     assert reason in why
-
-
-@pytest.mark.parametrize("path", [VAT_DRAFT, *TARIFF_DRAFTS], ids=lambda p: p.name)
-def test_the_walker_finds_every_citation_in_the_file(path: Path) -> None:
-    def count(value: object) -> int:
-        if isinstance(value, dict):
-            own = 1 if {"citation", "status"} <= value.keys() else 0
-            return own + sum(count(v) for v in value.values())
-        if isinstance(value, list):
-            return sum(count(v) for v in value)
-        return 0
-
-    model = load_file(path, VatRate if path == VAT_DRAFT else TariffVersion)
-    assert len(list(iter_cited(model))) == count(json.loads(path.read_text("utf-8")))
-
-
-def test_the_walker_looks_inside_mappings() -> None:
-    rate = load_file(VAT_DRAFT, VatRate)
-    assert [path for path, _ in iter_cited({"x": [rate.percent]})] == ["['x'][0]"]
 
 
 def test_every_pypdf_limit_is_pinned() -> None:

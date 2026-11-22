@@ -33,10 +33,9 @@ from munisense.domain.billing import (
     calculate_month,
     calculate_period,
 )
-from munisense.domain.citations import Estimated, StatusKind, Verified, cited_statuses
+from munisense.domain.citations import Estimated, StatusKind, Verified, cited_statuses, iter_cited
 from munisense.domain.money import Money, VatTable
 from munisense.domain.tariffs import FixedCharge, SeasonalEnergy, TariffVersion
-from munisense.ingestion.citation_check import iter_cited
 from munisense.provenance.publication import TariffPublication, VatRatePublication, load_bytes
 from support.ekurhuleni import BILL_CASES, month
 

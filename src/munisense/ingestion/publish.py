@@ -37,14 +37,13 @@ from pathlib import Path
 from pydantic import BaseModel, ValidationError
 
 from munisense.catalogue.suppliers import SupplierCatalogue
-from munisense.domain.citations import TextCheck, Verified
+from munisense.domain.citations import TextCheck, Verified, iter_cited
 from munisense.domain.money import VatRate
 from munisense.domain.tariffs import FreeBasicAllocation, TariffVersion
 from munisense.ingestion.citation_check import (
     CitationResult,
     Outcome,
     check_citations,
-    iter_cited,
 )
 from munisense.provenance import canonical
 from munisense.provenance.drafts import load_file

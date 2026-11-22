@@ -43,10 +43,9 @@ from sqlalchemy import Connection, text
 from sqlalchemy.exc import DBAPIError
 
 from munisense.catalogue.suppliers import SupplierCatalogue
-from munisense.domain.citations import cited_statuses, weakest
+from munisense.domain.citations import cited_statuses, iter_cited, weakest
 from munisense.domain.money import VatRate
 from munisense.domain.tariffs import TariffVersion
-from munisense.ingestion.citation_check import iter_cited
 from munisense.ingestion.guards import Loaded, check_set, load_all
 from munisense.ingestion.publish import documents
 from munisense.persistence.connection import engine

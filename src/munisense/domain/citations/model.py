@@ -15,12 +15,12 @@ account or meter number.
 """
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from datetime import date
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, Field, StringConstraints, model_validator
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, model_validator
 
 from munisense.domain.base import DomainModel
 from munisense.domain.citations.errors import NoStatusesError, UnparameterisedCitedError
@@ -180,19 +180,35 @@ def weakest_kind(kinds: Iterable[StatusKind]) -> StatusKind:
     return min(collected, key=lambda kind: kind.rank)
 
 
-def cited_statuses(item: object) -> list[Verified | Estimated | UserProvided]:
-    """Every status of every `Cited` value inside `item`, found by walking its fields.
+def iter_cited(value: object, path: str = "") -> Iterator[tuple[str, "Cited[Any]"]]:
+    """Every `Cited` value inside `value`, depth first, with its path (for example
+    `components[1].seasons[0].blocks[0].rate`).
 
-    Walks domain models, tuples, lists and dicts; stops at each `Cited` (its value is the
-    cited fact itself). Deriving statuses this way means a new cited field can never be
-    left out of a component's or version's summary status.
+    The one walker over cited values (TD-16): every caller that needs a model's cited
+    values uses it, so they can never disagree about which values a model holds. Walks
+    Pydantic models, tuples, lists and dicts, and stops at each `Cited` (its value is the
+    cited fact itself). Call it on validated models only: its depth follows the model's
+    shape, so raw parsed input (unbounded nesting) must be validated first. (A string
+    annotation: building `Cited[Any]` at runtime is refused by the float guard.)
     """
-    if isinstance(item, Cited):
-        return [item.status]
-    if isinstance(item, DomainModel):
-        return [s for name in type(item).model_fields for s in cited_statuses(getattr(item, name))]
-    if isinstance(item, tuple | list):
-        return [s for element in item for s in cited_statuses(element)]
-    if isinstance(item, dict):
-        return [s for element in item.values() for s in cited_statuses(element)]
-    return []
+    if isinstance(value, Cited):
+        yield path, value
+        return
+    if isinstance(value, BaseModel):
+        for name in type(value).model_fields:
+            yield from iter_cited(getattr(value, name), f"{path}.{name}" if path else name)
+    elif isinstance(value, tuple | list):
+        for index, inner in enumerate(value):
+            yield from iter_cited(inner, f"{path}[{index}]")
+    elif isinstance(value, dict):
+        for key, inner in value.items():
+            yield from iter_cited(inner, f"{path}[{key!r}]")
+
+
+def cited_statuses(item: object) -> list[Verified | Estimated | UserProvided]:
+    """Every status of every `Cited` value inside `item`, in `iter_cited`'s order.
+
+    Deriving statuses this way means a new cited field can never be left out of a
+    component's or version's summary status.
+    """
+    return [cited.status for _, cited in iter_cited(item)]

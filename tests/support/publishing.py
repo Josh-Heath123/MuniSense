@@ -8,9 +8,10 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from munisense.domain.citations import iter_cited
 from munisense.domain.money import VatRate
 from munisense.domain.tariffs import TariffVersion
-from munisense.ingestion.citation_check import CitationResult, Outcome, iter_cited
+from munisense.ingestion.citation_check import CitationResult, Outcome
 from munisense.ingestion.publish import Request, publish
 from munisense.provenance.drafts import write_file
 from munisense.provenance.sources import SourceDocument
