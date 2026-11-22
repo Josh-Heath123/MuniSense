@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "publisher": "Eskom",
+  "documents": [
+    {
+      "sha256": "915a93b2d71a453855e76a3ffe2223826f9f63a89bb542d58f92249f52c4d675",
+      "file": "schedule-of-standard-prices-2026-27.pdf",
+      "title": "Schedule of Standard Prices for Eskom Tariffs, 1 April 2026 to 31 March 2027 for non-local authority supplies, and 1 July 2026 to 30 June 2027 for local authority supplies",
+      "url": "https://www.eskom.co.za/distribution/wp-content/uploads/2026/03/20260226-Schedule-of-standard-prices-for-01-April-2026-Public-1.pdf",
+      "retrieved_on": "2026-11-21",
+      "approval": "E60",
+      "pages": 57,
+      "text_layer": true
+    },
+    {
+      "sha256": "eef82b077d7df4dd7b157ce757e2e56368170cec3bb69614fd81042451a1be84",
+      "file": "tariffs-and-charges-booklet-2026-27.pdf",
+      "title": "Tariffs and Charges Booklet 2026/2027",
+      "url": "https://www.eskom.co.za/distribution/wp-content/uploads/2026/07/Eskom-Tariff-booklet_Final.pdf",
+      "retrieved_on": "2026-11-21",
+      "approval": "E59",
+      "pages": 57,
+      "text_layer": true
+    }
+  ]
+}
