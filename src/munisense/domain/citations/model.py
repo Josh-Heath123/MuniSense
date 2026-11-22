@@ -184,11 +184,12 @@ def iter_cited(value: object, path: str = "") -> Iterator[tuple[str, "Cited[Any]
     """Every `Cited` value inside `value`, depth first, with its path (for example
     `components[1].seasons[0].blocks[0].rate`).
 
-    The one walker over cited values (TD-16): the citation check, the publish step, the
-    loader and the statuses below all use it, so they can never disagree about which values
-    a model holds. Walks Pydantic models, tuples, lists and dicts, and stops at each `Cited`
-    (its value is the cited fact itself). (A string annotation: building `Cited[Any]` at
-    runtime is refused by the float guard.)
+    The one walker over cited values (TD-16): every caller that needs a model's cited
+    values uses it, so they can never disagree about which values a model holds. Walks
+    Pydantic models, tuples, lists and dicts, and stops at each `Cited` (its value is the
+    cited fact itself). Call it on validated models only: its depth follows the model's
+    shape, so raw parsed input (unbounded nesting) must be validated first. (A string
+    annotation: building `Cited[Any]` at runtime is refused by the float guard.)
     """
     if isinstance(value, Cited):
         yield path, value

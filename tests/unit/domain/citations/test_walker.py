@@ -7,7 +7,9 @@ The walker's count for each instance is then compared with an independent count:
 `Cited`-shaped objects in the instance's JSON.
 """
 
+import dataclasses
 import importlib
+import json
 import pkgutil
 import types
 import typing
@@ -32,7 +34,8 @@ from munisense.domain.billing import (
     calculate_purchase,
 )
 from munisense.domain.citations import Cited, cited_statuses, iter_cited
-from munisense.domain.money import Money, Quantisation, RoundingMode
+from munisense.domain.money import Money, Quantisation, RoundingMode, VatRate
+from munisense.domain.tariffs import TariffVersion
 from munisense.domain.tariffs.components import Component
 from munisense.provenance.drafts import load_file
 from munisense.provenance.publication import TariffPublication, VatRatePublication
@@ -49,16 +52,16 @@ from support.builders import (
     fixture_vat_table,
     fixture_version,
 )
+from support.publishing import DRAFTS
 
 DATA = Path(__file__).resolve().parents[4] / "data"
-PACKAGES = ("munisense.domain", "munisense.catalogue", "munisense.provenance")
 
 
 def _import_everything() -> None:
-    for package in PACKAGES:
-        module = importlib.import_module(package)
-        for info in pkgutil.walk_packages(module.__path__, f"{package}."):
-            importlib.import_module(info.name)
+    """Import every module of the application, so every model class exists (Alembic's
+    migration scripts are not a package and are not imported)."""
+    for info in pkgutil.walk_packages(munisense.__path__, f"{munisense.__name__}."):
+        importlib.import_module(info.name)
 
 
 def _all_models() -> set[type[DomainModel]]:
@@ -92,11 +95,27 @@ def _mentions_cited(annotation: object, seen: set[object]) -> bool:
         return any(
             _mentions_cited(field.annotation, seen) for field in annotation.model_fields.values()
         )
-    if get_origin(annotation) is not None or isinstance(annotation, types.UnionType):
+    origin = get_origin(annotation)
+    if origin is typing.Literal:
+        return False  # its arguments are values, not types
+    if origin is typing.Annotated:  # nested inside another type; metadata is not a type
+        return _mentions_cited(get_args(annotation)[0], seen)
+    if isinstance(origin, typing.TypeAliasType):  # a parametrised `type X[T] = ...`
+        return _mentions_cited(origin.__value__, seen) or any(
+            _mentions_cited(arg, seen) for arg in get_args(annotation)
+        )
+    if origin is not None or isinstance(annotation, types.UnionType):
         return any(_mentions_cited(arg, seen) for arg in get_args(annotation))
     if isinstance(annotation, typing.TypeAliasType):
         return _mentions_cited(annotation.__value__, seen)
-    return False
+    if isinstance(annotation, type) and not dataclasses.is_dataclass(annotation):
+        return False  # a plain class: str, int, Decimal, date, an enum, ...
+    if annotation in (None, Ellipsis) or isinstance(annotation, typing.TypeVar):
+        return False
+    # A forward reference, a dataclass or anything else this inspection cannot see into
+    # would hide a cited field from it (and from the walker): fail loudly instead.
+    msg = f"cannot inspect the annotation {annotation!r}"
+    raise AssertionError(msg)
 
 
 def _cited_models() -> set[type[DomainModel]]:
@@ -206,3 +225,29 @@ def test_the_walker_names_paths_and_looks_inside_mappings() -> None:
     rate = fixture_vat_table().rates[0]
     assert [path for path, _ in iter_cited({"x": [rate.percent]})] == ["['x'][0]"]
     assert [path for path, _ in iter_cited(rate)] == ["start_cited", "percent"]
+
+
+@pytest.mark.parametrize("path", sorted(DRAFTS.rglob("*.json")), ids=lambda p: p.name)
+def test_the_walker_finds_every_citation_written_in_a_draft_file(path: Path) -> None:
+    """Against the file's own text, not the model's dump (moved from the citation check's
+    tests in P4-3)."""
+    model = load_file(path, VatRate if path.parts[-3] == "vat" else TariffVersion)
+    assert len(list(iter_cited(model))) == _json_cited_count(json.loads(path.read_text("utf-8")))
+
+
+@dataclasses.dataclass
+class _Hidden:
+    value: object
+
+
+@pytest.mark.parametrize("annotation", ["Cited[int]", _Hidden, tuple[_Hidden, ...]])
+def test_an_annotation_the_inspection_cannot_see_into_fails_loudly(annotation: object) -> None:
+    """A forward reference or a dataclass could hide a cited field from the inspection and
+    from the walker, so the inspection refuses it rather than answering "no"."""
+    with pytest.raises(AssertionError, match="cannot inspect the annotation"):
+        _mentions_cited(annotation, set())
+
+
+def test_a_parametrised_type_alias_is_looked_through() -> None:
+    type Pair[T] = tuple[Cited[T], T]
+    assert _mentions_cited(Pair[int], set())
