@@ -108,7 +108,12 @@ def _mentions_cited(annotation: object, seen: set[object]) -> bool:
         return any(_mentions_cited(arg, seen) for arg in get_args(annotation))
     if isinstance(annotation, typing.TypeAliasType):
         return _mentions_cited(annotation.__value__, seen)
-    if isinstance(annotation, type) and not dataclasses.is_dataclass(annotation):
+    if (
+        isinstance(annotation, type)
+        and not dataclasses.is_dataclass(annotation)
+        and not typing.is_typeddict(annotation)
+        and not (issubclass(annotation, tuple) and hasattr(annotation, "_fields"))
+    ):
         return False  # a plain class: str, int, Decimal, date, an enum, ...
     if annotation in (None, Ellipsis) or isinstance(annotation, typing.TypeVar):
         return False
@@ -240,7 +245,15 @@ class _Hidden:
     value: object
 
 
-@pytest.mark.parametrize("annotation", ["Cited[int]", _Hidden, tuple[_Hidden, ...]])
+class _Named(typing.NamedTuple):
+    value: object
+
+
+class _Typed(typing.TypedDict):
+    value: object
+
+
+@pytest.mark.parametrize("annotation", ["Cited[int]", _Hidden, tuple[_Hidden, ...], _Named, _Typed])
 def test_an_annotation_the_inspection_cannot_see_into_fails_loudly(annotation: object) -> None:
     """A forward reference or a dataclass could hide a cited field from the inspection and
     from the walker, so the inspection refuses it rather than answering "no"."""
