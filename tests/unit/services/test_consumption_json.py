@@ -5,7 +5,7 @@ import time
 from decimal import Decimal
 
 import pytest
-from pydantic import TypeAdapter, ValidationError
+from pydantic import TypeAdapter
 
 from munisense.domain.billing import ConsumptionProfile, TimeOfUseBuckets
 from munisense.domain.tariffs import TouPeriod
@@ -40,9 +40,9 @@ def test_duplicate_json_keys_are_refused_at_any_depth(text: str) -> None:
 def test_parse_consumption_json_validates_like_the_model() -> None:
     profile = parse_consumption_json('{"kind": "time_of_use", "used_kwh": {"peak": "1.5"}}')
     assert profile == TimeOfUseBuckets(used_kwh={TouPeriod.PEAK: Decimal("1.5")})
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConsumptionJsonError):
         parse_consumption_json('{"kind": "time_of_use", "used_kwh": {"peak": 1.5}}')
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConsumptionJsonError):
         parse_consumption_json("not json")
 
 
@@ -57,16 +57,20 @@ PLANTED = "John Smith 0821234567"
         '{"kind": "time_of_use", "used_kwh": {"peak": "-98765.4321"}}',
         f'{{"kind": "time_of_use", "used_kwh": {{"peak": "1"}}, "note": "{PLANTED}"}}',
         '{"kind": "period_total", "kwh": 98765.4321}',
+        f'{{"kind": "time_of_use", "used_kwh": {{"{PLANTED}": "1"}}}}',  # a key, not a value
+        f'{{"kind": "time_of_use", "used_kwh": {{"peak": "1"}}, "{PLANTED}": "1"}}',
     ],
 )
 def test_a_refusal_never_repeats_the_input(text: str) -> None:
     """Consumption figures and anything else a person sends stay out of messages (security
     register, input limits), including an unknown profile kind, which Pydantic would name."""
-    with pytest.raises((ValidationError, ConsumptionJsonError)) as caught:
+    with pytest.raises(ConsumptionJsonError) as caught:
         parse_consumption_json(text)
-    message = str(caught.value)
+    shown = [str(caught.value), repr(caught.value.args), repr(caught.value.codes)]
+    assert caught.value.__context__ is None  # no chain carries the original error
+    assert caught.value.__cause__ is None
     for planted in ("98765", "0821234567", "John Smith"):
-        assert planted not in message
+        assert all(planted not in text for text in shown)
 
 
 def test_a_repeated_unvalidated_key_is_not_repeated_in_the_message() -> None:
@@ -91,13 +95,34 @@ def test_the_duplicate_check_is_linear() -> None:
     assert time.perf_counter() - started < 2
 
 
+def test_a_huge_number_in_an_unvalidated_value_is_a_fixed_refusal() -> None:
+    """The earlier of two equal keys is never validated, so its value can hold what
+    Pydantic's parser accepts but Python's refuses (or the other way round); either way the
+    refusal is a `ConsumptionJsonError`, never a bare `ValueError` (P4-4 review)."""
+    huge = "9" * 5000
+    text = f'{{"kind": "time_of_use", "used_kwh": [{huge}], "used_kwh": {{"peak": "1"}}}}'
+    with pytest.raises(ConsumptionJsonError) as caught:
+        parse_consumption_json(text)
+    assert huge[:20] not in str(caught.value)
+
+
 def test_a_second_read_that_fails_is_a_fixed_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The backstop when the second read fails for any reason a real input may not reach."""
+
     def refuse(*args: object, **kwargs: object) -> object:
-        raise json.JSONDecodeError("bad", "doc", 0)
+        raise RecursionError
 
     monkeypatch.setattr(json, "loads", refuse)
     with pytest.raises(ConsumptionJsonError, match="could not be read a second time"):
         parse_consumption_json('{"kind": "period_total", "kwh": "1"}')
+
+
+def test_a_refusal_carries_only_error_type_codes() -> None:
+    with pytest.raises(ConsumptionJsonError) as caught:
+        parse_consumption_json('{"kind": "time_of_use", "used_kwh": {"peak": "-1"}, "x": 1}')
+    assert caught.value.codes
+    assert all(code.isidentifier() for code in caught.value.codes)
+    assert str(caught.value) == "the consumption input is not valid"
 
 
 def test_an_unknown_kind_is_a_fixed_refusal() -> None:
