@@ -14,9 +14,9 @@ last of two equal keys.
 """
 
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, Field
+from pydantic import AfterValidator, Field, model_validator
 
 from munisense.domain.base import DomainModel
 from munisense.domain.billing.errors import UnsupportedConsumptionError
@@ -41,14 +41,26 @@ class PeriodTotal(DomainModel):
 class TimeOfUseBuckets(DomainModel):
     """kWh used, and kWh exported, per time-of-use period over the billing period.
 
-    At least one period must be used (a zero is fine); export is optional. At most one
-    entry per period each, so at most three used and three exported. Whether the version's
-    calendar defines each period is checked when the profile is priced (P4-7).
+    At most one entry per period each, so at most three used and three exported.
+
+    An absent period is never read as zero use: when the profile is priced (P4-7), every
+    period the version's calendar defines must be in `used_kwh` (a zero is given as "0"),
+    and a period the calendar does not define is refused. Export is optional, because not
+    every customer exports; a period absent from `exported_kwh` exported nothing. A period
+    may be exported only if it is also given as used, because the export credit is capped
+    by the kWh used in the same period (ADR-0016 point 6).
     """
 
     kind: Literal["time_of_use"] = "time_of_use"
     used_kwh: Annotated[dict[TouPeriod, Kwh], Field(min_length=1)]
     exported_kwh: dict[TouPeriod, Kwh] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _exported_only_where_used(self) -> Self:
+        if not self.exported_kwh.keys() <= self.used_kwh.keys():
+            msg = "a period is exported but not given as used (give its use, even 0)"
+            raise ValueError(msg)
+        return self
 
 
 ConsumptionProfile = Annotated[PeriodTotal | TimeOfUseBuckets, Field(discriminator="kind")]

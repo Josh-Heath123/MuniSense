@@ -47,11 +47,11 @@ def test_a_profile_is_read_from_json_by_its_kind() -> None:
 def test_a_time_of_use_profile_gives_kwh_used_and_exported_per_period() -> None:
     profile = PROFILE.validate_json(
         '{"kind": "time_of_use", "used_kwh": {"peak": "100", "off_peak": "250.5"},'
-        ' "exported_kwh": {"standard": "12"}}'
+        ' "exported_kwh": {"off_peak": "12"}}'
     )
     assert isinstance(profile, TimeOfUseBuckets)
     assert profile.used_kwh == {TouPeriod.PEAK: Decimal(100), TouPeriod.OFF_PEAK: Decimal("250.5")}
-    assert profile.exported_kwh == {TouPeriod.STANDARD: Decimal(12)}
+    assert profile.exported_kwh == {TouPeriod.OFF_PEAK: Decimal(12)}
 
 
 def test_export_is_optional_and_defaults_to_nothing() -> None:
@@ -73,6 +73,8 @@ def test_a_time_of_use_profile_is_refused_by_the_engine_until_p4_7() -> None:
         '"used_kwh": {"peak": "1"}, "exported_kwh": {"peak": "-0.5"}',
         '"used_kwh": {"Peak Hours!": "1"}',  # not a period name
         '"used_kwh": {"shoulder": "1"}',  # not one of Eskom's three periods (ADR-0016)
+        '"used_kwh": {"peak": "1"}, "exported_kwh": {"shoulder": "1"}',
+        '"used_kwh": {"peak": "1"}, "exported_kwh": {"standard": "1"}',  # not given as used
         '"used_kwh": {"peak": 1}',  # a number, not an exact decimal string
         '"used_kwh": {"peak": "1"}, "readings": []',  # an unknown field
         '"kwh_by_bucket": {"peak": "1"}',  # the P1 shape is gone
