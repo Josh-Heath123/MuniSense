@@ -42,6 +42,7 @@ from munisense.domain.tariffs import (
     Component,
     PriceBasis,
     TariffVersion,
+    TouPeriod,
     VatTreatment,
 )
 from support.builders import (
@@ -269,7 +270,7 @@ def test_every_result_warns_about_unverified_values_and_rounding() -> None:
 
 
 def test_time_of_use_consumption_is_refused() -> None:
-    profile = TimeOfUseBuckets(kwh_by_bucket={"peak": Decimal("10")})
+    profile = TimeOfUseBuckets(used_kwh={TouPeriod.PEAK: Decimal("10")})
     with pytest.raises(UnsupportedConsumptionError):
         calculate_bill(fixture_version(BASIC, BLOCKS), JULY, profile, VAT)
 
