@@ -147,7 +147,10 @@ def is_priced_by_period(component: Component) -> bool:
 
 
 def check_quantities(
-    versions: list[TariffVersion], quantities: CustomerQuantities | None
+    versions: list[TariffVersion],
+    quantities: CustomerQuantities | None,
+    *,
+    allow_unused: bool = False,
 ) -> dict[Quantity, Decimal]:
     """The quantities by name, once every quantity the versions' quantity charges are
     priced on is given and none is given that no charge uses (it would be silently
@@ -160,7 +163,7 @@ def check_quantities(
         msg = f"give the customer's {missing[0].replace('_', ' ')} for the month"
         raise InvalidQuantityError(msg)
     unused = sorted(given.keys() - needed)
-    if unused:
+    if unused and not allow_unused:
         msg = f"the tariff has no charge on the {unused[0].replace('_', ' ')}"
         raise InvalidQuantityError(msg)
     return given
@@ -236,7 +239,9 @@ def price_part(
 
     by_period = _time_of_use(version, period, used_by_period, exported_by_period)
     calendar_season = _calendar_season(version, period)
-    given = check_quantities([version], quantities)
+    # The entry points refused unused quantities across all the versions; a part priced by a
+    # version without a charge on one (a mid-month tariff change) must not refuse it again.
+    given = check_quantities([version], quantities, allow_unused=True)
     lines = [
         _quantise_line(line, policy.line_amount)
         for component in version.components

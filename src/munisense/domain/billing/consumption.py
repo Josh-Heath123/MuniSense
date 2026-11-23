@@ -30,6 +30,7 @@ def _no_negative_zero(value: Decimal) -> Decimal:
 
 
 Kwh = Annotated[ExactDecimal, Field(ge=0), AfterValidator(_no_negative_zero)]
+Kva = Kwh  # the same rules: exact, never negative, no negative zero
 
 
 class PeriodTotal(DomainModel):
@@ -69,9 +70,9 @@ class CustomerQuantities(DomainModel):
     priced on (P4-9). Each is optional, exact, never negative (a negative zero becomes
     zero); unknown names are refused, and nothing here is ever stored or logged."""
 
-    measured_maximum_demand_kva: Kwh | None = None
-    notified_maximum_demand_kva: Kwh | None = None
-    annual_utilised_capacity_kva: Kwh | None = None
+    measured_maximum_demand_kva: Kva | None = None
+    notified_maximum_demand_kva: Kva | None = None
+    annual_utilised_capacity_kva: Kva | None = None
 
     def given(self) -> dict[Quantity, Decimal]:
         """The quantities given, by name."""

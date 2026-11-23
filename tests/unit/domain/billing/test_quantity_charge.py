@@ -369,3 +369,29 @@ def test_a_season_or_period_named_twice_is_refused() -> None:
         fixture_quantity_charge(seasons=("high", "high"))
     with pytest.raises(ValidationError, match="each season and period once"):
         fixture_quantity_charge(periods=(TouPeriod.PEAK, TouPeriod.PEAK))
+
+
+def test_a_mid_month_tariff_change_that_drops_the_charge_is_priced() -> None:
+    """Version A (to 16 July) has the capacity charge; version B (from 16 July) has none.
+    The quantity is checked once across both; B's part is not refused for it.
+    A's part: 100 kVA x 15/31 (0.483871) x R54.22 = R2,623.548... -> R2,623.55."""
+    a = fixture_version(fixture_flat("100"), MINIFLEX, end=date(2026, 7, 16))
+    b = fixture_version(fixture_flat("100"), start=date(2026, 7, 16), end=None)
+    bill = calculate_period([a, b], JULY, NOTHING, VAT, quantities=capacity(100))
+    charged = [
+        line.amount.rand
+        for part in bill.parts
+        for line in part.lines
+        if line.component == "network_capacity"
+    ]
+    assert charged == [Decimal("2623.55")]
+    with pytest.raises(InvalidQuantityError, match="no charge on the measured maximum demand"):
+        calculate_period(
+            [a, b],
+            JULY,
+            NOTHING,
+            VAT,
+            quantities=CustomerQuantities(
+                annual_utilised_capacity_kva=Decimal(100), measured_maximum_demand_kva=Decimal(1)
+            ),
+        )
