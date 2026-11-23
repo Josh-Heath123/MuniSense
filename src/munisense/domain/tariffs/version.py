@@ -31,6 +31,7 @@ from munisense.domain.tariffs.components import (
     SeasonalEnergy,
 )
 from munisense.domain.tariffs.policy import BillingPolicy
+from munisense.domain.tariffs.time_of_use import TouCalendar
 
 Code = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
 
@@ -57,6 +58,10 @@ class TariffVersion(DomainModel):
     price_basis: Cited[PriceBasis]
     rounding_policy: RoundingPolicy
     billing_policy: BillingPolicy
+    tou_calendar: TouCalendar | None = Field(default=None, exclude_if=lambda value: value is None)
+    """The version's time-of-use calendar (ADR-0016). Added under schema version 1 and left
+    out of the output when absent, so files without one stay byte-identical (ADR-0016
+    point 3)."""
     components: Annotated[tuple[Component, ...], Field(min_length=1, max_length=30)]
 
     @model_validator(mode="after")
@@ -69,7 +74,36 @@ class TariffVersion(DomainModel):
             msg = "component names must be unique within a version"
             raise ValueError(msg)
         self._check_free_basic_allocation()
+        self._check_calendar()
         return self
+
+    def _check_calendar(self) -> None:
+        """A time-of-use component needs the calendar; a seasonal component must agree with
+        it, season by season (TD-11, ADR-0016 point 2)."""
+        calendar = self.tou_calendar
+        if calendar is None:
+            needing = [c.name for c in self.components if type(c).NEEDS_CALENDAR]
+            if needing:
+                msg = f"the component(s) {', '.join(needing)} need a time-of-use calendar"
+                raise ValueError(msg)
+            return
+        seasons = {season.name: season.dates.value for season in calendar.seasons}
+        for component in self.components:
+            if not isinstance(component, SeasonalEnergy):
+                continue
+            for season in component.seasons:
+                if season.name not in seasons:
+                    msg = (
+                        f"the season {season.name!r} of {component.name} is not in the "
+                        "version's calendar"
+                    )
+                    raise ValueError(msg)
+                if season.dates.value != seasons[season.name]:
+                    msg = (
+                        f"the season {season.name!r} of {component.name} covers different "
+                        "days from the calendar's"
+                    )
+                    raise ValueError(msg)
 
     def _check_free_basic_allocation(self) -> None:
         allocations = [c for c in self.components if isinstance(c, FreeBasicAllocation)]

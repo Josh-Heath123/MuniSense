@@ -17,7 +17,7 @@ until then the engine refuses such periods for block tariffs (P1-7 criterion).
 from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from typing import Annotated, ClassVar, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -53,6 +53,10 @@ def _require_unit(rate: Cited[Rate], allowed: set[CanonicalUnit], what: str) -> 
 
 
 class _ComponentBase(DomainModel):
+    NEEDS_CALENDAR: ClassVar[bool] = False
+    """True for a component priced by time of use: its version must carry a calendar
+    (ADR-0016 point 1)."""
+
     schema_version: Literal[1]
     name: ComponentName
     label: Cited[PrintedLabel]

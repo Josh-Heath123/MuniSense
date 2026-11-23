@@ -24,10 +24,15 @@ from munisense.domain.tariffs.time_of_use import (
     CalendarSeason,
     DaySchedule,
     DayType,
+    HolidayCoverageError,
+    HolidayRule,
+    HolidayTreatment,
+    ListedHoliday,
     TimeRange,
     TouCalendar,
     TouPeriod,
     UndefinedPeriodError,
+    UnlistedHolidays,
 )
 from munisense.domain.tariffs.version import PriceBasis, TariffVersion
 
@@ -44,7 +49,11 @@ __all__ = [
     "FixedCharge",
     "FlatEnergy",
     "FreeBasicAllocation",
+    "HolidayCoverageError",
+    "HolidayRule",
+    "HolidayTreatment",
     "Levy",
+    "ListedHoliday",
     "PrepaidFixedCharges",
     "PriceBasis",
     "ProRating",
@@ -56,5 +65,6 @@ __all__ = [
     "TouCalendar",
     "TouPeriod",
     "UndefinedPeriodError",
+    "UnlistedHolidays",
     "VatTreatment",
 ]

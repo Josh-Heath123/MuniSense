@@ -35,7 +35,7 @@ from munisense.domain.billing import (
 )
 from munisense.domain.citations import Cited, cited_statuses, iter_cited
 from munisense.domain.money import Money, Quantisation, RoundingMode, VatRate
-from munisense.domain.tariffs import TariffVersion
+from munisense.domain.tariffs import DayType, TariffVersion
 from munisense.domain.tariffs.components import Component
 from munisense.provenance.drafts import load_file
 from munisense.provenance.publication import TariffPublication, VatRatePublication
@@ -46,6 +46,7 @@ from support.builders import (
     fixture_fixed,
     fixture_flat,
     fixture_free_basic,
+    fixture_holiday_list,
     fixture_levy,
     fixture_policy,
     fixture_season,
@@ -148,6 +149,11 @@ def _instances() -> list[object]:
         ),
         fixture_vat_table(),
         fixture_calendar(),
+        fixture_calendar(
+            holidays=fixture_holiday_list(
+                (date(2026, 4, 1), date(2027, 7, 1)), (date(2026, 7, 15), DayType.SUNDAY)
+            )
+        ),
         *_results(),
     ]
 
