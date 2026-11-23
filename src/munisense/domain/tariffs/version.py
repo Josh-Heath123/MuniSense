@@ -95,12 +95,13 @@ class TariffVersion(DomainModel):
         seasons: dict[str, SeasonDates] = (
             {s.name: s.dates.value for s in calendar.seasons} if calendar is not None else {}
         )
+        calendar_names = {s.name for s in calendar.seasons} if calendar is not None else set()
         for component in self.components:
             if not isinstance(component, SeasonalEnergy):
                 continue
             for season in component.seasons:
                 known = seasons.setdefault(season.name, season.dates.value)
-                if calendar is not None and season.name not in {s.name for s in calendar.seasons}:
+                if calendar is not None and season.name not in calendar_names:
                     msg = (
                         f"the season {season.name!r} of {component.name} is not in the "
                         "version's calendar"
@@ -124,9 +125,12 @@ class TariffVersion(DomainModel):
         if window.days > MAX_HOLIDAY_COVERAGE_DAYS:
             msg = f"a holiday list covers at most {MAX_HOLIDAY_COVERAGE_DAYS} days"
             raise ValueError(msg)
-        start = self.effective_from.value
-        end = self.effective_to.value if self.effective_to is not None else None
-        if not window.contains(start) or (end is not None and window.end < end):
+        if self.effective_to is None:
+            # No finite list covers an open-ended version, and a mistyped end within the
+            # cap would price later holidays as ordinary days (P4-6 security review).
+            msg = "a version with a holiday list needs its end date"
+            raise ValueError(msg)
+        if not window.contains(self.effective_from.value) or window.end < self.effective_to.value:
             msg = "the holiday list must cover every day of the version"
             raise ValueError(msg)
 

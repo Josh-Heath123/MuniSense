@@ -241,13 +241,20 @@ def test_a_holiday_list_covers_at_most_two_years() -> None:
         (date(2026, 4, 1), date(2072, 7, 1)), (date(2026, 7, 15), DayType.SUNDAY)
     )
     with pytest.raises(ValidationError, match="covers at most 731 days"):
-        fixture_version(fixture_flat("100"), end=None, tou_calendar=fixture_calendar(holidays=typo))
+        fixture_version(fixture_flat("100"), tou_calendar=fixture_calendar(holidays=typo))
     two_years = fixture_holiday_list(
         (date(2026, 7, 1), date(2028, 7, 1)), (date(2026, 7, 15), DayType.SUNDAY)
     )
-    assert fixture_version(
-        fixture_flat("100"), end=None, tou_calendar=fixture_calendar(holidays=two_years)
-    )
+    assert fixture_version(fixture_flat("100"), tou_calendar=fixture_calendar(holidays=two_years))
+
+
+def test_an_open_ended_version_cannot_carry_a_holiday_list() -> None:
+    """No finite list covers it, and a mistyped end within the cap would go unnoticed."""
+    with pytest.raises(ValidationError, match="needs its end date"):
+        fixture_version(
+            fixture_flat("100"), end=None, tou_calendar=fixture_calendar(holidays=LISTED)
+        )
+    assert fixture_version(fixture_flat("100"), end=None, tou_calendar=fixture_calendar())
 
 
 # ------------------------------------------------------------------ round trips
