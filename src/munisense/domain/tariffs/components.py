@@ -185,6 +185,19 @@ class SeasonDates(DomainModel):
         return key >= start or key <= end  # wraps past the new year
 
 
+def check_covers_the_year_once(seasons: list[SeasonDates]) -> None:
+    """Refuse seasons that leave a day of the year (a leap year, so 29 February counts)
+    uncovered, or cover one twice. Shared by seasonal components and the TOU calendar."""
+    day = date(_LEAP_YEAR, 1, 1)
+    while day.year == _LEAP_YEAR:
+        covering = sum(dates.contains(day) for dates in seasons)
+        if covering != 1:
+            problem = "no season" if covering == 0 else "more than one season"
+            msg = f"the seasons must cover every day once; {day:%d %B} has {problem}"
+            raise ValueError(msg)
+        day += timedelta(days=1)
+
+
 class Season(DomainModel):
     """One season of a seasonal energy charge: its cited dates and its own cited rates.
     A flat rate is a single open-ended block."""
@@ -215,14 +228,7 @@ class SeasonalEnergy(_ComponentBase):
         if len(set(names)) != len(names):
             msg = "season names must be unique within a component"
             raise ValueError(msg)
-        day = date(_LEAP_YEAR, 1, 1)
-        while day.year == _LEAP_YEAR:
-            covering = sum(season.dates.value.contains(day) for season in self.seasons)
-            if covering != 1:
-                problem = "no season" if covering == 0 else "more than one season"
-                msg = f"the seasons must cover every day once; {day:%d %B} has {problem}"
-                raise ValueError(msg)
-            day += timedelta(days=1)
+        check_covers_the_year_once([season.dates.value for season in self.seasons])
         return self
 
     def season_for(self, first: date, last: date) -> Season | None:

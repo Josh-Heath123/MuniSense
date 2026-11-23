@@ -20,7 +20,15 @@ from munisense.domain.tariffs.policy import (
     PrepaidFixedCharges,
     ProRating,
 )
-from munisense.domain.tariffs.time_of_use import TouPeriod
+from munisense.domain.tariffs.time_of_use import (
+    CalendarSeason,
+    DaySchedule,
+    DayType,
+    TimeRange,
+    TouCalendar,
+    TouPeriod,
+    UndefinedPeriodError,
+)
 from munisense.domain.tariffs.version import PriceBasis, TariffVersion
 
 __all__ = [
@@ -28,8 +36,11 @@ __all__ = [
     "Block",
     "BlockEnergy",
     "BlockReset",
+    "CalendarSeason",
     "Component",
     "ConsumptionSplit",
+    "DaySchedule",
+    "DayType",
     "FixedCharge",
     "FlatEnergy",
     "FreeBasicAllocation",
@@ -41,6 +52,9 @@ __all__ = [
     "SeasonDates",
     "SeasonalEnergy",
     "TariffVersion",
+    "TimeRange",
+    "TouCalendar",
     "TouPeriod",
+    "UndefinedPeriodError",
     "VatTreatment",
 ]
