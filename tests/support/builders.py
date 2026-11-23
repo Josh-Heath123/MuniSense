@@ -45,9 +45,11 @@ from munisense.domain.tariffs import (
     SeasonalEnergy,
     SeasonDates,
     TariffVersion,
+    TimeOfUseEnergy,
     TimeRange,
     TouCalendar,
     TouPeriod,
+    TouRate,
     UnlistedHolidays,
     VatTreatment,
 )
@@ -436,4 +438,35 @@ def fixture_calendar(
             for day_type in DayType
         ),
         holidays=holidays or fixture_holidays_by_day_of_week(),
+    )
+
+
+# Made-up time-of-use rates in cents per kWh for the fixture calendar's seasons.
+FIXTURE_TOU_CENTS: dict[tuple[str, TouPeriod], str] = {
+    ("high", TouPeriod.PEAK): "500",
+    ("high", TouPeriod.STANDARD): "200",
+    ("high", TouPeriod.OFF_PEAK): "100",
+    ("low", TouPeriod.PEAK): "300",
+    ("low", TouPeriod.STANDARD): "150",
+    ("low", TouPeriod.OFF_PEAK): "100",
+}
+
+
+def fixture_tou_energy(
+    cents: dict[tuple[str, TouPeriod], str] = FIXTURE_TOU_CENTS,
+    name: str = "tou_energy",
+    status: Status = FIXTURE_STATUS,
+) -> TimeOfUseEnergy:
+    return TimeOfUseEnergy(
+        schema_version=1,
+        kind="time_of_use_energy",
+        name=name,
+        label=cited_label("Active energy charge", status),
+        vat=cited_vat(status=status),
+        rates=tuple(
+            TouRate(
+                season=season, period=period, rate=cited_rate(c, RateUnit.CENTS_PER_KWH, status)
+            )
+            for (season, period), c in cents.items()
+        ),
     )

@@ -24,6 +24,7 @@ from pydantic import Field, StringConstraints, model_validator
 from munisense.domain.base import DomainModel
 from munisense.domain.citations import Cited, StatusKind, cited_statuses, weakest
 from munisense.domain.money import CanonicalUnit, ExactDecimal, Rate
+from munisense.domain.tariffs.tou_period import TouPeriod
 
 ComponentName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]{0,63}$")]
 PrintedLabel = Annotated[
@@ -305,7 +306,47 @@ class FreeBasicAllocation(_ComponentBase):
         return self
 
 
+class TouRate(DomainModel):
+    """The rate of one period in one season of a time-of-use energy charge."""
+
+    season: ComponentName
+    period: TouPeriod
+    rate: Cited[Rate]
+
+
+class TimeOfUseEnergy(_ComponentBase):
+    """Energy priced by time of use (ADR-0016 point 6): a cited rate per kWh for each
+    period of each season of the version's calendar. The version checks that the rates
+    name exactly the seasons and periods its calendar defines."""
+
+    kind: Literal["time_of_use_energy"]
+    rates: Annotated[tuple[TouRate, ...], Field(min_length=1, max_length=36)]
+
+    @model_validator(mode="after")
+    def _one_rate_per_season_and_period(self) -> Self:
+        keys = [(r.season, r.period) for r in self.rates]
+        if len(set(keys)) != len(keys):
+            msg = "a time-of-use energy charge has one rate per season and period"
+            raise ValueError(msg)
+        for rate in self.rates:
+            _require_unit(rate.rate, {CanonicalUnit.RAND_PER_KWH}, "a time-of-use energy rate")
+        return self
+
+    @property
+    def needs_calendar(self) -> bool:
+        return True
+
+    def rate_for(self, season: str, period: TouPeriod) -> Cited[Rate]:
+        return next(r.rate for r in self.rates if (r.season, r.period) == (season, period))
+
+
 Component = Annotated[
-    FixedCharge | FlatEnergy | BlockEnergy | SeasonalEnergy | Levy | FreeBasicAllocation,
+    FixedCharge
+    | FlatEnergy
+    | BlockEnergy
+    | SeasonalEnergy
+    | TimeOfUseEnergy
+    | Levy
+    | FreeBasicAllocation,
     Field(discriminator="kind"),
 ]

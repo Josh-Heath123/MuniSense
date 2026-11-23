@@ -21,7 +21,7 @@ from pydantic import AfterValidator, Field, model_validator
 from munisense.domain.base import DomainModel
 from munisense.domain.billing.errors import UnsupportedConsumptionError
 from munisense.domain.money import ExactDecimal
-from munisense.domain.tariffs.time_of_use import TouPeriod
+from munisense.domain.tariffs.tou_period import TouPeriod
 
 
 def _no_negative_zero(value: Decimal) -> Decimal:

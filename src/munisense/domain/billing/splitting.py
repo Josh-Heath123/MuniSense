@@ -26,12 +26,13 @@ from decimal import Decimal
 from itertools import pairwise
 from typing import assert_never
 
-from munisense.domain.billing.consumption import (
-    PeriodTotal,
-    TimeOfUseBuckets,
-    require_period_total,
+from munisense.domain.billing.consumption import PeriodTotal, TimeOfUseBuckets
+from munisense.domain.billing.engine import (
+    check_price_basis,
+    has_monthly_values,
+    price_part,
+    read_consumption,
 )
-from munisense.domain.billing.engine import check_price_basis, has_monthly_values, price_part
 from munisense.domain.billing.errors import (
     IncompatibleVersionsError,
     PeriodOutsideVersionError,
@@ -50,7 +51,9 @@ from munisense.domain.tariffs import (
     ConsumptionSplit,
     ProRating,
     SeasonalEnergy,
+    SeasonDates,
     TariffVersion,
+    TouPeriod,
 )
 
 
@@ -64,10 +67,21 @@ def calculate_period(
 ) -> PeriodBill:
     """Price a period that may span months, versions, seasons and VAT rates, or raise a
     `DomainError` explaining why it cannot."""
-    total_kwh = require_period_total(consumption).kwh
     ordered = _check_versions(versions)
+    readings = [read_consumption(version, consumption) for version in ordered]
+    total_kwh, used = readings[0]  # every version accepts the same consumption
     parts = _split(ordered, period, vat_table)
-    shares = _shares(total_kwh, period, [part for part, _ in parts], parts[0][1])
+    ranges = [part for part, _ in parts]
+    if used is None:
+        shares = _shares(total_kwh, period, ranges, parts[0][1])
+        by_period: list[dict[TouPeriod, Decimal] | None] = [None] * len(parts)
+    else:
+        # Each period's kWh are shared on their own; a part's total is the sum of its
+        # periods' shares, so the two always agree.
+        per_period = {p: _shares(kwh, period, ranges, parts[0][1]) for p, kwh in used.items()}
+        by_period = [{p: per_period[p][i] for p in used} for i in range(len(parts))]
+        with exact():
+            shares = [sum(part.values(), Decimal(0)) for part in by_period if part is not None]
     eligible = bool(free_basic_eligible)
     bills = [
         price_part(
@@ -77,8 +91,9 @@ def calculate_period(
             vat_table,
             free_basic_eligible=free_basic_eligible,
             month_fraction=_month_fraction(part, version, eligible=eligible),
+            used_by_period=part_used,
         )
-        for (part, version), kwh in zip(parts, shares, strict=True)
+        for (part, version), kwh, part_used in zip(parts, shares, by_period, strict=True)
     ]
     split = len(bills) > 1 or any(bill.month_fraction is not None for bill in bills)
     policies = list(dict.fromkeys(version.billing_policy for _, version in parts))
@@ -137,7 +152,10 @@ def _split(
         if own is not None:
             for component in version.components:
                 if isinstance(component, SeasonalEnergy):
-                    cuts |= _season_starts(component, own)
+                    cuts |= _season_starts([s.dates.value for s in component.seasons], own)
+            if version.tou_calendar is not None:
+                seasons = [s.dates.value for s in version.tou_calendar.seasons]
+                cuts |= _season_starts(seasons, own)
     # The VAT table is contiguous, so every change is some rate's end; a period reaching
     # past the table's first start or last end is refused by `rate_for` either way.
     cuts |= {
@@ -175,10 +193,9 @@ def _version_edges(version: TariffVersion) -> list[date]:
     return [version.effective_from.value] + ([] if end is None else [end.value])
 
 
-def _season_starts(component: SeasonalEnergy, period: DateRange) -> set[date]:
+def _season_starts(seasons: list[SeasonDates], period: DateRange) -> set[date]:
     starts: set[date] = set()
-    for season in component.seasons:
-        dates = season.dates.value
+    for dates in seasons:
         for year in range(period.start.year, period.end.year + 1):
             if (dates.start_month, dates.start_day) == (2, 29) and not calendar.isleap(year):
                 start = date(year, 3, 1)  # without 29 February the season starts on 1 March

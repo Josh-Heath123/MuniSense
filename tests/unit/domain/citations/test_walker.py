@@ -51,6 +51,7 @@ from support.builders import (
     fixture_policy,
     fixture_season,
     fixture_seasonal,
+    fixture_tou_energy,
     fixture_vat_table,
     fixture_version,
 )
@@ -148,6 +149,7 @@ def _instances() -> list[object]:
             fixture_free_basic("50"),
         ),
         fixture_vat_table(),
+        fixture_version(fixture_tou_energy(), tou_calendar=fixture_calendar()),
         fixture_calendar(),
         fixture_calendar(
             holidays=fixture_holiday_list(
