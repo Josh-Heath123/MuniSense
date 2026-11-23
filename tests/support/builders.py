@@ -43,6 +43,8 @@ from munisense.domain.tariffs import (
     PrepaidFixedCharges,
     PriceBasis,
     ProRating,
+    Quantity,
+    QuantityCharge,
     Season,
     SeasonalEnergy,
     SeasonDates,
@@ -505,4 +507,25 @@ def fixture_export_credit(
             )
             for (season, period), c in cents.items()
         ),
+    )
+
+
+def fixture_quantity_charge(
+    rand_per_kva: str = "50.00",
+    quantity: Quantity = Quantity.UTILISED_CAPACITY_KVA,
+    name: str = "network_capacity",
+    seasons: tuple[str, ...] = (),
+    periods: tuple[TouPeriod, ...] = (),
+    status: Status = FIXTURE_STATUS,
+) -> QuantityCharge:
+    return QuantityCharge(
+        schema_version=1,
+        kind="quantity_charge",
+        name=name,
+        label=cited_label("Network capacity charge", status),
+        vat=cited_vat(status=status),
+        quantity=quantity,
+        rate=cited_rate(rand_per_kva, RateUnit.RAND_PER_KVA_PER_MONTH, status),
+        seasons=seasons,
+        periods=periods,
     )

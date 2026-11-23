@@ -23,7 +23,7 @@ so one rounding applies to the whole share-out.
 """
 
 import calendar
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date
 from decimal import Decimal
 from itertools import pairwise
@@ -32,6 +32,7 @@ from typing import assert_never
 from munisense.domain.billing.consumption import PeriodTotal, TimeOfUseBuckets
 from munisense.domain.billing.engine import (
     check_price_basis,
+    check_quantities,
     has_monthly_values,
     price_part,
     read_consumption,
@@ -54,6 +55,7 @@ from munisense.domain.tariffs import (
     BillingPolicy,
     ConsumptionSplit,
     ProRating,
+    Quantity,
     SeasonalEnergy,
     SeasonDates,
     TariffVersion,
@@ -69,6 +71,7 @@ def calculate_period(
     vat_table: VatTable,
     *,
     free_basic_eligible: bool | None = None,
+    quantities: Mapping[Quantity, Decimal] | None = None,
 ) -> PeriodBill:
     """Price a period that may span months, versions, seasons and VAT rates, or raise a
     `DomainError` explaining why it cannot."""
@@ -76,6 +79,7 @@ def calculate_period(
     parts = _split(ordered, period, vat_table)
     pricing = list(dict.fromkeys(version for _, version in parts))
     readings = [read_consumption(version, consumption) for version in pricing]
+    check_quantities(pricing, quantities)
     total_kwh, used, exported = readings[0]  # every version that prices a part accepts it
     ranges = [part for part, _ in parts]
     if used is not None and len(_calendar_seasons(parts)) > 1:
@@ -112,6 +116,7 @@ def calculate_period(
             month_fraction=_month_fraction(part, version, eligible=eligible),
             used_by_period=part_used,
             exported_by_period=part_exported,
+            quantities=quantities,
         )
         for (part, version), kwh, part_used, part_exported in zip(
             parts, shares, by_period, exports, strict=True

@@ -22,6 +22,7 @@
 | **High-demand / low-demand season** | Eskom's seasons: June to August, and September to May |
 | **Demand charge** | A charge per kVA of maximum demand in a billing period |
 | **NMD / capacity charge** | Notified maximum demand: a charge based on contracted capacity |
+| **Quantity charge** | A monthly charge per kVA of a quantity the customer gives for the month: a measured maximum demand, a notified maximum demand or a utilised capacity (`QuantityCharge`, P4-9). It can be limited to seasons of the calendar, and can name the periods in which the demand is measured; it is pro-rated in a part month like any monthly value |
 | **FBE** | Free basic electricity: a monthly free allocation (typically 50 kWh) for registered indigent households |
 | **SSEG** | Small-scale embedded generation: rooftop solar and similar. May earn export credits |
 | **Prepaid** | Electricity bought in advance as tokens. Block thresholds may reset per calendar month |

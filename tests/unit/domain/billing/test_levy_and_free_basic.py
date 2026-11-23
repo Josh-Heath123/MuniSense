@@ -100,9 +100,15 @@ def test_a_zero_rated_levy_stays_out_of_the_vat_base() -> None:
     assert bill.total == rand("132.50")
 
 
-@pytest.mark.parametrize("unit", list(RateUnit))
-def test_a_levy_accepts_every_rate_unit(unit: RateUnit) -> None:
+@pytest.mark.parametrize("unit", [u for u in RateUnit if u is not RateUnit.RAND_PER_KVA_PER_MONTH])
+def test_a_levy_accepts_every_rate_unit_but_per_kva(unit: RateUnit) -> None:
     assert fixture_levy("1.00", unit).rate.value.unit is unit
+
+
+def test_a_levy_is_not_priced_per_kva() -> None:
+    """A charge per kVA is a quantity charge (P4-9), priced on a customer's demand."""
+    with pytest.raises(ValidationError):
+        fixture_levy("1.00", RateUnit.RAND_PER_KVA_PER_MONTH)
 
 
 @pytest.mark.parametrize("value", ["-1.00", "-0"])

@@ -53,6 +53,7 @@ from support.builders import (
     fixture_flat,
     fixture_free_basic,
     fixture_levy,
+    fixture_quantity_charge,
     fixture_season,
     fixture_seasonal,
     fixture_tou_energy,
@@ -358,6 +359,7 @@ def test_every_component_priced_by_period_needs_a_calendar() -> None:
         "seasonal_energy": fixture_seasonal(fixture_season("all", (1, 1), (12, 31), (None, "1"))),
         "time_of_use_energy": fixture_tou_energy(),
         "export_credit": fixture_export_credit(),
+        "quantity_charge": fixture_quantity_charge(),
         "levy": fixture_levy("1"),
         "free_basic_allocation": fixture_free_basic("50"),
     }

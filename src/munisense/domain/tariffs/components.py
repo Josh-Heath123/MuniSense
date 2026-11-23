@@ -359,6 +359,46 @@ class ExportCredit(_PerPeriodRates):
     kind: Literal["export_credit"]
 
 
+class Quantity(StrEnum):
+    """A quantity the customer gives for a month, which a quantity charge is priced on."""
+
+    MEASURED_MAXIMUM_DEMAND_KVA = "measured_maximum_demand_kva"
+    NOTIFIED_MAXIMUM_DEMAND_KVA = "notified_maximum_demand_kva"
+    UTILISED_CAPACITY_KVA = "utilised_capacity_kva"
+    """Eskom: "the higher of the notified maximum demand (NMD) or the maximum demand"."""
+
+
+class QuantityCharge(_ComponentBase):
+    """A monthly charge per unit of a quantity the customer gives (ADR-0016 point 6): a
+    measured maximum demand, or a notified or utilised capacity, in kVA. It covers the
+    roadmap's demand and capacity charges.
+
+    `seasons` limits it to those seasons of the version's calendar (empty: all year).
+    `periods` names the time-of-use periods in which the quantity is measured (empty: any
+    time); it says what the customer must give and is shown on the bill. Either makes the
+    charge need the calendar."""
+
+    kind: Literal["quantity_charge"]
+    quantity: Quantity
+    rate: Cited[Rate]
+    seasons: Annotated[tuple[ComponentName, ...], Field(max_length=12)] = ()
+    periods: Annotated[tuple[TouPeriod, ...], Field(max_length=3)] = ()
+
+    @model_validator(mode="after")
+    def _valid(self) -> Self:
+        _require_unit(self.rate, {CanonicalUnit.RAND_PER_KVA_PER_MONTH}, "a quantity charge")
+        if len(set(self.seasons)) != len(self.seasons) or len(set(self.periods)) != len(
+            self.periods
+        ):
+            msg = "a quantity charge names each season and period once"
+            raise ValueError(msg)
+        return self
+
+    @property
+    def needs_calendar(self) -> bool:
+        return bool(self.seasons or self.periods)
+
+
 Component = Annotated[
     FixedCharge
     | FlatEnergy
@@ -366,6 +406,7 @@ Component = Annotated[
     | SeasonalEnergy
     | TimeOfUseEnergy
     | ExportCredit
+    | QuantityCharge
     | Levy
     | FreeBasicAllocation,
     Field(discriminator="kind"),
