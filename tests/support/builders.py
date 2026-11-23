@@ -25,8 +25,11 @@ from munisense.domain.tariffs import (
     Block,
     BlockEnergy,
     BlockReset,
+    CalendarSeason,
     Component,
     ConsumptionSplit,
+    DaySchedule,
+    DayType,
     FixedCharge,
     FlatEnergy,
     FreeBasicAllocation,
@@ -38,6 +41,9 @@ from munisense.domain.tariffs import (
     SeasonalEnergy,
     SeasonDates,
     TariffVersion,
+    TimeRange,
+    TouCalendar,
+    TouPeriod,
     VatTreatment,
 )
 from munisense.domain.tariffs.components import PrintedLabel
@@ -294,4 +300,91 @@ def fixture_vat_table(percent: str = "12.5", status: Status = FIXTURE_STATUS) ->
                 percent=cited_decimal(percent, status),
             ),
         )
+    )
+
+
+# A fixture calendar: two seasons and made-up hours, not any supplier's (CLAUDE.md rule 1).
+# Each day is a list of (end minute, period); ranges start where the previous one ended.
+FIXTURE_HOURS: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = {
+    DayType.WEEKDAY: (
+        (6 * 60, TouPeriod.OFF_PEAK),
+        (18 * 60, TouPeriod.STANDARD),
+        (21 * 60, TouPeriod.PEAK),
+        (24 * 60, TouPeriod.OFF_PEAK),
+    ),
+    DayType.SATURDAY: (
+        (7 * 60, TouPeriod.OFF_PEAK),
+        (12 * 60, TouPeriod.STANDARD),
+        (24 * 60, TouPeriod.OFF_PEAK),
+    ),
+    DayType.SUNDAY: ((24 * 60, TouPeriod.OFF_PEAK),),
+}
+
+
+def fixture_day(
+    season: str, day_type: DayType, ends: tuple[tuple[int, TouPeriod], ...]
+) -> DaySchedule:
+    ranges, start = [], 0
+    for end, period in ends:
+        ranges.append(
+            Cited[TimeRange](
+                value=TimeRange(start_minute=start, end_minute=end, period=period),
+                citation=fixture_citation(f"{season} {day_type} hours"),
+                status=FIXTURE_STATUS,
+            )
+        )
+        start = end
+    return DaySchedule(season=season, day_type=day_type, ranges=tuple(ranges))
+
+
+# The low season's made-up hours differ from the high season's, so a lookup that ignored
+# the season would give a wrong period (P4-5 review).
+FIXTURE_LOW_HOURS: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = {
+    DayType.WEEKDAY: (
+        (7 * 60, TouPeriod.OFF_PEAK),
+        (9 * 60, TouPeriod.PEAK),
+        (17 * 60, TouPeriod.STANDARD),
+        (19 * 60, TouPeriod.PEAK),
+        (24 * 60, TouPeriod.OFF_PEAK),
+    ),
+    DayType.SATURDAY: (
+        (8 * 60, TouPeriod.OFF_PEAK),
+        (11 * 60, TouPeriod.STANDARD),
+        (24 * 60, TouPeriod.OFF_PEAK),
+    ),
+    DayType.SUNDAY: (
+        (17 * 60, TouPeriod.OFF_PEAK),
+        (19 * 60, TouPeriod.STANDARD),
+        (24 * 60, TouPeriod.OFF_PEAK),
+    ),
+}
+
+
+def fixture_calendar(
+    high: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = FIXTURE_HOURS,
+    low: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = FIXTURE_LOW_HOURS,
+) -> TouCalendar:
+    """A "high" season from 1 June to 31 August and a "low" one for the rest of the year,
+    each with its own made-up hours (end minutes per day type)."""
+    seasons = (("high", (6, 1), (8, 31), high), ("low", (9, 1), (5, 31), low))
+    return TouCalendar(
+        seasons=tuple(
+            CalendarSeason(
+                name=name,
+                label=cited_label(f"{name} demand season"),
+                dates=Cited[SeasonDates](
+                    value=SeasonDates(
+                        start_month=start[0], start_day=start[1], end_month=end[0], end_day=end[1]
+                    ),
+                    citation=fixture_citation(f"{name} dates"),
+                    status=FIXTURE_STATUS,
+                ),
+            )
+            for name, start, end, _ in seasons
+        ),
+        schedules=tuple(
+            fixture_day(name, day_type, hours[day_type])
+            for name, _, _, hours in seasons
+            for day_type in DayType
+        ),
     )

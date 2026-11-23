@@ -42,6 +42,7 @@ from munisense.provenance.publication import TariffPublication, VatRatePublicati
 from support.builders import (
     fixture_billing_policy,
     fixture_blocks,
+    fixture_calendar,
     fixture_fixed,
     fixture_flat,
     fixture_free_basic,
@@ -146,6 +147,7 @@ def _instances() -> list[object]:
             fixture_free_basic("50"),
         ),
         fixture_vat_table(),
+        fixture_calendar(),
         *_results(),
     ]
 

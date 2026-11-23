@@ -30,7 +30,10 @@
 | **Period total** | The kWh used over a whole billing period (`PeriodTotal`). Called a period total, not a monthly total, because billing periods are not always calendar months |
 | **Price basis** | Whether a tariff schedule prints its prices excluding VAT or including VAT. Recorded (and cited) per tariff version |
 | **VAT treatment** | How VAT applies to one component's amount: standard-rated, zero-rated or exempt. Recorded (and cited) per component |
-| **Season** | Part of the year with its own energy rates (for example a high-demand season June to August). Seasons are a calendar in data with cited dates that must cover every day once (`SeasonalEnergy`) |
+| **Season** | Part of the year with its own energy rates (for example a high-demand season June to August). Seasons are a calendar in data with cited dates that must cover every day once (`SeasonalEnergy`, and the TOU calendar's seasons, P4-5) |
+| **TOU calendar** | A tariff version's one cited calendar for time of use (`TouCalendar`, ADR-0016): its seasons, and for each season and day type a day schedule |
+| **Day type** | How a tariff treats a date for time of use: `weekday`, `saturday` or `sunday` (public holidays may be treated as one of these, P4-6) |
+| **Day schedule** | The periods of one day type in one season: cited time ranges in minutes after midnight (SAST), covering the day exactly once, each naming `peak`, `standard` or `off_peak` |
 | **Billing policy** | A supplier's named way of applying its tariff to a period: how monthly values are pro-rated for part of a month and how kWh are shared when a period is split (`BillingPolicy`, ADR-0011). Learnt from bills, with its own status |
 | **Period splitting** | Pricing a billing period that spans calendar months, tariff versions, seasons or VAT rates as parts, each priced on its own and then added up (`calculate_period`) |
 | **Pro-rating** | Scaling a monthly value (a basic charge, a block threshold, a free allocation) for part of a month, by days in the part / days in the month, with the factor rounded at the policy's `pro_rating` point |
