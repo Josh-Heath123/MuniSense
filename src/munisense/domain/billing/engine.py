@@ -34,6 +34,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
+from typing import assert_never
 
 from munisense.domain.billing.consumption import (
     PeriodTotal,
@@ -73,10 +74,12 @@ from munisense.domain.money import (
 )
 from munisense.domain.periods import DateRange
 from munisense.domain.tariffs import (
+    BillingPolicy,
     Block,
     BlockEnergy,
     CalendarSeason,
     Component,
+    ExportCap,
     ExportCredit,
     FixedCharge,
     FlatEnergy,
@@ -202,8 +205,8 @@ def price_part(
     total = _quantised(subtotal + vat, policy.total)
     if total.rand < 0:
         msg = (
-            "the export credit would make the bill negative; how the supplier treats a "
-            "negative bill is not known, so it is refused"
+            "the bill would be negative; how the supplier treats a negative bill is not "
+            "known, so it is refused"
         )
         raise NegativeBillError(msg)
 
@@ -231,8 +234,18 @@ def price_part(
         rounding_policy_status=policy.status.kind,
         free_basic_eligible=free_basic_eligible,
         month_fraction=month_fraction,
-        warnings=_warnings(status, policy, credited=_credited(version, lines)),
+        warnings=_warnings(
+            status,
+            policy,
+            credited=_credited(version, lines),
+            exported=version.billing_policy if _export_credited(version, lines) else None,
+        ),
     )
+
+
+def _export_credited(version: TariffVersion, lines: list[LineItem]) -> bool:
+    credits = {c.name for c in version.components if isinstance(c, ExportCredit)}
+    return any(line.component in credits for line in lines)
 
 
 def _credited(version: TariffVersion, lines: list[LineItem]) -> bool:
@@ -345,6 +358,8 @@ def _time_of_use(
         msg = f"kWh are given for {', '.join(unused)}, which the {first} season does not have"
         raise UndefinedPeriodError(msg)
     exported = exported or {}
+    if any(kwh > 0 for kwh in exported.values()):
+        _check_export_cap(version)
     if any(kwh > 0 for kwh in exported.values()) and not period.is_whole_calendar_month:
         msg = (
             "export credits are capped per calendar month, so a bill with exported kWh "
@@ -443,6 +458,19 @@ def _time_of_use_lines(component: TimeOfUseEnergy, part: _TouPart) -> Iterator[L
             rate = component.rate_for(season.name, period)
             description = f"{season.label.value}: {period.value.replace('_', '-')} kWh"
             yield _line(component, description, kwh, QuantityUnit.KWH, rate, extra=extra)
+
+
+def _check_export_cap(version: TariffVersion) -> None:
+    """The only cap built is per period and calendar month; a new member must be priced
+    here before it can be used."""
+    cap = version.billing_policy.export_cap
+    match cap:
+        case ExportCap.USE_IN_PERIOD_PER_CALENDAR_MONTH:
+            return
+        case None:  # pragma: no cover - the version refuses a credit without a cap
+            raise AssertionError
+        case _:  # pragma: no cover - every member is handled above
+            assert_never(cap)
 
 
 def _export_lines(component: ExportCredit, part: _TouPart) -> Iterator[LineItem]:
@@ -668,9 +696,25 @@ def _words(kind: StatusKind) -> str:
 
 
 def _warnings(
-    status: StatusKind, policy: RoundingPolicy, *, credited: bool
+    status: StatusKind,
+    policy: RoundingPolicy,
+    *,
+    credited: bool,
+    exported: BillingPolicy | None = None,
 ) -> tuple[BillWarning, ...]:
+    """`exported` is the billing policy whose export cap was applied, if any credit was."""
     warnings: list[BillWarning] = []
+    if exported is not None and exported.needs_warning:
+        warnings.append(
+            BillWarning(
+                code=WarningCode.UNVERIFIED_EXPORT_CAP,
+                message=(
+                    f"Exports are credited under billing policy '{exported.name}', which is not "
+                    "verified: at most the kWh used in the same time-of-use period, reading "
+                    '"each month" as the calendar month.'
+                ),
+            )
+        )
     if credited:
         warnings.append(
             BillWarning(

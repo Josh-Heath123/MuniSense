@@ -69,6 +69,7 @@ class WarningCode(StrEnum):
     ASSUMED_FREE_BASIC_METHOD = "assumed_free_basic_method"
     UNVERIFIED_BILLING_POLICY = "unverified_billing_policy"
     TIME_OF_USE_SHARED_ACROSS_SEASONS = "time_of_use_shared_across_seasons"
+    UNVERIFIED_EXPORT_CAP = "unverified_export_cap"
 
 
 class BillWarning(DomainModel):

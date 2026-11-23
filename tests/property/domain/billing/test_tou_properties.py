@@ -218,15 +218,26 @@ def _with_credit(rates: list[str], credit: list[str]) -> TariffVersion:
 def test_a_credit_never_exceeds_the_energy_charge_of_its_period(
     rates: list[str], credit: list[str], used: list[Decimal], exported: list[Decimal], first: date
 ) -> None:
-    """With credit rates no higher than the energy rates, the credit in each period is at
-    most that period's energy charge (the kWh credited never exceed the kWh used)."""
+    """The kWh credited in each period are exactly the smaller of the kWh exported and used;
+    with credit rates no higher than the energy rates, the credit in each period is at most
+    that period's energy charge."""
     credit = [str(min(Decimal(c), Decimal(r))) for c, r in zip(credit, rates[:6], strict=True)]
-    exported = [min(e, u) for e, u in zip(exported, used, strict=True)]  # exports only where used
     profile = TimeOfUseBuckets(
         used_kwh=dict(zip(PERIODS, used, strict=True)),
         exported_kwh=dict(zip(PERIODS, exported, strict=True)),
     )
     bill = calculate_bill(_with_credit(rates, credit), _month(first), profile, VAT)
+    for period_name, e, u in zip(PERIODS, exported, used, strict=True):
+        label = period_name.value.replace("_", "-")
+        quantity = sum(
+            (
+                line.quantity
+                for line in bill.lines
+                if line.description.endswith(f": {label} kWh exported, credited")
+            ),
+            Decimal(0),
+        )
+        assert quantity == min(e, u)  # the cap, exactly (exports drawn independently of use)
     for period in ("peak kWh", "standard kWh", "off-peak kWh"):
         charge = sum(
             (line.amount.rand for line in bill.lines if line.description.endswith(f": {period}")),

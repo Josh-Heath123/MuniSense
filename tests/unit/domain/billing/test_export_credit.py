@@ -20,6 +20,7 @@ from munisense.domain.billing import (
     calculate_bill,
     calculate_period,
 )
+from munisense.domain.citations import TextCheck, Verified
 from munisense.domain.tariffs import (
     Component,
     ExportCap,
@@ -32,6 +33,7 @@ from support.builders import (
     fixture_billing_policy,
     fixture_calendar,
     fixture_export_credit,
+    fixture_flat,
     fixture_tou_energy,
     fixture_vat_table,
     fixture_version,
@@ -144,13 +146,74 @@ def test_a_credit_that_would_make_the_bill_negative_is_refused() -> None:
         calculate_bill(version(generous), JULY, profile(("100", "0", "0"), {PEAK: "100"}), VAT)
 
 
-def test_two_whole_months_share_exports_by_days_and_cap_each_month() -> None:
-    """July and August (31 + 31 days, both high season): every figure is shared half and
-    half (factor 31/62 = 0.5). Peak used 200, exported 300: each month uses 100 and
-    exports 150, so each month credits 100 (the use), not 150."""
+def test_exports_over_more_than_one_calendar_month_are_refused() -> None:
+    """Shared-out figures cannot show each month's use, so the monthly cap could not be
+    applied (July exports 100 and uses none, August uses 100: the real credit is 0)."""
     both = BillingPeriod(start=date(2026, 7, 1), end=date(2026, 9, 1))
-    bill = calculate_period([version()], both, profile(("200", "0", "0"), {PEAK: "300"}), VAT)
-    for part in bill.parts:
-        credit = next(line for line in part.lines if line.amount.rand < 0)
-        assert credit.quantity == Decimal(100)
-        assert credit.amount.rand == Decimal("-400.00")
+    with pytest.raises(NonMonthlyPeriodError, match="only on a bill of one calendar month"):
+        calculate_period([version()], both, profile(("200", "0", "0"), {PEAK: "300"}), VAT)
+    assert calculate_period([version()], both, profile(("200", "0", "0"), {PEAK: "0"}), VAT)
+
+
+def test_one_whole_month_through_calculate_period_is_credited() -> None:
+    bill = calculate_period([version()], JULY, profile(("100", "0", "0"), {PEAK: "50"}), VAT)
+    credit = next(line for line in bill.parts[0].lines if line.amount.rand < 0)
+    assert (credit.quantity, credit.amount.rand) == (Decimal(50), Decimal("-200.00"))
+
+
+VERIFIED = Verified(
+    verifier="owner",
+    verifier_kind="human",
+    method="fixture",
+    verified_on=date(2026, 1, 1),
+    text_check=TextCheck.PASSED,
+)
+
+
+def test_a_credit_under_an_unverified_policy_warns() -> None:
+    """The export cap's reading is the billing policy's; until that is verified, every bill
+    with a credit says so, whatever the status of the rates."""
+    bill = calculate_bill(version(), JULY, profile(("100", "0", "0"), {PEAK: "50"}), VAT)
+    assert "unverified_export_cap" in {w.code for w in bill.warnings}
+    verified_policy = fixture_billing_policy(
+        status=VERIFIED, export_cap=ExportCap.USE_IN_PERIOD_PER_CALENDAR_MONTH
+    )
+    trusted = fixture_version(
+        fixture_tou_energy(),
+        fixture_export_credit(),
+        tou_calendar=CALENDAR,
+        billing=verified_policy,
+    )
+    bill = calculate_bill(trusted, JULY, profile(("100", "0", "0"), {PEAK: "50"}), VAT)
+    assert "unverified_export_cap" not in {w.code for w in bill.warnings}
+    no_credit = calculate_bill(version(), JULY, profile(("100", "0", "0"), {}), VAT)
+    assert "unverified_export_cap" not in {w.code for w in no_credit.warnings}
+
+
+def test_a_version_has_at_most_one_export_credit() -> None:
+    with pytest.raises(ValidationError, match="at most one export credit"):
+        version(fixture_export_credit(), fixture_export_credit(name="second_credit"))
+
+
+def test_an_export_credit_needs_time_of_use_energy() -> None:
+    with pytest.raises(ValidationError, match="needs a time-of-use energy charge"):
+        fixture_version(
+            fixture_flat("100"), fixture_export_credit(), tou_calendar=CALENDAR, billing=CAP
+        )
+
+
+def test_an_export_cap_without_a_credit_is_refused() -> None:
+    with pytest.raises(ValidationError, match="no export credit"):
+        fixture_version(fixture_tou_energy(), tou_calendar=CALENDAR, billing=CAP)
+
+
+def test_a_negative_credit_rate_is_refused() -> None:
+    with pytest.raises(ValidationError, match="must not be negative"):
+        fixture_export_credit({**FIXTURE_EXPORT_CENTS, ("high", PEAK): "-1"})
+
+
+def test_a_bill_of_exactly_zero_is_accepted() -> None:
+    """Credit rate equal to the energy rate at peak: R500.00 - R500.00 = R0.00."""
+    equal = fixture_export_credit({**FIXTURE_EXPORT_CENTS, ("high", PEAK): "500"})
+    bill = calculate_bill(version(equal), JULY, profile(("100", "0", "0"), {PEAK: "100"}), VAT)
+    assert bill.total.rand == 0

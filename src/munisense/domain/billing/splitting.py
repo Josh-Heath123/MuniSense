@@ -38,6 +38,7 @@ from munisense.domain.billing.engine import (
 )
 from munisense.domain.billing.errors import (
     IncompatibleVersionsError,
+    NonMonthlyPeriodError,
     PeriodOutsideVersionError,
 )
 from munisense.domain.billing.result import (
@@ -79,6 +80,13 @@ def calculate_period(
     ranges = [part for part, _ in parts]
     if used is not None and len(_calendar_seasons(parts)) > 1:
         _check_each_season_has_the_periods(parts, used)
+    if exported and any(kwh > 0 for kwh in exported.values()) and len(parts) > 1:
+        msg = (
+            "exported kWh can be credited only on a bill of one calendar month: the credit is "
+            "capped by each month's use, which shared-out figures cannot show; give one bill "
+            "per month"
+        )
+        raise NonMonthlyPeriodError(msg)
     if used is None:
         shares = _shares(total_kwh, period, ranges, parts[0][1])
         by_period: list[dict[TouPeriod, Decimal] | None] = [None] * len(parts)
