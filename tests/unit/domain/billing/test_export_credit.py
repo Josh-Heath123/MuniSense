@@ -150,7 +150,9 @@ def test_exports_over_more_than_one_calendar_month_are_refused() -> None:
     """Shared-out figures cannot show each month's use, so the monthly cap could not be
     applied (July exports 100 and uses none, August uses 100: the real credit is 0)."""
     both = BillingPeriod(start=date(2026, 7, 1), end=date(2026, 9, 1))
-    with pytest.raises(NonMonthlyPeriodError, match="only on a bill of one calendar month"):
+    with pytest.raises(
+        NonMonthlyPeriodError, match="only on a bill of one calendar month priced in one part"
+    ):
         calculate_period([version()], both, profile(("200", "0", "0"), {PEAK: "300"}), VAT)
     assert calculate_period([version()], both, profile(("200", "0", "0"), {PEAK: "0"}), VAT)
 

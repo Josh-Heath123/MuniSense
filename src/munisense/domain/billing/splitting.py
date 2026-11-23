@@ -82,9 +82,10 @@ def calculate_period(
         _check_each_season_has_the_periods(parts, used)
     if exported and any(kwh > 0 for kwh in exported.values()) and len(parts) > 1:
         msg = (
-            "exported kWh can be credited only on a bill of one calendar month: the credit is "
-            "capped by each month's use, which shared-out figures cannot show; give one bill "
-            "per month"
+            "exported kWh can be credited only on a bill of one calendar month priced in one "
+            "part: this period is split (by months, a tariff change, a season or a VAT "
+            "change), and the credit is capped by each part's use, which shared-out figures "
+            "cannot show"
         )
         raise NonMonthlyPeriodError(msg)
     if used is None:
