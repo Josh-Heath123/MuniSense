@@ -144,14 +144,17 @@ def test_seasons_that_do_not_cover_the_year_once_are_refused() -> None:
 
 def test_a_day_has_at_most_48_ranges() -> None:
     def day(count: int) -> tuple[Cited[TimeRange], ...]:
-        return tuple(_range(i * 30, (i + 1) * 30 if i < count - 1 else 1440) for i in range(count))
+        """`count` valid ranges of 29 minutes, the last running to midnight."""
+        return tuple(_range(i * 29, (i + 1) * 29 if i < count - 1 else 1440) for i in range(count))
 
     assert len(DaySchedule(season="high", day_type=DayType.SUNDAY, ranges=day(48)).ranges) == 48
-    with pytest.raises(ValidationError):
-        DaySchedule(season="high", day_type=DayType.SUNDAY, ranges=day(49))
+    ranges = day(49)  # built outside the check: each range is valid
+    with pytest.raises(ValidationError) as caught:
+        DaySchedule(season="high", day_type=DayType.SUNDAY, ranges=ranges)
+    assert [(e["type"], e["loc"]) for e in caught.value.errors()] == [("too_long", ("ranges",))]
 
 
 def test_a_calendar_has_at_most_12_seasons() -> None:
-    assert len(CALENDAR.seasons) <= 12
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as caught:
         TouCalendar(seasons=CALENDAR.seasons * 7, schedules=CALENDAR.schedules)
+    assert ("too_long", ("seasons",)) in [(e["type"], e["loc"]) for e in caught.value.errors()]
