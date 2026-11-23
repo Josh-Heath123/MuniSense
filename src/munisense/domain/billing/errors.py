@@ -7,6 +7,12 @@ class UnsupportedConsumptionError(DomainError):
     """The consumption profile is of a kind the engine cannot evaluate yet."""
 
 
+class IntervalReadingsError(DomainError):
+    """Interval readings cannot price this bill (they do not cover it exactly, or an
+    interval crosses a time-of-use period boundary). Messages name at most an interval's
+    position, never a time or a kWh figure."""
+
+
 class InvalidQuantityError(DomainError):
     """A quantity a charge is priced on (a maximum demand or a capacity) is missing, or
     given for a tariff with no charge on it, or for a period of more than one month."""

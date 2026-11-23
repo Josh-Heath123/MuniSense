@@ -37,9 +37,10 @@ from decimal import Decimal
 from typing import assert_never
 
 from munisense.domain.billing.consumption import (
+    Consumption,
     CustomerQuantities,
+    IntervalReadings,
     PeriodTotal,
-    TimeOfUseBuckets,
 )
 from munisense.domain.billing.errors import (
     FreeBasicEligibilityRequiredError,
@@ -52,6 +53,7 @@ from munisense.domain.billing.errors import (
     UnsupportedConsumptionError,
     UnsupportedPriceBasisError,
 )
+from munisense.domain.billing.intervals import classify, total_used
 from munisense.domain.billing.result import (
     Bill,
     BillWarning,
@@ -104,7 +106,7 @@ from munisense.domain.tariffs import (
 def calculate_bill(
     version: TariffVersion,
     period: DateRange,
-    consumption: PeriodTotal | TimeOfUseBuckets,
+    consumption: Consumption,
     vat_table: VatTable,
     *,
     free_basic_eligible: bool | None = None,
@@ -121,6 +123,8 @@ def calculate_bill(
     total_kwh, used_by_period, exported_by_period = read_consumption(version, consumption)
     check_quantities([version], quantities)
     _check_calculable(version, period, free_basic_eligible=free_basic_eligible)
+    if isinstance(consumption, IntervalReadings):
+        ((used_by_period, exported_by_period),) = classify(consumption, period, [(period, version)])
     return price_part(
         version,
         period,
@@ -170,7 +174,7 @@ def check_quantities(
 
 
 def read_consumption(
-    version: TariffVersion, consumption: PeriodTotal | TimeOfUseBuckets
+    version: TariffVersion, consumption: Consumption
 ) -> tuple[Decimal, dict[TouPeriod, Decimal] | None, dict[TouPeriod, Decimal] | None]:
     """The period's total kWh used, and for a version priced by time of use its kWh used
     and exported per period, or a `DomainError` saying why the consumption cannot price
@@ -190,6 +194,12 @@ def read_consumption(
         msg = "kWh per time-of-use period price only a tariff priced by time of use"
         raise UnsupportedConsumptionError(msg)
     has_credit = any(isinstance(c, ExportCredit) for c in version.components)
+    if isinstance(consumption, IntervalReadings):
+        # Classified into buckets per part by the caller (`intervals.classify`).
+        if any(r.exported_kwh > 0 for r in consumption.readings) and not has_credit:
+            msg = "this tariff has no export credit, so exported kWh cannot be priced"
+            raise UnsupportedConsumptionError(msg)
+        return total_used(consumption), None, None
     if consumption.exported_kwh and not has_credit:
         msg = "this tariff has no export credit, so exported kWh (even 0) cannot be priced"
         raise UnsupportedConsumptionError(msg)

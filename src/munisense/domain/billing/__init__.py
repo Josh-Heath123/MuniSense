@@ -1,8 +1,11 @@
 """Bill and prepaid purchase calculation, period splitting, line items and warnings."""
 
 from munisense.domain.billing.consumption import (
+    Consumption,
     ConsumptionProfile,
     CustomerQuantities,
+    IntervalReading,
+    IntervalReadings,
     PeriodTotal,
     TimeOfUseBuckets,
     require_period_total,
@@ -46,11 +49,14 @@ __all__ = [
     "Bill",
     "BillWarning",
     "BillingPeriod",
+    "Consumption",
     "ConsumptionProfile",
     "CustomerQuantities",
     "FreeBasicEligibilityRequiredError",
     "FreeBasicNotOfferedError",
     "IncompatibleVersionsError",
+    "IntervalReading",
+    "IntervalReadings",
     "InvalidPurchaseError",
     "InvalidQuantityError",
     "LineItem",

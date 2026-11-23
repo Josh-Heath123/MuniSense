@@ -17,9 +17,14 @@ import json
 
 from pydantic import ConfigDict, TypeAdapter, ValidationError
 
-from munisense.domain.billing import ConsumptionProfile, PeriodTotal, TimeOfUseBuckets
+from munisense.domain.billing import (
+    ConsumptionProfile,
+    IntervalReadings,
+    PeriodTotal,
+    TimeOfUseBuckets,
+)
 
-_PROFILE: TypeAdapter[PeriodTotal | TimeOfUseBuckets] = TypeAdapter(
+_PROFILE: TypeAdapter[PeriodTotal | TimeOfUseBuckets | IntervalReadings] = TypeAdapter(
     ConsumptionProfile, config=ConfigDict(strict=True, hide_input_in_errors=True)
 )
 
@@ -47,7 +52,7 @@ def _refuse_duplicates(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return dict(pairs)
 
 
-def _validate(text: str) -> PeriodTotal | TimeOfUseBuckets | tuple[str, ...]:
+def _validate(text: str) -> PeriodTotal | TimeOfUseBuckets | IntervalReadings | tuple[str, ...]:
     """The profile, or the error type codes of why it is not one."""
     try:
         return _PROFILE.validate_json(text)
@@ -66,7 +71,7 @@ def _has_duplicates(text: str) -> bool | None:
     return False
 
 
-def parse_consumption_json(text: str) -> PeriodTotal | TimeOfUseBuckets:
+def parse_consumption_json(text: str) -> PeriodTotal | TimeOfUseBuckets | IntervalReadings:
     """A consumption profile from JSON text, validated as the model validates JSON, with
     any key given twice (at any depth) refused. Raises only `ConsumptionJsonError`."""
     result = _validate(text)
