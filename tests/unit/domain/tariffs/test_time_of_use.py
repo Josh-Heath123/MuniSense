@@ -114,31 +114,44 @@ def _without(calendar: TouCalendar, season: str, day_type: DayType) -> tuple[Day
 
 def test_a_missing_schedule_is_refused() -> None:
     with pytest.raises(ValidationError, match="no saturday schedule for the season 'low'"):
-        TouCalendar(seasons=CALENDAR.seasons, schedules=_without(CALENDAR, "low", DayType.SATURDAY))
+        TouCalendar(
+            holidays=CALENDAR.holidays,
+            seasons=CALENDAR.seasons,
+            schedules=_without(CALENDAR, "low", DayType.SATURDAY),
+        )
 
 
 def test_a_second_schedule_for_one_season_and_day_type_is_refused() -> None:
     with pytest.raises(ValidationError, match="one schedule for each season and day type"):
         TouCalendar(
-            seasons=CALENDAR.seasons, schedules=(*CALENDAR.schedules, CALENDAR.schedules[0])
+            holidays=CALENDAR.holidays,
+            seasons=CALENDAR.seasons,
+            schedules=(*CALENDAR.schedules, CALENDAR.schedules[0]),
         )
 
 
 def test_a_schedule_for_an_unknown_season_is_refused() -> None:
     extra = fixture_day("summer", DayType.SUNDAY, FIXTURE_HOURS[DayType.SUNDAY])
     with pytest.raises(ValidationError, match="names the season 'summer'"):
-        TouCalendar(seasons=CALENDAR.seasons, schedules=(*CALENDAR.schedules, extra))
+        TouCalendar(
+            holidays=CALENDAR.holidays,
+            seasons=CALENDAR.seasons,
+            schedules=(*CALENDAR.schedules, extra),
+        )
 
 
 def test_seasons_that_do_not_cover_the_year_once_are_refused() -> None:
     with pytest.raises(ValidationError, match="cover every day once; 01 January has no season"):
         TouCalendar(
+            holidays=CALENDAR.holidays,
             seasons=CALENDAR.seasons[:1],
             schedules=tuple(s for s in CALENDAR.schedules if s.season == "high"),
         )
     with pytest.raises(ValidationError, match="unique within a calendar"):
         TouCalendar(
-            seasons=(CALENDAR.seasons[0], CALENDAR.seasons[0]), schedules=CALENDAR.schedules
+            holidays=CALENDAR.holidays,
+            seasons=(CALENDAR.seasons[0], CALENDAR.seasons[0]),
+            schedules=CALENDAR.schedules,
         )
 
 
@@ -156,5 +169,7 @@ def test_a_day_has_at_most_48_ranges() -> None:
 
 def test_a_calendar_has_at_most_12_seasons() -> None:
     with pytest.raises(ValidationError) as caught:
-        TouCalendar(seasons=CALENDAR.seasons * 7, schedules=CALENDAR.schedules)
+        TouCalendar(
+            holidays=CALENDAR.holidays, seasons=CALENDAR.seasons * 7, schedules=CALENDAR.schedules
+        )
     assert ("too_long", ("seasons",)) in [(e["type"], e["loc"]) for e in caught.value.errors()]

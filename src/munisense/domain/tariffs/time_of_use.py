@@ -3,19 +3,23 @@
 Times are minutes after midnight in South African Standard Time (UTC+02:00, no daylight
 saving). A day's schedule is a list of `[start, end)` ranges that cover the 1,440 minutes
 of the day exactly once, each naming a period. The calendar has one schedule for each
-season and day type. Public holidays come in P4-6; until then a date's day type is its
-day of the week.
+season and day type. Public holidays are treated as the calendar's cited holiday rule
+says (P4-6): either as the day of the week they fall on, or as listed by the tariff's own
+document, which covers a stated window of dates; outside that window a day is refused,
+because nothing can tell whether it is a holiday.
 """
 
 from collections.abc import Iterable
 from datetime import date
 from enum import StrEnum
-from typing import Annotated, Self
+from itertools import pairwise
+from typing import Annotated, Self, assert_never
 
 from pydantic import Field, model_validator
 
 from munisense.domain.base import DomainError, DomainModel
 from munisense.domain.citations import Cited
+from munisense.domain.periods import DateRange
 from munisense.domain.tariffs.components import (
     ComponentName,
     PrintedLabel,
@@ -44,6 +48,108 @@ class DayType(StrEnum):
 
 class UndefinedPeriodError(DomainError):
     """A period was named that the version's calendar does not define."""
+
+
+class HolidayCoverageError(DomainError):
+    """A day falls outside the dates the calendar's holiday list covers, so whether it is
+    a holiday (and how it is treated) is unknown."""
+
+
+class HolidayRule(StrEnum):
+    """How public holidays are treated."""
+
+    AS_DAY_OF_WEEK = "as_day_of_week"
+    """Every holiday is treated as the day of the week it falls on (Eskom's Homeflex)."""
+    LISTED = "listed"
+    """The tariff's document lists the holidays of a stated window and how each is
+    treated (Eskom's Appendix D for Megaflex and others)."""
+
+
+class UnlistedHolidays(StrEnum):
+    """How a list treats a holiday it does not name (for example one announced later)."""
+
+    AS_DAY_OF_WEEK = "as_day_of_week"
+
+
+class ListedHoliday(DomainModel):
+    """One listed holiday and the day type it is treated as."""
+
+    day: date
+    treated_as: DayType
+
+    @model_validator(mode="after")
+    def _weekend_treatment(self) -> Self:
+        if self.treated_as == DayType.WEEKDAY:
+            msg = "a listed holiday is treated as a Saturday or a Sunday"
+            raise ValueError(msg)
+        return self
+
+
+class HolidayTreatment(DomainModel):
+    """The calendar's cited holiday rule (ADR-0016 point 1).
+
+    `as_day_of_week` has no list. `listed` has a cited coverage window, at least one cited
+    holiday inside it (in date order, each date once), and a cited rule for holidays it
+    does not name. The coverage is a half-open `DateRange`: its `end` is the first day NOT
+    covered (a list printed "to 30 June 2027" ends on 1 July 2027), unlike `SeasonDates`,
+    whose end is inclusive as schedules print it. The only unlisted rule is "as the day of
+    the week", the only one the engine can apply without a national holiday calendar.
+    """
+
+    rule: Cited[HolidayRule]
+    coverage: Cited[DateRange] | None = None
+    listed: Annotated[tuple[Cited[ListedHoliday], ...], Field(max_length=100)] = ()
+    unlisted: Cited[UnlistedHolidays] | None = None
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if self.rule.value == HolidayRule.AS_DAY_OF_WEEK:
+            if self.coverage is not None or self.listed or self.unlisted is not None:
+                msg = "holidays treated as the day of the week have no list or coverage"
+                raise ValueError(msg)
+            return self
+        if self.coverage is None or not self.listed or self.unlisted is None:
+            msg = "a holiday list needs its coverage, at least one holiday and an unlisted rule"
+            raise ValueError(msg)
+        days = [cited.value.day for cited in self.listed]
+        if any(later <= earlier for earlier, later in pairwise(days)):
+            msg = "listed holidays are in date order, each date once"
+            raise ValueError(msg)
+        outside = [d for d in days if not self.coverage.value.contains(d)]
+        if outside:
+            msg = f"a listed holiday is outside the list's coverage: {min(outside)}"
+            raise ValueError(msg)
+        return self
+
+    def day_type(self, day: date) -> DayType:
+        """The day's type: a listed holiday's treatment, otherwise its day of the week."""
+        if self.rule.value == HolidayRule.LISTED:
+            coverage = self.coverage.value if self.coverage is not None else None
+            if coverage is None or not coverage.contains(day):
+                # Fixed text: the day may come from a consumer's readings (ADR-0016 point 4).
+                msg = "a day is outside the dates the holiday list covers"
+                raise HolidayCoverageError(msg)
+            for cited in self.listed:
+                if cited.value.day == day:
+                    return cited.value.treated_as
+            unlisted = self.unlisted.value if self.unlisted is not None else None
+            match unlisted:
+                case UnlistedHolidays.AS_DAY_OF_WEEK:
+                    return _day_of_week(day)
+                case None:  # pragma: no cover - the validator requires the rule
+                    raise AssertionError
+                case _:  # pragma: no cover - every member is handled above
+                    assert_never(unlisted)
+        return _day_of_week(day)
+
+
+def _day_of_week(day: date) -> DayType:
+    weekday = day.weekday()  # Monday is 0
+    if weekday == 5:
+        return DayType.SATURDAY
+    if weekday == 6:
+        return DayType.SUNDAY
+    return DayType.WEEKDAY
 
 
 class TimeRange(DomainModel):
@@ -115,6 +221,7 @@ class TouCalendar(DomainModel):
 
     seasons: Annotated[tuple[CalendarSeason, ...], Field(min_length=1, max_length=12)]
     schedules: Annotated[tuple[DaySchedule, ...], Field(min_length=3, max_length=36)]
+    holidays: HolidayTreatment
 
     @model_validator(mode="after")
     def _complete(self) -> Self:
@@ -159,13 +266,9 @@ class TouCalendar(DomainModel):
         return found
 
     def day_type(self, day: date) -> DayType:
-        """The day's type by its day of the week (public holidays: P4-6)."""
-        weekday = day.weekday()
-        if weekday == 5:
-            return DayType.SATURDAY
-        if weekday == 6:
-            return DayType.SUNDAY
-        return DayType.WEEKDAY
+        """The day's type under the holiday rule (`HolidayCoverageError` outside a list's
+        coverage)."""
+        return self.holidays.day_type(day)
 
     def schedule_for(self, day: date) -> DaySchedule:
         """The day's schedule: its season's, for its day type (the validators guarantee

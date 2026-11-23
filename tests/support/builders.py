@@ -20,6 +20,7 @@ from munisense.domain.money import (
     VatRate,
     VatTable,
 )
+from munisense.domain.periods import DateRange
 from munisense.domain.tariffs import (
     BillingPolicy,
     Block,
@@ -33,7 +34,10 @@ from munisense.domain.tariffs import (
     FixedCharge,
     FlatEnergy,
     FreeBasicAllocation,
+    HolidayRule,
+    HolidayTreatment,
     Levy,
+    ListedHoliday,
     PrepaidFixedCharges,
     PriceBasis,
     ProRating,
@@ -44,6 +48,7 @@ from munisense.domain.tariffs import (
     TimeRange,
     TouCalendar,
     TouPeriod,
+    UnlistedHolidays,
     VatTreatment,
 )
 from munisense.domain.tariffs.components import PrintedLabel
@@ -273,6 +278,7 @@ def fixture_version(
     status: Status = FIXTURE_STATUS,
     billing: BillingPolicy | None = None,
     tariff_code: str = "fixture-a",
+    tou_calendar: TouCalendar | None = None,
 ) -> TariffVersion:
     return TariffVersion(
         schema_version=1,
@@ -286,6 +292,7 @@ def fixture_version(
         price_basis=cited_basis(basis, status),
         rounding_policy=policy or fixture_policy(status=status),
         billing_policy=billing or fixture_billing_policy(status=status),
+        tou_calendar=tou_calendar,
         components=components,
     )
 
@@ -360,9 +367,50 @@ FIXTURE_LOW_HOURS: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = {
 }
 
 
+def fixture_holidays_by_day_of_week() -> HolidayTreatment:
+    return HolidayTreatment(
+        rule=Cited[HolidayRule](
+            value=HolidayRule.AS_DAY_OF_WEEK,
+            citation=fixture_citation("holidays as the day they fall on"),
+            status=FIXTURE_STATUS,
+        )
+    )
+
+
+def fixture_holiday_list(
+    coverage: tuple[date, date], *holidays: tuple[date, DayType]
+) -> HolidayTreatment:
+    """A made-up holiday list (a Megaflex-style table): its coverage `[start, end)` and
+    each listed date with the day type it is treated as."""
+    return HolidayTreatment(
+        rule=Cited[HolidayRule](
+            value=HolidayRule.LISTED, citation=fixture_citation("listed"), status=FIXTURE_STATUS
+        ),
+        coverage=Cited[DateRange](
+            value=DateRange(start=coverage[0], end=coverage[1]),
+            citation=fixture_citation("list period"),
+            status=FIXTURE_STATUS,
+        ),
+        listed=tuple(
+            Cited[ListedHoliday](
+                value=ListedHoliday(day=day, treated_as=treated_as),
+                citation=fixture_citation(f"{day}"),
+                status=FIXTURE_STATUS,
+            )
+            for day, treated_as in holidays
+        ),
+        unlisted=Cited[UnlistedHolidays](
+            value=UnlistedHolidays.AS_DAY_OF_WEEK,
+            citation=fixture_citation("unlisted holidays"),
+            status=FIXTURE_STATUS,
+        ),
+    )
+
+
 def fixture_calendar(
     high: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = FIXTURE_HOURS,
     low: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = FIXTURE_LOW_HOURS,
+    holidays: HolidayTreatment | None = None,
 ) -> TouCalendar:
     """A "high" season from 1 June to 31 August and a "low" one for the rest of the year,
     each with its own made-up hours (end minutes per day type)."""
@@ -387,4 +435,5 @@ def fixture_calendar(
             for name, _, _, hours in seasons
             for day_type in DayType
         ),
+        holidays=holidays or fixture_holidays_by_day_of_week(),
     )

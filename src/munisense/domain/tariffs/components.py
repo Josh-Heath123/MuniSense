@@ -63,6 +63,13 @@ class _ComponentBase(DomainModel):
         """The weakest status of all the component's cited values (ADR-0004)."""
         return weakest(cited_statuses(self))
 
+    @property
+    def needs_calendar(self) -> bool:
+        """True when this component is priced by time of use, so its version must carry a
+        calendar (ADR-0016 point 1). Per instance: a charge limited to seasons or periods
+        needs one, the same charge unlimited does not (P4-9)."""
+        return False
+
 
 class FixedCharge(_ComponentBase):
     """A charge per day or per month, whatever the consumption."""

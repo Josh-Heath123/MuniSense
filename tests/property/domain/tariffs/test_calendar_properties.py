@@ -77,7 +77,7 @@ def calendars(draw: st.DrawFn) -> TouCalendar:
             ends = [*draw(cuts), 24 * 60]
             hours[day_type] = tuple((end, draw(periods)) for end in ends)
         by_season.append(hours)
-    return fixture_calendar(*by_season)
+    return fixture_calendar(by_season[0], by_season[1])
 
 
 @settings(max_examples=200)
