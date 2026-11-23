@@ -17,8 +17,10 @@ from munisense.domain.tariffs import (
     HolidayRule,
     HolidayTreatment,
     ListedHoliday,
+    TariffVersion,
     TouPeriod,
 )
+from munisense.provenance import canonical
 from munisense.provenance.publication import TariffPublication, load_bytes, render
 from support.builders import (
     FIXTURE_STATUS,
@@ -67,8 +69,11 @@ def test_an_unlisted_day_inside_the_window_is_its_day_of_the_week() -> None:
 def test_a_day_outside_the_lists_window_is_refused(day: date) -> None:
     """Nothing can tell whether it is a holiday, so the engine does not guess."""
     calendar = fixture_calendar(holidays=LISTED)
-    with pytest.raises(HolidayCoverageError, match="outside the dates the holiday list covers"):
+    with pytest.raises(
+        HolidayCoverageError, match="outside the dates the holiday list covers"
+    ) as caught:
         calendar.period_for(day, 0)
+    assert str(day) not in str(caught.value)  # the day may come from a consumer's readings
 
 
 def test_a_listed_holiday_outside_the_window_is_refused() -> None:
@@ -76,11 +81,19 @@ def test_a_listed_holiday_outside_the_window_is_refused() -> None:
         fixture_holiday_list(COVERAGE, (date(2027, 7, 1), DayType.SUNDAY))
 
 
-def test_a_holiday_listed_twice_is_refused() -> None:
-    with pytest.raises(ValidationError, match="listed once"):
-        fixture_holiday_list(
-            COVERAGE, (date(2026, 7, 15), DayType.SUNDAY), (date(2026, 7, 15), DayType.SATURDAY)
-        )
+@pytest.mark.parametrize(
+    "holidays",
+    [
+        ((date(2026, 7, 15), DayType.SUNDAY), (date(2026, 7, 15), DayType.SATURDAY)),  # twice
+        ((date(2026, 12, 16), DayType.SATURDAY), (date(2026, 7, 15), DayType.SUNDAY)),  # order
+    ],
+)
+def test_holidays_are_listed_once_each_in_date_order(
+    holidays: tuple[tuple[date, DayType], ...],
+) -> None:
+    """One encoding per meaning, and an easier list to check against its source."""
+    with pytest.raises(ValidationError, match="in date order, each date once"):
+        fixture_holiday_list(COVERAGE, *holidays)
 
 
 def test_a_listed_holiday_is_treated_as_a_saturday_or_a_sunday() -> None:
@@ -99,6 +112,10 @@ def test_a_list_needs_its_coverage_holidays_and_unlisted_rule() -> None:
         HolidayTreatment(
             rule=_cited_rule(HolidayRule.LISTED), coverage=LISTED.coverage, unlisted=LISTED.unlisted
         )
+    with pytest.raises(ValidationError, match="needs its coverage"):
+        HolidayTreatment(
+            rule=_cited_rule(HolidayRule.LISTED), coverage=LISTED.coverage, listed=LISTED.listed
+        )
 
 
 def test_holidays_by_day_of_week_have_no_list() -> None:
@@ -106,6 +123,8 @@ def test_holidays_by_day_of_week_have_no_list() -> None:
         HolidayTreatment(rule=_cited_rule(HolidayRule.AS_DAY_OF_WEEK), coverage=LISTED.coverage)
     with pytest.raises(ValidationError, match="no list or coverage"):
         HolidayTreatment(rule=_cited_rule(HolidayRule.AS_DAY_OF_WEEK), listed=LISTED.listed)
+    with pytest.raises(ValidationError, match="no list or coverage"):
+        HolidayTreatment(rule=_cited_rule(HolidayRule.AS_DAY_OF_WEEK), unlisted=LISTED.unlisted)
 
 
 # ----------------------------------------------------------- the calendar on a version
@@ -129,7 +148,7 @@ def test_a_component_that_needs_a_calendar_is_refused_without_one(
 ) -> None:
     """No component needs one yet (P4-7 adds `TimeOfUseEnergy`); the rule is shown with a
     component marked as needing one."""
-    monkeypatch.setattr(FlatEnergy, "NEEDS_CALENDAR", True)
+    monkeypatch.setattr(FlatEnergy, "needs_calendar", property(lambda self: True))
     with pytest.raises(ValidationError, match="energy need a time-of-use calendar"):
         fixture_version(fixture_flat("100"))
     assert fixture_version(fixture_flat("100"), tou_calendar=fixture_calendar())
@@ -153,7 +172,9 @@ def test_a_seasonal_season_with_other_days_is_refused() -> None:
         fixture_season("high", (5, 1), (8, 31), (None, "300")),
         fixture_season("low", (9, 1), (4, 30), (None, "200")),
     )
-    with pytest.raises(ValidationError, match="'high' of energy covers different days"):
+    with pytest.raises(
+        ValidationError, match="'high' of energy has dates that differ from the calendar's"
+    ):
         fixture_version(seasonal, tou_calendar=fixture_calendar())
 
 
@@ -176,3 +197,69 @@ def test_the_published_tariff_b_files_load_unchanged() -> None:
         assert publication.version is not None
         assert publication.version.tou_calendar is None
         assert render(publication).encode("utf-8") == path.read_bytes()
+
+
+def test_without_a_calendar_two_seasonal_components_must_agree() -> None:
+    """TD-11 also for a version with no calendar: one season name, one set of dates."""
+    first = fixture_seasonal(
+        fixture_season("high", (6, 1), (8, 31), (None, "300")),
+        fixture_season("low", (9, 1), (5, 31), (None, "200")),
+        name="energy",
+    )
+    second = fixture_seasonal(
+        fixture_season("high", (5, 1), (8, 31), (None, "30")),
+        fixture_season("low", (9, 1), (4, 30), (None, "20")),
+        name="network",
+    )
+    with pytest.raises(
+        ValidationError, match="'high' of network has dates that differ from another"
+    ):
+        fixture_version(first, second)
+
+
+# --------------------------------------------- a holiday list must cover the version
+
+
+def test_a_holiday_list_must_cover_every_day_of_the_version() -> None:
+    """The fixture version runs from 1 July 2026 to 1 July 2027; COVERAGE covers it."""
+    assert fixture_version(fixture_flat("100"), tou_calendar=fixture_calendar(holidays=LISTED))
+    short = fixture_holiday_list(
+        (date(2026, 4, 1), date(2027, 4, 1)), (date(2026, 7, 15), DayType.SUNDAY)
+    )
+    with pytest.raises(ValidationError, match="must cover every day of the version"):
+        fixture_version(fixture_flat("100"), tou_calendar=fixture_calendar(holidays=short))
+    late = fixture_holiday_list(
+        (date(2026, 8, 1), date(2027, 7, 1)), (date(2026, 8, 5), DayType.SUNDAY)
+    )
+    with pytest.raises(ValidationError, match="must cover every day of the version"):
+        fixture_version(fixture_flat("100"), tou_calendar=fixture_calendar(holidays=late))
+
+
+def test_a_holiday_list_covers_at_most_two_years() -> None:
+    """A mistyped end (2072 for 2027) would otherwise price later holidays as weekdays."""
+    typo = fixture_holiday_list(
+        (date(2026, 4, 1), date(2072, 7, 1)), (date(2026, 7, 15), DayType.SUNDAY)
+    )
+    with pytest.raises(ValidationError, match="covers at most 731 days"):
+        fixture_version(fixture_flat("100"), end=None, tou_calendar=fixture_calendar(holidays=typo))
+    two_years = fixture_holiday_list(
+        (date(2026, 7, 1), date(2028, 7, 1)), (date(2026, 7, 15), DayType.SUNDAY)
+    )
+    assert fixture_version(
+        fixture_flat("100"), end=None, tou_calendar=fixture_calendar(holidays=two_years)
+    )
+
+
+# ------------------------------------------------------------------ round trips
+
+
+def test_a_version_with_a_listed_calendar_survives_json_and_canonical_form() -> None:
+    """Strict JSON mode reads what the model writes, and the canonical text (what a
+    publication file holds) parses back to the same version. The database round trip is
+    P4-12's."""
+    version = fixture_version(fixture_flat("100"), tou_calendar=fixture_calendar(holidays=LISTED))
+    text = version.model_dump_json()
+    assert TariffVersion.model_validate_json(text) == version
+    canonical_text = canonical.dumps(canonical.parse(text))
+    assert canonical.check(canonical_text) == canonical.parse(text)
+    assert TariffVersion.model_validate_json(canonical_text) == version

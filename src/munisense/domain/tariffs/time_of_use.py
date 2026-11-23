@@ -12,7 +12,8 @@ because nothing can tell whether it is a holiday.
 from collections.abc import Iterable
 from datetime import date
 from enum import StrEnum
-from typing import Annotated, Self
+from itertools import pairwise
+from typing import Annotated, Self, assert_never
 
 from pydantic import Field, model_validator
 
@@ -88,7 +89,11 @@ class HolidayTreatment(DomainModel):
     """The calendar's cited holiday rule (ADR-0016 point 1).
 
     `as_day_of_week` has no list. `listed` has a cited coverage window, at least one cited
-    holiday inside it (each date once), and a cited rule for holidays it does not name.
+    holiday inside it (in date order, each date once), and a cited rule for holidays it
+    does not name. The coverage is a half-open `DateRange`: its `end` is the first day NOT
+    covered (a list printed "to 30 June 2027" ends on 1 July 2027), unlike `SeasonDates`,
+    whose end is inclusive as schedules print it. The only unlisted rule is "as the day of
+    the week", the only one the engine can apply without a national holiday calendar.
     """
 
     rule: Cited[HolidayRule]
@@ -107,8 +112,8 @@ class HolidayTreatment(DomainModel):
             msg = "a holiday list needs its coverage, at least one holiday and an unlisted rule"
             raise ValueError(msg)
         days = [cited.value.day for cited in self.listed]
-        if len(set(days)) != len(days):
-            msg = "each holiday is listed once"
+        if any(later <= earlier for earlier, later in pairwise(days)):
+            msg = "listed holidays are in date order, each date once"
             raise ValueError(msg)
         outside = [d for d in days if not self.coverage.value.contains(d)]
         if outside:
@@ -121,11 +126,20 @@ class HolidayTreatment(DomainModel):
         if self.rule.value == HolidayRule.LISTED:
             coverage = self.coverage.value if self.coverage is not None else None
             if coverage is None or not coverage.contains(day):
-                msg = f"{day} is outside the dates the holiday list covers"
+                # Fixed text: the day may come from a consumer's readings (ADR-0016 point 4).
+                msg = "a day is outside the dates the holiday list covers"
                 raise HolidayCoverageError(msg)
             for cited in self.listed:
                 if cited.value.day == day:
                     return cited.value.treated_as
+            unlisted = self.unlisted.value if self.unlisted is not None else None
+            match unlisted:
+                case UnlistedHolidays.AS_DAY_OF_WEEK:
+                    return _day_of_week(day)
+                case None:  # pragma: no cover - the validator requires the rule
+                    raise AssertionError
+                case _:  # pragma: no cover - every member is handled above
+                    assert_never(unlisted)
         return _day_of_week(day)
 
 

@@ -29,11 +29,13 @@ from munisense.domain.tariffs.components import (
     FreeBasicAllocation,
     PrintedLabel,
     SeasonalEnergy,
+    SeasonDates,
 )
 from munisense.domain.tariffs.policy import BillingPolicy
 from munisense.domain.tariffs.time_of_use import TouCalendar
 
 Code = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
+MAX_HOLIDAY_COVERAGE_DAYS = 731  # two years, a leap day included
 
 
 class PriceBasis(StrEnum):
@@ -78,32 +80,55 @@ class TariffVersion(DomainModel):
         return self
 
     def _check_calendar(self) -> None:
-        """A time-of-use component needs the calendar; a seasonal component must agree with
-        it, season by season (TD-11, ADR-0016 point 2)."""
+        """A time-of-use component needs the calendar; a holiday list must cover the
+        version's dates; every seasonal component must agree, season by season, with the
+        calendar or, without one, with the other seasonal components (TD-11, ADR-0016
+        point 2)."""
         calendar = self.tou_calendar
         if calendar is None:
-            needing = [c.name for c in self.components if type(c).NEEDS_CALENDAR]
+            needing = [c.name for c in self.components if c.needs_calendar]
             if needing:
                 msg = f"the component(s) {', '.join(needing)} need a time-of-use calendar"
                 raise ValueError(msg)
-            return
-        seasons = {season.name: season.dates.value for season in calendar.seasons}
+        else:
+            self._check_holiday_coverage(calendar)
+        seasons: dict[str, SeasonDates] = (
+            {s.name: s.dates.value for s in calendar.seasons} if calendar is not None else {}
+        )
         for component in self.components:
             if not isinstance(component, SeasonalEnergy):
                 continue
             for season in component.seasons:
-                if season.name not in seasons:
+                known = seasons.setdefault(season.name, season.dates.value)
+                if calendar is not None and season.name not in {s.name for s in calendar.seasons}:
                     msg = (
                         f"the season {season.name!r} of {component.name} is not in the "
                         "version's calendar"
                     )
                     raise ValueError(msg)
-                if season.dates.value != seasons[season.name]:
+                if season.dates.value != known:
+                    against = "the calendar's" if calendar is not None else "another component's"
                     msg = (
-                        f"the season {season.name!r} of {component.name} covers different "
-                        "days from the calendar's"
+                        f"the season {season.name!r} of {component.name} has dates that differ "
+                        f"from {against}"
                     )
                     raise ValueError(msg)
+
+    def _check_holiday_coverage(self, calendar: TouCalendar) -> None:
+        """A holiday list must cover every day of the version, and at most two years, so a
+        mistyped end cannot price later holidays as ordinary days (P4-6 security review)."""
+        coverage = calendar.holidays.coverage
+        if coverage is None:
+            return
+        window = coverage.value
+        if window.days > MAX_HOLIDAY_COVERAGE_DAYS:
+            msg = f"a holiday list covers at most {MAX_HOLIDAY_COVERAGE_DAYS} days"
+            raise ValueError(msg)
+        start = self.effective_from.value
+        end = self.effective_to.value if self.effective_to is not None else None
+        if not window.contains(start) or (end is not None and window.end < end):
+            msg = "the holiday list must cover every day of the version"
+            raise ValueError(msg)
 
     def _check_free_basic_allocation(self) -> None:
         allocations = [c for c in self.components if isinstance(c, FreeBasicAllocation)]
