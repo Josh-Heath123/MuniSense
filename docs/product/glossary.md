@@ -26,7 +26,7 @@
 | **SSEG** | Small-scale embedded generation: rooftop solar and similar. May earn export credits |
 | **Prepaid** | Electricity bought in advance as tokens. Block thresholds may reset per calendar month |
 | **Prepaid purchase** | One token purchase: a rand amount paid and the kWh received. The kWh depend on earlier purchases in the same month, because they decide which blocks are already used |
-| **Consumption profile** | How consumption is given to the engine: a period kWh total, kWh per time-of-use bucket (from P4), or (later) interval data |
+| **Consumption profile** | How consumption is given to the engine: a period kWh total, kWh used and exported per time-of-use period (`peak`, `standard`, `off_peak`; P4-4), or interval readings (P4-10) |
 | **Period total** | The kWh used over a whole billing period (`PeriodTotal`). Called a period total, not a monthly total, because billing periods are not always calendar months |
 | **Price basis** | Whether a tariff schedule prints its prices excluding VAT or including VAT. Recorded (and cited) per tariff version |
 | **VAT treatment** | How VAT applies to one component's amount: standard-rated, zero-rated or exempt. Recorded (and cited) per component |

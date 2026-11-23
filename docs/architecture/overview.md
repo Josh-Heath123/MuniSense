@@ -27,7 +27,7 @@ src/munisense/
     citations/    Citation, Cited[T] (the "cited value"), VerificationStatus (Verified, Estimated, UserProvided), weakest()
     money/        ExactDecimal, exact(), Money, Rate, RateUnit, CanonicalUnit, VatRate, VatTable, Quantisation, RoundingPolicy (Decimal only)
     tariffs/      TariffVersion (header + ordered components; PriceBasis), FixedCharge, FlatEnergy, BlockEnergy, SeasonalEnergy (Season, SeasonDates), Levy, FreeBasicAllocation, VatTreatment, BillingPolicy; later TOU calendars
-    billing/      calculate_bill() -> Bill (LineItem with Sources by role, BillWarning); calculate_period() -> PeriodBill (split at months, versions, seasons and VAT changes; ADR-0011); ConsumptionProfile (PeriodTotal; TimeOfUseBuckets refused until P4), BillingPeriod; calculate_purchase() / calculate_month() -> Purchase (prepaid, P1-14)
+    billing/      calculate_bill() -> Bill (LineItem with Sources by role, BillWarning); calculate_period() -> PeriodBill (split at months, versions, seasons and VAT changes; ADR-0011); ConsumptionProfile (PeriodTotal; TimeOfUseBuckets: kWh used and exported per TouPeriod, P4-4, priced from P4-7), BillingPeriod; calculate_purchase() / calculate_month() -> Purchase (prepaid, P1-14)
   catalogue/      suppliers (SupplierCatalogue, suppliers.py, P2-6), customer classes, supply areas
   provenance/     canonical JSON (canonical.py) and the publication envelope: PublicationRecord, TariffPublication, VatRatePublication, withdrawals (publication.py, ADR-0012, ADR-0013, P2-4); source manifests (SourceManifest, sources.py) and reading and writing data files in canonical form (drafts.py, P2-6). The per-value Citation and status types live in domain/citations, because the domain may not import this package
   ingestion/      the citation check (citation_check.py; P2-7), whose PDF text extraction runs in a
@@ -37,10 +37,11 @@ src/munisense/
   persistence/    Alembic migrations, the loader (`poe db-rebuild`; it reuses ingestion's
                   publication guards, and ingestion never imports persistence), the
                   read-only repository ("as recorded on" queries, P2-12)
-  services/       use cases: calculate_bill, compare_tariffs, publish_version, ... (from P2). Today only
-                  demo.py: the `poe demo` entry point, which reads the published Tariff B and VAT
+  services/       use cases: calculate_bill, compare_tariffs, publish_version, ... (from P2). Today:
+                  demo.py, the `poe demo` entry point, which reads the published Tariff B and VAT
                   rate through the repository as currently recorded (P2-13; `persistence.connection.connect`
-                  gives it a connection without importing SQLAlchemy)
+                  gives it a connection without importing SQLAlchemy); and consumption.py,
+                  parse_consumption_json, which reads consumption JSON with repeated keys refused (P4-4)
   api/            FastAPI routers, schemas, auth, errors (P5)
   console/        Jinja2 + HTMX pages (P6)
   mcp/            MCP server (P7)
@@ -104,7 +105,7 @@ Not built, and why: a per-value `citation` table (deferred to P6 if needed; cita
 
 1. The service resolves the supplier, tariff and versions covering the period (as of now, or as recorded on a given date).
 2. It splits the period at version boundaries and season boundaries. The allocation of consumption across splits is explicit and reported (pro-rata by days unless the supplier's policy says otherwise).
-3. The pure engine evaluates each component for each split and returns line items with component, quantity, rate, amount, citation and status. Consumption arrives as a **profile** (a period total now; time-of-use buckets from P4).
+3. The pure engine evaluates each component for each split and returns line items with component, quantity, rate, amount, citation and status. Consumption arrives as a **profile**: a period total, or kWh used and exported per time-of-use period (P4-4; priced from P4-7). Interfaces read JSON input with `services.consumption.parse_consumption_json`, which refuses a key given twice.
 4. VAT and rounding are applied; totals are computed.
 5. The result includes assumptions (for example "consumption pro-rated by days") and warnings (for example "rounding policy estimated").
 

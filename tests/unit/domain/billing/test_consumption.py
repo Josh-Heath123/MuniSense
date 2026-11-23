@@ -14,6 +14,7 @@ from munisense.domain.billing import (
     UnsupportedConsumptionError,
     require_period_total,
 )
+from munisense.domain.tariffs import TouPeriod
 
 PROFILE = TypeAdapter[ConsumptionProfile](ConsumptionProfile)
 
@@ -43,38 +44,51 @@ def test_a_profile_is_read_from_json_by_its_kind() -> None:
     assert isinstance(profile, PeriodTotal)
 
 
-def test_a_time_of_use_profile_can_be_described_but_is_refused_until_p4() -> None:
+def test_a_time_of_use_profile_gives_kwh_used_and_exported_per_period() -> None:
     profile = PROFILE.validate_json(
-        '{"kind": "time_of_use", "kwh_by_bucket": {"peak": "100", "off_peak": "250.5"}}'
+        '{"kind": "time_of_use", "used_kwh": {"peak": "100", "off_peak": "250.5"},'
+        ' "exported_kwh": {"off_peak": "12"}}'
     )
     assert isinstance(profile, TimeOfUseBuckets)
+    assert profile.used_kwh == {TouPeriod.PEAK: Decimal(100), TouPeriod.OFF_PEAK: Decimal("250.5")}
+    assert profile.exported_kwh == {TouPeriod.OFF_PEAK: Decimal(12)}
+
+
+def test_export_is_optional_and_defaults_to_nothing() -> None:
+    profile = TimeOfUseBuckets(used_kwh={TouPeriod.PEAK: Decimal(1)})
+    assert profile.exported_kwh == {}
+
+
+def test_a_time_of_use_profile_is_refused_by_the_engine_until_p4_7() -> None:
+    profile = TimeOfUseBuckets(used_kwh={TouPeriod.PEAK: Decimal(1)})
     with pytest.raises(UnsupportedConsumptionError, match="time-of-use"):
         require_period_total(profile)
 
 
 @pytest.mark.parametrize(
-    "buckets",
+    "body",
     [
-        "{}",
-        '{"peak": "-1"}',
-        '{"Peak Hours!": "1"}',
-        "{" + ", ".join(f'"b{i}": "1"' for i in range(25)) + "}",
+        '"used_kwh": {}',  # nothing used: at least one period
+        '"used_kwh": {"peak": "-1"}',  # negative
+        '"used_kwh": {"peak": "1"}, "exported_kwh": {"peak": "-0.5"}',
+        '"used_kwh": {"Peak Hours!": "1"}',  # not a period name
+        '"used_kwh": {"shoulder": "1"}',  # not one of Eskom's three periods (ADR-0016)
+        '"used_kwh": {"peak": "1"}, "exported_kwh": {"shoulder": "1"}',
+        '"used_kwh": {"peak": "1"}, "exported_kwh": {"standard": "1"}',  # not given as used
+        '"used_kwh": {"peak": 1}',  # a number, not an exact decimal string
+        '"used_kwh": {"peak": "1"}, "readings": []',  # an unknown field
+        '"kwh_by_bucket": {"peak": "1"}',  # the P1 shape is gone
     ],
 )
-def test_an_invalid_time_of_use_profile_is_refused(buckets: str) -> None:
+def test_an_invalid_time_of_use_profile_is_refused(body: str) -> None:
     with pytest.raises(ValidationError):
-        PROFILE.validate_json(f'{{"kind": "time_of_use", "kwh_by_bucket": {buckets}}}')
+        PROFILE.validate_json(f'{{"kind": "time_of_use", {body}}}')
 
 
-def test_the_bucket_limits_are_inclusive() -> None:
-    buckets = ", ".join(f'"b{i}": "1"' for i in range(24))
-    profile = PROFILE.validate_json(f'{{"kind": "time_of_use", "kwh_by_bucket": {{{buckets}}}}}')
-    assert isinstance(profile, TimeOfUseBuckets)
-    assert len(profile.kwh_by_bucket) == 24
-    longest = "a" * 32
-    assert longest in TimeOfUseBuckets(kwh_by_bucket={longest: Decimal("1")}).kwh_by_bucket
-    with pytest.raises(ValidationError):
-        TimeOfUseBuckets(kwh_by_bucket={"a" * 33: Decimal("1")})
+def test_the_limits_are_the_three_periods_used_and_exported() -> None:
+    every = {period: Decimal(1) for period in TouPeriod}
+    profile = TimeOfUseBuckets(used_kwh=every, exported_kwh=every)
+    assert len(profile.used_kwh) == len(profile.exported_kwh) == len(TouPeriod) == 3
 
 
 def test_negative_zero_kwh_becomes_zero() -> None:

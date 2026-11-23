@@ -20,6 +20,7 @@ from munisense.domain.tariffs.policy import (
     PrepaidFixedCharges,
     ProRating,
 )
+from munisense.domain.tariffs.time_of_use import TouPeriod
 from munisense.domain.tariffs.version import PriceBasis, TariffVersion
 
 __all__ = [
@@ -40,5 +41,6 @@ __all__ = [
     "SeasonDates",
     "SeasonalEnergy",
     "TariffVersion",
+    "TouPeriod",
     "VatTreatment",
 ]
