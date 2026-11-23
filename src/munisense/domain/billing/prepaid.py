@@ -171,6 +171,9 @@ def _check(version: TariffVersion, one_day: DateRange, free_basic_eligible: bool
         msg = "the purchase day is not inside the tariff version's effective range"
         raise PeriodOutsideVersionError(msg)
     check_price_basis(version)
+    if any(component.needs_calendar for component in version.components):
+        msg = "prepaid purchases on a tariff priced by time of use are not supported"
+        raise PrepaidNotSupportedError(msg)
     allocation = version.free_basic_allocation
     if allocation is not None and free_basic_eligible is None:
         msg = (

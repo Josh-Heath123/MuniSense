@@ -11,6 +11,8 @@ from munisense.domain.tariffs.components import (
     Season,
     SeasonalEnergy,
     SeasonDates,
+    TimeOfUseEnergy,
+    TouRate,
     VatTreatment,
 )
 from munisense.domain.tariffs.policy import (
@@ -30,10 +32,10 @@ from munisense.domain.tariffs.time_of_use import (
     ListedHoliday,
     TimeRange,
     TouCalendar,
-    TouPeriod,
     UndefinedPeriodError,
     UnlistedHolidays,
 )
+from munisense.domain.tariffs.tou_period import TouPeriod
 from munisense.domain.tariffs.version import PriceBasis, TariffVersion
 
 __all__ = [
@@ -61,9 +63,11 @@ __all__ = [
     "SeasonDates",
     "SeasonalEnergy",
     "TariffVersion",
+    "TimeOfUseEnergy",
     "TimeRange",
     "TouCalendar",
     "TouPeriod",
+    "TouRate",
     "UndefinedPeriodError",
     "UnlistedHolidays",
     "VatTreatment",

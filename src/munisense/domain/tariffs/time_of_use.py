@@ -26,16 +26,9 @@ from munisense.domain.tariffs.components import (
     SeasonDates,
     check_covers_the_year_once,
 )
+from munisense.domain.tariffs.tou_period import TouPeriod
 
 MINUTES_IN_A_DAY = 24 * 60
-
-
-class TouPeriod(StrEnum):
-    """A time-of-use period, as a calendar names its time ranges (ADR-0016 point 1)."""
-
-    PEAK = "peak"
-    STANDARD = "standard"
-    OFF_PEAK = "off_peak"
 
 
 class DayType(StrEnum):
@@ -249,6 +242,12 @@ class TouCalendar(DomainModel):
     def periods(self) -> frozenset[TouPeriod]:
         """Every period some schedule uses."""
         return frozenset(r.value.period for s in self.schedules for r in s.ranges)
+
+    def periods_in(self, season: str) -> frozenset[TouPeriod]:
+        """The periods the schedules of one season use."""
+        return frozenset(
+            r.value.period for s in self.schedules if s.season == season for r in s.ranges
+        )
 
     def require_defined(self, periods: Iterable[TouPeriod]) -> None:
         """Refuse any period the calendar does not define (used when pricing, P4-7)."""

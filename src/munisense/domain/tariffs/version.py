@@ -30,6 +30,7 @@ from munisense.domain.tariffs.components import (
     PrintedLabel,
     SeasonalEnergy,
     SeasonDates,
+    TimeOfUseEnergy,
 )
 from munisense.domain.tariffs.policy import BillingPolicy
 from munisense.domain.tariffs.time_of_use import TouCalendar
@@ -92,6 +93,7 @@ class TariffVersion(DomainModel):
                 raise ValueError(msg)
         else:
             self._check_holiday_coverage(calendar)
+            self._check_time_of_use_rates(calendar)
         seasons: dict[str, SeasonDates] = (
             {s.name: s.dates.value for s in calendar.seasons} if calendar is not None else {}
         )
@@ -114,6 +116,26 @@ class TariffVersion(DomainModel):
                         f"from {against}"
                     )
                     raise ValueError(msg)
+
+    def _check_time_of_use_rates(self, calendar: TouCalendar) -> None:
+        """Each time-of-use energy charge has a rate for exactly the periods each season
+        of the calendar uses: none missing, none for a season or period it lacks (P4-7)."""
+        expected = {(s.name, p) for s in calendar.seasons for p in calendar.periods_in(s.name)}
+        for component in self.components:
+            if not isinstance(component, TimeOfUseEnergy):
+                continue
+            given = {(r.season, r.period) for r in component.rates}
+            if given - expected:
+                season, period = min(given - expected)
+                msg = (
+                    f"{component.name} has a rate for {period} in the season {season!r}, "
+                    "which the calendar does not define there"
+                )
+                raise ValueError(msg)
+            if expected - given:
+                season, period = min(expected - given)
+                msg = f"{component.name} has no rate for {period} in the season {season!r}"
+                raise ValueError(msg)
 
     def _check_holiday_coverage(self, calendar: TouCalendar) -> None:
         """A holiday list must cover every day of the version, and at most two years, so a
