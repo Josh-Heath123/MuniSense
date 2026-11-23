@@ -18,6 +18,7 @@ from decimal import Decimal
 from typing import Annotated, Literal, Self
 
 from pydantic import AfterValidator, AwareDatetime, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from munisense.domain.base import DomainModel
 from munisense.domain.billing.errors import UnsupportedConsumptionError
@@ -82,7 +83,6 @@ class CustomerQuantities(DomainModel):
 
 
 # Interval readings (P4-10, ADR-0016 point 4).
-INTERVAL_MINUTES = (1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60)  # the lengths that divide an hour
 MAX_INTERVALS = 44_640  # a 31-day month of 1-minute readings
 SAST = timedelta(hours=2)  # South African Standard Time, UTC+02:00, no daylight saving
 
@@ -113,18 +113,30 @@ class IntervalReadings(DomainModel):
         previous: datetime | None = None
         for index, reading in enumerate(self.readings):
             start = reading.start
+            # Each refusal has its own error type (a fixed code) and names only the
+            # interval's position (in `ctx`), never a time or a kWh figure.
             if start.utcoffset() != SAST:
-                msg = f"interval {index}: its start is not in South African Standard Time (+02:00)"
-                raise ValueError(msg)
-            if start.second or start.microsecond or (start.hour * 60 + start.minute) % self.minutes:
-                msg = f"interval {index}: it does not start on the {self.minutes}-minute grid"
-                raise ValueError(msg)
-            if previous is not None and start != previous + step:
-                problem = (
-                    "a gap before it" if start > previous + step else "it overlaps the one before"
+                raise PydanticCustomError(
+                    "interval_not_sast",
+                    "interval {index}: its start is not in South African Standard Time (+02:00)",
+                    {"index": index},
                 )
-                msg = f"interval {index}: {problem}"
-                raise ValueError(msg)
+            if start.second or start.microsecond or (start.hour * 60 + start.minute) % self.minutes:
+                raise PydanticCustomError(
+                    "interval_off_grid",
+                    "interval {index}: it does not start on the interval grid",
+                    {"index": index},
+                )
+            if previous is not None and start > previous + step:
+                raise PydanticCustomError(
+                    "interval_gap", "interval {index}: a gap before it", {"index": index}
+                )
+            if previous is not None and start < previous + step:
+                raise PydanticCustomError(
+                    "interval_overlap",
+                    "interval {index}: it overlaps the one before",
+                    {"index": index},
+                )
             previous = start
         return self
 

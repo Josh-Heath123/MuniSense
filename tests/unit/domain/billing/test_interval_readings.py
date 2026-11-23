@@ -25,10 +25,12 @@ from munisense.domain.billing.consumption import MAX_INTERVALS
 from munisense.domain.billing.errors import IntervalReadingsError
 from munisense.domain.billing.intervals import classify
 from munisense.domain.tariffs import (
+    DaySchedule,
     DayType,
     ExportCap,
     HolidayCoverageError,
     TariffVersion,
+    TouCalendar,
     TouPeriod,
 )
 from support.builders import (
@@ -85,16 +87,22 @@ def test_a_wednesday_of_hourly_readings_by_hand() -> None:
     assert bill.consumption_kwh == Decimal(24)
 
 
-@pytest.mark.parametrize("minutes", [1, 5, 15, 30, 60])
-def test_any_interval_length_that_divides_an_hour_gives_the_same_buckets(minutes: int) -> None:
-    per_interval = str(Decimal(minutes) / 60)
+@pytest.mark.parametrize("minutes", [1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60])
+def test_every_interval_length_that_divides_an_hour_gives_the_same_buckets(minutes: int) -> None:
+    """`minutes` kWh in each interval is exactly 60 kWh an hour at every length: 180 kWh
+    peak, 720 standard and 540 off-peak on the Wednesday, R2,880.00."""
     bill = calculate_bill(
         tou_version(),
         day(date(2026, 7, 15)),
-        readings(date(2026, 7, 15), 1, minutes, per_interval),
+        readings(date(2026, 7, 15), 1, minutes, str(minutes)),
         VAT,
     )
-    assert bill.subtotal.rand == Decimal("48.00")
+    assert {line.description: line.quantity for line in bill.lines} == {
+        "high demand season: peak kWh": Decimal(180),
+        "high demand season: standard kWh": Decimal(720),
+        "high demand season: off-peak kWh": Decimal(540),
+    }
+    assert bill.subtotal.rand == Decimal("2880.00")
 
 
 def test_a_listed_holiday_is_priced_as_its_listed_day_type() -> None:
@@ -112,10 +120,11 @@ def test_a_listed_holiday_is_priced_as_its_listed_day_type() -> None:
     assert bill.subtotal.rand == Decimal("24.00")
 
 
-def test_holiday_coverage_errors_are_refusals_and_a_valid_version_cannot_reach_one() -> None:
-    """A day outside a holiday list's window is refused as a `DomainError`. A version that
-    carries a list must be covered by it for every day (P4-6), and a bill lies inside its
-    version, so pricing cannot meet one; the calendar shows the refusal directly."""
+def test_a_holiday_coverage_error_is_a_refusal() -> None:
+    """A day outside a holiday list's window is refused as a `DomainError`. Pricing cannot
+    meet one: a version with a list must be covered by it for every day
+    (`test_a_holiday_list_must_cover_every_day_of_the_version`, P4-6) and a bill lies
+    inside its version; the calendar shows the refusal directly."""
     holidays = fixture_holiday_list(
         (date(2026, 4, 1), date(2027, 7, 1)), (date(2026, 7, 15), DayType.SUNDAY)
     )
@@ -159,12 +168,15 @@ def test_across_a_month_change_each_part_keeps_its_own_readings() -> None:
 
 
 def test_readings_must_cover_the_billing_period_exactly() -> None:
-    with pytest.raises(IntervalReadingsError, match="cover the billing period exactly"):
-        calculate_bill(
-            tou_version(), day(date(2026, 7, 15), 2), readings(date(2026, 7, 15), 1), VAT
-        )
-    with pytest.raises(IntervalReadingsError, match="cover the billing period exactly"):
-        calculate_bill(tou_version(), day(date(2026, 7, 15)), readings(date(2026, 7, 14), 1), VAT)
+    for period, profile in (
+        (day(date(2026, 7, 15), 2), readings(date(2026, 7, 15), 1)),
+        (day(date(2026, 7, 15)), readings(date(2026, 7, 14), 1)),
+    ):
+        with pytest.raises(
+            IntervalReadingsError, match="cover the billing period exactly"
+        ) as caught:
+            calculate_bill(tou_version(), period, profile, VAT)
+        assert caught.value.code == "readings_do_not_cover_period"
 
 
 def test_an_interval_across_a_period_boundary_is_refused_by_its_position_only() -> None:
@@ -191,6 +203,37 @@ def test_an_interval_across_a_period_boundary_is_refused_by_its_position_only() 
         )
     assert "98765" not in str(caught.value) + repr(caught.value.args)
     assert "2026" not in str(caught.value) + repr(caught.value.args)
+    assert caught.value.code == "interval_crosses_period_boundary"
+
+
+def test_a_period_wholly_inside_one_interval_is_refused() -> None:
+    """Standard for ten minutes, 07:25 to 07:35, inside the 07:00 hour: the hour starts
+    and ends off-peak, but cannot be billed as off-peak (both reviews of P4-10). Five-minute
+    readings of the same day are priced."""
+    weekday = (
+        (7 * 60 + 25, TouPeriod.OFF_PEAK),
+        (7 * 60 + 35, TouPeriod.STANDARD),
+        (24 * 60, TouPeriod.OFF_PEAK),
+    )
+    plain = ((24 * 60, TouPeriod.OFF_PEAK),)
+    hours = {DayType.WEEKDAY: weekday, DayType.SATURDAY: plain, DayType.SUNDAY: plain}
+    cents = {
+        (season, period): "100"
+        for season in ("high", "low")
+        for period in (TouPeriod.OFF_PEAK, TouPeriod.STANDARD)
+    }
+    version = fixture_version(
+        fixture_tou_energy(cents),
+        start=date(2026, 4, 1),
+        tou_calendar=fixture_calendar(hours, hours),
+    )
+    with pytest.raises(IntervalReadingsError, match=r"^interval 7: it crosses") as caught:
+        calculate_bill(version, day(date(2026, 7, 15)), readings(date(2026, 7, 15), 1), VAT)
+    assert caught.value.code == "interval_crosses_period_boundary"
+    five_minutes = calculate_bill(
+        version, day(date(2026, 7, 15)), readings(date(2026, 7, 15), 1, 5, "5"), VAT
+    )
+    assert five_minutes.consumption_kwh == Decimal(24 * 60)
 
 
 def test_interval_readings_price_only_a_tariff_priced_by_time_of_use() -> None:
@@ -228,34 +271,46 @@ ZERO = datetime(2026, 7, 15, tzinfo=SAST)
 
 
 @pytest.mark.parametrize(
-    ("starts", "message"),
+    ("starts", "code", "message"),
     [
-        ([ZERO, ZERO + timedelta(hours=2)], "interval 1: a gap before it"),
-        ([ZERO, ZERO], "interval 1: it overlaps the one before"),
-        ([ZERO + timedelta(minutes=15)], "interval 0: it does not start on the 60-minute grid"),
-        ([ZERO + timedelta(seconds=1)], "interval 0: it does not start on the 60-minute grid"),
+        ([ZERO, ZERO + timedelta(hours=2)], "interval_gap", "interval 1: a gap before it"),
+        ([ZERO, ZERO], "interval_overlap", "interval 1: it overlaps the one before"),
+        (
+            [ZERO + timedelta(minutes=15)],
+            "interval_off_grid",
+            "interval 0: it does not start on the interval grid",
+        ),
+        (
+            [ZERO + timedelta(seconds=1)],
+            "interval_off_grid",
+            "interval 0: it does not start on the interval grid",
+        ),
         (
             [datetime(2026, 7, 15, tzinfo=UTC)],
+            "interval_not_sast",
             r"interval 0: its start is not in South African Standard Time \(\+02:00\)",
         ),
     ],
 )
 def test_the_readings_refuse_gaps_overlaps_grids_and_zones_by_position_only(
-    starts: list[datetime], message: str
+    starts: list[datetime], code: str, message: str
 ) -> None:
     with pytest.raises(ValidationError, match=message) as caught:
         _model(starts)
-    shown = str(caught.value)
+    assert [e["type"] for e in caught.value.errors()] == [code]
+    shown = str(caught.value) + repr(caught.value.args)
     assert "98765" not in shown
     assert "2026-07-15" not in shown
     assert "2026, 7, 15" not in shown
 
 
 def test_a_naive_start_or_a_length_that_does_not_divide_an_hour_is_refused() -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as caught:
         _model([datetime(2026, 7, 15)])  # noqa: DTZ001 - the point of the test
-    with pytest.raises(ValidationError):
+    assert {e["type"] for e in caught.value.errors()} == {"timezone_aware"}
+    with pytest.raises(ValidationError) as caught:
         _model([ZERO], minutes=7)
+    assert {e["type"] for e in caught.value.errors()} == {"literal_error"}
 
 
 def test_there_are_at_most_max_intervals_readings() -> None:
@@ -346,3 +401,52 @@ def test_exports_from_readings_over_two_parts_are_refused_for_now() -> None:
     )
     with pytest.raises(NonMonthlyPeriodError, match="one calendar month priced in one part"):
         calculate_period([version], day(date(2026, 7, 31), 2), profile, VAT)
+
+
+def test_each_part_is_classified_by_its_own_versions_calendar() -> None:
+    """A tariff change on 16 July to a version whose (made-up) calendar is off-peak all day:
+    the 15th is priced by the fixture hours (R48.00), the 16th all off-peak (R24.00)."""
+    plain = ((24 * 60, TouPeriod.OFF_PEAK),)
+    flat_hours: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = dict.fromkeys(DayType, plain)
+    cents = {(s, TouPeriod.OFF_PEAK): "100" for s in ("high", "low")}
+    first = fixture_version(
+        fixture_tou_energy(), start=date(2026, 4, 1), end=date(2026, 7, 16), tou_calendar=CALENDAR
+    )
+    second = fixture_version(
+        fixture_tou_energy(cents),
+        start=date(2026, 7, 16),
+        tou_calendar=fixture_calendar(flat_hours, flat_hours),
+    )
+    bill = calculate_period(
+        [first, second], day(date(2026, 7, 15), 2), readings(date(2026, 7, 15), 2), VAT
+    )
+    assert [part.subtotal.rand for part in bill.parts] == [Decimal("48.00"), Decimal("24.00")]
+
+
+@pytest.mark.slow
+def test_a_full_month_of_one_minute_readings_is_classified_with_bounded_work() -> None:
+    """The most readings allowed (44,640): every minute of July. Each day's schedule is
+    looked up once, and each distinct schedule's minute table built once (`period_at` is
+    called 1,440 times per table, not per interval)."""
+    profile = readings(date(2026, 7, 1), 31, 1, "0.001")
+    calls = {"schedule_for": 0, "period_at": 0}
+    schedule_for = TouCalendar.schedule_for
+    period_at = DaySchedule.period_at
+
+    def count_schedule(self: TouCalendar, d: date) -> DaySchedule:
+        calls["schedule_for"] += 1
+        return schedule_for(self, d)
+
+    def count_minute(self: DaySchedule, minute: int) -> TouPeriod:
+        calls["period_at"] += 1
+        return period_at(self, minute)
+
+    july = BillingPeriod(start=date(2026, 7, 1), end=date(2026, 8, 1))
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(TouCalendar, "schedule_for", count_schedule)
+        patch.setattr(DaySchedule, "period_at", count_minute)
+        bill = calculate_bill(tou_version(), july, profile, VAT)
+    assert len(profile.readings) == MAX_INTERVALS
+    assert bill.consumption_kwh == Decimal("44.640")
+    assert calls["schedule_for"] == 31
+    assert calls["period_at"] == 3 * 1440  # weekday, Saturday and Sunday tables

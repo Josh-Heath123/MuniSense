@@ -8,9 +8,13 @@ class UnsupportedConsumptionError(DomainError):
 
 
 class IntervalReadingsError(DomainError):
-    """Interval readings cannot price this bill (they do not cover it exactly, or an
-    interval crosses a time-of-use period boundary). Messages name at most an interval's
-    position, never a time or a kWh figure."""
+    """Interval readings cannot price this bill. `code` is fixed: `readings_do_not_cover_period`
+    or `interval_crosses_period_boundary`. Messages name at most an interval's position,
+    never a time or a kWh figure."""
+
+    def __init__(self, message: str, code: str) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class InvalidQuantityError(DomainError):

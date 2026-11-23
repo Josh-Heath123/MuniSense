@@ -191,11 +191,16 @@ def read_consumption(
             raise UnsupportedConsumptionError(msg)
         return consumption.kwh, None, None
     if not priced_by_period or version.tou_calendar is None:
-        msg = "kWh per time-of-use period price only a tariff priced by time of use"
+        if isinstance(consumption, IntervalReadings):
+            msg = "interval readings price only a tariff priced by time of use"
+        else:
+            msg = "kWh per time-of-use period price only a tariff priced by time of use"
         raise UnsupportedConsumptionError(msg)
     has_credit = any(isinstance(c, ExportCredit) for c in version.components)
     if isinstance(consumption, IntervalReadings):
-        # Classified into buckets per part by the caller (`intervals.classify`).
+        # Classified into buckets per part by the caller (`intervals.classify`). Unlike
+        # buckets, readings always carry an export figure (0 by default), so only a
+        # positive export needs a credit.
         if any(r.exported_kwh > 0 for r in consumption.readings) and not has_credit:
             msg = "this tariff has no export credit, so exported kWh cannot be priced"
             raise UnsupportedConsumptionError(msg)
