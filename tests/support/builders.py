@@ -337,12 +337,36 @@ def fixture_day(
     return DaySchedule(season=season, day_type=day_type, ranges=tuple(ranges))
 
 
+# The low season's made-up hours differ from the high season's, so a lookup that ignored
+# the season would give a wrong period (P4-5 review).
+FIXTURE_LOW_HOURS: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = {
+    DayType.WEEKDAY: (
+        (7 * 60, TouPeriod.OFF_PEAK),
+        (9 * 60, TouPeriod.PEAK),
+        (17 * 60, TouPeriod.STANDARD),
+        (19 * 60, TouPeriod.PEAK),
+        (24 * 60, TouPeriod.OFF_PEAK),
+    ),
+    DayType.SATURDAY: (
+        (8 * 60, TouPeriod.OFF_PEAK),
+        (11 * 60, TouPeriod.STANDARD),
+        (24 * 60, TouPeriod.OFF_PEAK),
+    ),
+    DayType.SUNDAY: (
+        (17 * 60, TouPeriod.OFF_PEAK),
+        (19 * 60, TouPeriod.STANDARD),
+        (24 * 60, TouPeriod.OFF_PEAK),
+    ),
+}
+
+
 def fixture_calendar(
-    hours: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = FIXTURE_HOURS,
+    high: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = FIXTURE_HOURS,
+    low: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = FIXTURE_LOW_HOURS,
 ) -> TouCalendar:
     """A "high" season from 1 June to 31 August and a "low" one for the rest of the year,
-    both with the same made-up hours (end minutes per day type)."""
-    seasons = (("high", (6, 1), (8, 31)), ("low", (9, 1), (5, 31)))
+    each with its own made-up hours (end minutes per day type)."""
+    seasons = (("high", (6, 1), (8, 31), high), ("low", (9, 1), (5, 31), low))
     return TouCalendar(
         seasons=tuple(
             CalendarSeason(
@@ -356,11 +380,11 @@ def fixture_calendar(
                     status=FIXTURE_STATUS,
                 ),
             )
-            for name, start, end in seasons
+            for name, start, end, _ in seasons
         ),
         schedules=tuple(
             fixture_day(name, day_type, hours[day_type])
-            for name, _, _ in seasons
+            for name, _, _, hours in seasons
             for day_type in DayType
         ),
     )

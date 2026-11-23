@@ -35,6 +35,17 @@ def test_a_date_and_minute_give_the_season_day_type_and_period() -> None:
     assert CALENDAR.period_for(wednesday_in_july, 1439) == TouPeriod.OFF_PEAK
 
 
+def test_each_season_has_its_own_hours() -> None:
+    """The same day type and minute in July (high season) and in January (low season)
+    fall in different periods, so a lookup that ignored the season would be caught."""
+    july, january = date(2026, 7, 15), date(2027, 1, 13)  # both Wednesdays
+    assert CALENDAR.day_type(july) == CALENDAR.day_type(january) == DayType.WEEKDAY
+    assert CALENDAR.period_for(july, 8 * 60) == TouPeriod.STANDARD
+    assert CALENDAR.period_for(january, 8 * 60) == TouPeriod.PEAK
+    assert CALENDAR.period_for(date(2026, 7, 19), 18 * 60) == TouPeriod.OFF_PEAK  # Sunday
+    assert CALENDAR.period_for(date(2027, 1, 17), 18 * 60) == TouPeriod.STANDARD
+
+
 def test_saturdays_and_sundays_have_their_own_schedules() -> None:
     assert CALENDAR.day_type(date(2026, 7, 18)) == DayType.SATURDAY
     assert CALENDAR.day_type(date(2026, 7, 19)) == DayType.SUNDAY
@@ -58,10 +69,10 @@ def test_a_minute_outside_the_day_is_refused(minute: int) -> None:
 def test_the_calendar_lists_its_periods_and_refuses_others() -> None:
     assert CALENDAR.periods == frozenset(TouPeriod)
     CALENDAR.require_defined([TouPeriod.PEAK, TouPeriod.OFF_PEAK])
-    two_periods = fixture_calendar(
-        dict.fromkeys(DayType, ((24 * 60, TouPeriod.OFF_PEAK),))
-        | {DayType.WEEKDAY: ((18 * 60, TouPeriod.OFF_PEAK), (24 * 60, TouPeriod.PEAK))}
-    )
+    no_standard: dict[DayType, tuple[tuple[int, TouPeriod], ...]] = dict.fromkeys(
+        DayType, ((24 * 60, TouPeriod.OFF_PEAK),)
+    ) | {DayType.WEEKDAY: ((18 * 60, TouPeriod.OFF_PEAK), (24 * 60, TouPeriod.PEAK))}
+    two_periods = fixture_calendar(no_standard, no_standard)
     with pytest.raises(UndefinedPeriodError, match="standard"):
         two_periods.require_defined([TouPeriod.STANDARD])
 
@@ -129,3 +140,18 @@ def test_seasons_that_do_not_cover_the_year_once_are_refused() -> None:
         TouCalendar(
             seasons=(CALENDAR.seasons[0], CALENDAR.seasons[0]), schedules=CALENDAR.schedules
         )
+
+
+def test_a_day_has_at_most_48_ranges() -> None:
+    def day(count: int) -> tuple[Cited[TimeRange], ...]:
+        return tuple(_range(i * 30, (i + 1) * 30 if i < count - 1 else 1440) for i in range(count))
+
+    assert len(DaySchedule(season="high", day_type=DayType.SUNDAY, ranges=day(48)).ranges) == 48
+    with pytest.raises(ValidationError):
+        DaySchedule(season="high", day_type=DayType.SUNDAY, ranges=day(49))
+
+
+def test_a_calendar_has_at_most_12_seasons() -> None:
+    assert len(CALENDAR.seasons) <= 12
+    with pytest.raises(ValidationError):
+        TouCalendar(seasons=CALENDAR.seasons * 7, schedules=CALENDAR.schedules)

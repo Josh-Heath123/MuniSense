@@ -151,7 +151,12 @@ class TouCalendar(DomainModel):
             raise UndefinedPeriodError(msg)
 
     def season_for(self, day: date) -> CalendarSeason:
-        return next(s for s in self.seasons if s.dates.value.contains(day))
+        """The season containing the day (the validators guarantee exactly one)."""
+        found = next((s for s in self.seasons if s.dates.value.contains(day)), None)
+        if found is None:  # only reachable if validation was skipped
+            msg = f"no season contains {day}"
+            raise AssertionError(msg)
+        return found
 
     def day_type(self, day: date) -> DayType:
         """The day's type by its day of the week (public holidays: P4-6)."""
@@ -163,8 +168,15 @@ class TouCalendar(DomainModel):
         return DayType.WEEKDAY
 
     def schedule_for(self, day: date) -> DaySchedule:
+        """The day's schedule: its season's, for its day type (the validators guarantee
+        exactly one)."""
         season, day_type = self.season_for(day).name, self.day_type(day)
-        return next(s for s in self.schedules if (s.season, s.day_type) == (season, day_type))
+        key = (season, day_type)
+        found = next((s for s in self.schedules if (s.season, s.day_type) == key), None)
+        if found is None:  # only reachable if validation was skipped
+            msg = f"no {day_type} schedule for the season {season!r}"
+            raise AssertionError(msg)
+        return found
 
     def period_for(self, day: date, minute: int) -> TouPeriod:
         """The period at a minute (0 to 1,439, SAST) of a day."""
