@@ -153,7 +153,7 @@ class TouCalendar(DomainModel):
     def season_for(self, day: date) -> CalendarSeason:
         """The season containing the day (the validators guarantee exactly one)."""
         found = next((s for s in self.seasons if s.dates.value.contains(day)), None)
-        if found is None:  # only reachable if validation was skipped
+        if found is None:  # pragma: no cover - only reachable if validation was skipped
             msg = f"no season contains {day}"
             raise AssertionError(msg)
         return found
@@ -173,7 +173,7 @@ class TouCalendar(DomainModel):
         season, day_type = self.season_for(day).name, self.day_type(day)
         key = (season, day_type)
         found = next((s for s in self.schedules if (s.season, s.day_type) == key), None)
-        if found is None:  # only reachable if validation was skipped
+        if found is None:  # pragma: no cover - only reachable if validation was skipped
             msg = f"no {day_type} schedule for the season {season!r}"
             raise AssertionError(msg)
         return found
