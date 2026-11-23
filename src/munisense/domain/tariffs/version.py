@@ -25,6 +25,7 @@ from munisense.domain.periods import DateRange
 from munisense.domain.tariffs.components import (
     BlockEnergy,
     Component,
+    ExportCredit,
     FlatEnergy,
     FreeBasicAllocation,
     PrintedLabel,
@@ -94,6 +95,7 @@ class TariffVersion(DomainModel):
         else:
             self._check_holiday_coverage(calendar)
             self._check_time_of_use_rates(calendar)
+        self._check_export_credit()
         seasons: dict[str, SeasonDates] = (
             {s.name: s.dates.value for s in calendar.seasons} if calendar is not None else {}
         )
@@ -117,12 +119,31 @@ class TariffVersion(DomainModel):
                     )
                     raise ValueError(msg)
 
+    def _check_export_credit(self) -> None:
+        """At most one export credit (a second would pay the cap twice); it needs a
+        time-of-use energy charge, whose use caps it, and the billing policy's export cap;
+        a cap without a credit is refused as unused data (P4-8 reviews)."""
+        credits = [c for c in self.components if isinstance(c, ExportCredit)]
+        cap = self.billing_policy.export_cap
+        if len(credits) > 1:
+            msg = "a version has at most one export credit"
+            raise ValueError(msg)
+        if credits and not any(isinstance(c, TimeOfUseEnergy) for c in self.components):
+            msg = "an export credit needs a time-of-use energy charge"
+            raise ValueError(msg)
+        if credits and cap is None:
+            msg = "a version with an export credit needs its billing policy's export cap"
+            raise ValueError(msg)
+        if not credits and cap is not None:
+            msg = "an export cap is set but the version has no export credit"
+            raise ValueError(msg)
+
     def _check_time_of_use_rates(self, calendar: TouCalendar) -> None:
         """Each time-of-use energy charge has a rate for exactly the periods each season
         of the calendar uses: none missing, none for a season or period it lacks (P4-7)."""
         expected = {(s.name, p) for s in calendar.seasons for p in calendar.periods_in(s.name)}
         for component in self.components:
-            if not isinstance(component, TimeOfUseEnergy):
+            if not isinstance(component, TimeOfUseEnergy | ExportCredit):
                 continue
             given = {(r.season, r.period) for r in component.rates}
             if given - expected:

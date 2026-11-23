@@ -19,9 +19,11 @@ from munisense.domain.billing import (
 )
 from munisense.domain.billing.splitting import _shares
 from munisense.domain.money import RoundingPolicy, VatApplication
-from munisense.domain.tariffs import TariffVersion, TouPeriod
+from munisense.domain.tariffs import ExportCap, TariffVersion, TouPeriod
 from support.builders import (
+    fixture_billing_policy,
     fixture_calendar,
+    fixture_export_credit,
     fixture_fixed,
     fixture_flat,
     fixture_policy,
@@ -186,3 +188,83 @@ def test_each_periods_shares_add_up_to_the_share_of_the_total(
     ranges = [part.period for part in bill.parts]
     expected = _shares(sum(used, Decimal(0)), period, ranges, version)
     assert [part.consumption_kwh for part in bill.parts] == expected
+
+
+def _with_credit(rates: list[str], credit: list[str]) -> TariffVersion:
+    base = _version(rates)
+    export = fixture_export_credit(
+        {
+            (season, period): credit[i * 3 + j]
+            for i, season in enumerate(("high", "low"))
+            for j, period in enumerate(PERIODS)
+        }
+    )
+    return fixture_version(
+        *base.components,
+        export,
+        tou_calendar=CALENDAR,
+        billing=fixture_billing_policy(export_cap=ExportCap.USE_IN_PERIOD_PER_CALENDAR_MONTH),
+    )
+
+
+@settings(max_examples=60)
+@given(
+    st.lists(cents, min_size=7, max_size=7),
+    st.lists(cents, min_size=6, max_size=6),
+    st.lists(kwh, min_size=3, max_size=3),
+    st.lists(kwh, min_size=3, max_size=3),
+    months,
+)
+def test_a_credit_never_exceeds_the_energy_charge_of_its_period(
+    rates: list[str], credit: list[str], used: list[Decimal], exported: list[Decimal], first: date
+) -> None:
+    """The kWh credited in each period are exactly the smaller of the kWh exported and used;
+    with credit rates no higher than the energy rates, the credit in each period is at most
+    that period's energy charge."""
+    credit = [str(min(Decimal(c), Decimal(r))) for c, r in zip(credit, rates[:6], strict=True)]
+    profile = TimeOfUseBuckets(
+        used_kwh=dict(zip(PERIODS, used, strict=True)),
+        exported_kwh=dict(zip(PERIODS, exported, strict=True)),
+    )
+    bill = calculate_bill(_with_credit(rates, credit), _month(first), profile, VAT)
+    for period_name, e, u in zip(PERIODS, exported, used, strict=True):
+        label = period_name.value.replace("_", "-")
+        quantity = sum(
+            (
+                line.quantity
+                for line in bill.lines
+                if line.description.endswith(f": {label} kWh exported, credited")
+            ),
+            Decimal(0),
+        )
+        assert quantity == min(e, u)  # the cap, exactly (exports drawn independently of use)
+    for period in ("peak kWh", "standard kWh", "off-peak kWh"):
+        charge = sum(
+            (line.amount.rand for line in bill.lines if line.description.endswith(f": {period}")),
+            Decimal(0),
+        )
+        credited = sum(
+            (
+                -line.amount.rand
+                for line in bill.lines
+                if line.description.endswith(f": {period} exported, credited")
+            ),
+            Decimal(0),
+        )
+        assert credited <= charge + HALF_CENT * 2  # both lines rounded to cents
+    assert bill.total.rand >= 0
+
+
+@settings(max_examples=40)
+@given(st.lists(cents, min_size=7, max_size=7), st.lists(kwh, min_size=3, max_size=3), months)
+def test_zero_export_gives_the_bill_without_an_export_credit(
+    rates: list[str], used: list[Decimal], first: date
+) -> None:
+    zero = TimeOfUseBuckets(
+        used_kwh=dict(zip(PERIODS, used, strict=True)),
+        exported_kwh=dict.fromkeys(PERIODS, Decimal(0)),
+    )
+    with_credit = calculate_bill(_with_credit(rates, ["100"] * 6), _month(first), zero, VAT)
+    without = calculate_bill(_version(rates), _month(first), _used(used), VAT)
+    assert with_credit.lines == without.lines
+    assert with_credit.total == without.total

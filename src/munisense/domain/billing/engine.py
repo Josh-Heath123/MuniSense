@@ -10,13 +10,15 @@ Steps (architecture overview, "How a calculation works", for a single version):
    input where one is needed, a period across a season boundary of a seasonal component
    or of the time-of-use calendar (`calculate_period` splits), and consumption of the
    wrong shape (`read_consumption`: a period total on a tariff priced by time of use, kWh
-   per period on any other, an absent or undefined period, exported kWh until P4-8, use
-   in a period the bill's season lacks).
+   per period on any other, an absent or undefined period, exported kWh on a tariff
+   without an export credit, use in a period the bill's season lacks), and exports on a
+   period that is not whole calendar months (the cap is per month, P4-8).
 2. Evaluate each component into line items, exactly, then quantise each line if the
    policy names a line-amount point. A free basic allocation, for an eligible customer,
    becomes credit lines that mirror the energy lines of the kWh it makes free.
 3. Apply VAT per line or on the subtotal of standard-rated lines, as the policy says.
-4. Add up and quantise the total if the policy names a total point.
+4. Add up and quantise the total if the policy names a total point; refuse a negative
+   total (an export credit larger than the bill: P4-8).
 5. Report the weakest status of every value used and warn about anything not verified.
 
 All arithmetic is exact (`Rate.charge`, `Money`, `exact()`); rounding happens only through
@@ -32,6 +34,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
+from typing import assert_never
 
 from munisense.domain.billing.consumption import (
     PeriodTotal,
@@ -40,6 +43,7 @@ from munisense.domain.billing.consumption import (
 from munisense.domain.billing.errors import (
     FreeBasicEligibilityRequiredError,
     FreeBasicNotOfferedError,
+    NegativeBillError,
     NonMonthlyPeriodError,
     PeriodCrossesSeasonError,
     PeriodOutsideVersionError,
@@ -70,10 +74,13 @@ from munisense.domain.money import (
 )
 from munisense.domain.periods import DateRange
 from munisense.domain.tariffs import (
+    BillingPolicy,
     Block,
     BlockEnergy,
     CalendarSeason,
     Component,
+    ExportCap,
+    ExportCredit,
     FixedCharge,
     FlatEnergy,
     FreeBasicAllocation,
@@ -104,7 +111,7 @@ def calculate_bill(
     allocation. It is an input, never inferred: it must be given (`True` or `False`) for a
     tariff that has an allocation, and `True` is refused for a tariff without one.
     """
-    total_kwh, used_by_period = read_consumption(version, consumption)
+    total_kwh, used_by_period, exported_by_period = read_consumption(version, consumption)
     _check_calculable(version, period, free_basic_eligible=free_basic_eligible)
     return price_part(
         version,
@@ -114,30 +121,33 @@ def calculate_bill(
         free_basic_eligible=free_basic_eligible,
         month_fraction=None,
         used_by_period=used_by_period,
+        exported_by_period=exported_by_period,
     )
 
 
 def read_consumption(
     version: TariffVersion, consumption: PeriodTotal | TimeOfUseBuckets
-) -> tuple[Decimal, dict[TouPeriod, Decimal] | None]:
-    """The period's total kWh, and its kWh per time-of-use period for a version priced by
-    time of use, or a `DomainError` saying why the consumption cannot price this version.
+) -> tuple[Decimal, dict[TouPeriod, Decimal] | None, dict[TouPeriod, Decimal] | None]:
+    """The period's total kWh used, and for a version priced by time of use its kWh used
+    and exported per period, or a `DomainError` saying why the consumption cannot price
+    this version.
 
-    A version with a time-of-use energy charge needs kWh per period, every period its
-    calendar defines given (an absent period is never read as zero use, P4-4); any other
-    version needs a period total. Exported kWh are refused until the export credit is
-    built (P4-8)."""
+    A version priced by time of use needs kWh per period, every period its calendar defines
+    given (an absent period is never read as zero use, P4-4); any other version needs a
+    period total. Exported kWh price only a version with an export credit; a period absent
+    from the exports exported nothing (export is optional, P4-4)."""
     priced_by_period = any(c.needs_calendar for c in version.components)
     if isinstance(consumption, PeriodTotal):
         if priced_by_period:
             msg = "this tariff is priced by time of use: give the kWh used in each period"
             raise UnsupportedConsumptionError(msg)
-        return consumption.kwh, None
+        return consumption.kwh, None, None
     if not priced_by_period or version.tou_calendar is None:
         msg = "kWh per time-of-use period price only a tariff priced by time of use"
         raise UnsupportedConsumptionError(msg)
-    if consumption.exported_kwh:
-        msg = "exported kWh (even 0) cannot be priced until the export credit is built (P4-8)"
+    has_credit = any(isinstance(c, ExportCredit) for c in version.components)
+    if consumption.exported_kwh and not has_credit:
+        msg = "this tariff has no export credit, so exported kWh (even 0) cannot be priced"
         raise UnsupportedConsumptionError(msg)
     calendar = version.tou_calendar
     calendar.require_defined(consumption.used_kwh)
@@ -151,7 +161,7 @@ def read_consumption(
     used = dict(consumption.used_kwh)
     with exact():
         total = sum(used.values(), Decimal(0))
-    return total, used
+    return total, used, dict(consumption.exported_kwh)
 
 
 def price_part(
@@ -163,6 +173,7 @@ def price_part(
     free_basic_eligible: bool | None,
     month_fraction: Decimal | None,
     used_by_period: Mapping[TouPeriod, Decimal] | None = None,
+    exported_by_period: Mapping[TouPeriod, Decimal] | None = None,
 ) -> Bill:
     """Price one part of a period with one version (used by `calculate_bill` and by period
     splitting). `month_fraction` scales every monthly value (monthly charges and levies,
@@ -181,7 +192,7 @@ def price_part(
         if isinstance(c, FlatEnergy | BlockEnergy | SeasonalEnergy)
     }
 
-    by_period = _time_of_use(version, period, used_by_period)
+    by_period = _time_of_use(version, period, used_by_period, exported_by_period)
     lines = [
         _quantise_line(line, policy.line_amount)
         for component in version.components
@@ -192,6 +203,12 @@ def price_part(
     lines, vat = _apply_vat(lines, vat_rate, policy)
     subtotal = Money.sum(line.amount for line in lines)
     total = _quantised(subtotal + vat, policy.total)
+    if total.rand < 0:
+        msg = (
+            "the bill would be negative; how the supplier treats a negative bill is not "
+            "known, so it is refused"
+        )
+        raise NegativeBillError(msg)
 
     status = weakest_kind(
         [line.status for line in lines]
@@ -217,8 +234,18 @@ def price_part(
         rounding_policy_status=policy.status.kind,
         free_basic_eligible=free_basic_eligible,
         month_fraction=month_fraction,
-        warnings=_warnings(status, policy, credited=_credited(version, lines)),
+        warnings=_warnings(
+            status,
+            policy,
+            credited=_credited(version, lines),
+            exported=version.billing_policy if _export_credited(version, lines) else None,
+        ),
     )
+
+
+def _export_credited(version: TariffVersion, lines: list[LineItem]) -> bool:
+    credits = {c.name for c in version.components if isinstance(c, ExportCredit)}
+    return any(line.component in credits for line in lines)
 
 
 def _credited(version: TariffVersion, lines: list[LineItem]) -> bool:
@@ -301,10 +328,14 @@ class _TouPart:
 
     season: CalendarSeason
     used: Mapping[TouPeriod, Decimal]
+    exported: Mapping[TouPeriod, Decimal]
 
 
 def _time_of_use(
-    version: TariffVersion, period: DateRange, used: Mapping[TouPeriod, Decimal] | None
+    version: TariffVersion,
+    period: DateRange,
+    used: Mapping[TouPeriod, Decimal] | None,
+    exported: Mapping[TouPeriod, Decimal] | None = None,
 ) -> _TouPart | None:
     """The part's calendar season and kWh per period, for a version priced by time of use;
     refuses a part across a calendar season boundary (`calculate_period` splits first) and
@@ -326,7 +357,16 @@ def _time_of_use(
     if unused:
         msg = f"kWh are given for {', '.join(unused)}, which the {first} season does not have"
         raise UndefinedPeriodError(msg)
-    return _TouPart(calendar.season_for(period.start), used)
+    exported = exported or {}
+    if any(kwh > 0 for kwh in exported.values()):
+        _check_export_cap(version)
+    if any(kwh > 0 for kwh in exported.values()) and not period.is_whole_calendar_month:
+        msg = (
+            "export credits are capped per calendar month, so a bill with exported kWh "
+            "must cover whole calendar months"
+        )
+        raise NonMonthlyPeriodError(msg)
+    return _TouPart(calendar.season_for(period.start), used, exported)
 
 
 def _crosses_a_season(calendar: TouCalendar, period: DateRange) -> bool:
@@ -370,6 +410,10 @@ def _evaluate(
         if by_period is None:  # pragma: no cover - _time_of_use refuses this first
             raise AssertionError
         yield from _time_of_use_lines(component, by_period)
+    elif isinstance(component, ExportCredit):
+        if by_period is None:  # pragma: no cover - _time_of_use refuses this first
+            raise AssertionError
+        yield from _export_lines(component, by_period)
     elif isinstance(component, FixedCharge):
         yield _fixed(component, period, scale)
     elif isinstance(component, Levy):
@@ -414,6 +458,49 @@ def _time_of_use_lines(component: TimeOfUseEnergy, part: _TouPart) -> Iterator[L
             rate = component.rate_for(season.name, period)
             description = f"{season.label.value}: {period.value.replace('_', '-')} kWh"
             yield _line(component, description, kwh, QuantityUnit.KWH, rate, extra=extra)
+
+
+def _check_export_cap(version: TariffVersion) -> None:
+    """The only cap built is per period and calendar month; a new member must be priced
+    here before it can be used."""
+    cap = version.billing_policy.export_cap
+    match cap:
+        case ExportCap.USE_IN_PERIOD_PER_CALENDAR_MONTH:
+            return
+        case None:  # pragma: no cover - the version refuses a credit without a cap
+            raise AssertionError
+        case _:  # pragma: no cover - every member is handled above
+            assert_never(cap)
+
+
+def _export_lines(component: ExportCredit, part: _TouPart) -> Iterator[LineItem]:
+    """One credit (negative) line per period with export: the kWh credited are the kWh
+    exported, capped by the kWh used in the same period (the billing policy's export cap,
+    checked to be per calendar month)."""
+    season = part.season
+    extra = (
+        Source(role=SourceRole.SEASON, citation=season.dates.citation, status=season.dates.kind),
+        Source(
+            role=SourceRole.SEASON_LABEL, citation=season.label.citation, status=season.label.kind
+        ),
+    )
+    for period in TouPeriod:
+        with exact():
+            credited = min(part.exported.get(period, Decimal(0)), part.used.get(period, Decimal(0)))
+        if credited > 0:
+            rate = component.rate_for(season.name, period)
+            name = period.value.replace("_", "-")
+            charge = _line(
+                component,
+                f"{season.label.value}: {name} kWh exported, credited",
+                credited,
+                QuantityUnit.KWH,
+                rate,
+                extra=extra,
+            )
+            yield LineItem.model_validate(
+                charge.model_dump() | {"amount": Money.zero() - charge.amount}
+            )
 
 
 def _seasonal(
@@ -609,9 +696,25 @@ def _words(kind: StatusKind) -> str:
 
 
 def _warnings(
-    status: StatusKind, policy: RoundingPolicy, *, credited: bool
+    status: StatusKind,
+    policy: RoundingPolicy,
+    *,
+    credited: bool,
+    exported: BillingPolicy | None = None,
 ) -> tuple[BillWarning, ...]:
+    """`exported` is the billing policy whose export cap was applied, if any credit was."""
     warnings: list[BillWarning] = []
+    if exported is not None and exported.needs_warning:
+        warnings.append(
+            BillWarning(
+                code=WarningCode.UNVERIFIED_EXPORT_CAP,
+                message=(
+                    f"Exports are credited under billing policy '{exported.name}', which is not "
+                    "verified: at most the kWh used in the same time-of-use period, reading "
+                    '"each month" as the calendar month.'
+                ),
+            )
+        )
     if credited:
         warnings.append(
             BillWarning(

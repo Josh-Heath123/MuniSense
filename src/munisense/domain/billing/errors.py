@@ -7,6 +7,10 @@ class UnsupportedConsumptionError(DomainError):
     """The consumption profile is of a kind the engine cannot evaluate yet."""
 
 
+class NegativeBillError(DomainError):
+    """A credit would make the bill negative, and no source says how that is treated."""
+
+
 class PeriodOutsideVersionError(DomainError):
     """The billing period is not wholly inside the tariff version's effective range."""
 

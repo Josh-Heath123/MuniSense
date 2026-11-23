@@ -35,7 +35,7 @@ from munisense.domain.billing import (
 )
 from munisense.domain.citations import Cited, cited_statuses, iter_cited
 from munisense.domain.money import Money, Quantisation, RoundingMode, VatRate
-from munisense.domain.tariffs import DayType, TariffVersion
+from munisense.domain.tariffs import DayType, ExportCap, TariffVersion
 from munisense.domain.tariffs.components import Component
 from munisense.provenance.drafts import load_file
 from munisense.provenance.publication import TariffPublication, VatRatePublication
@@ -43,6 +43,7 @@ from support.builders import (
     fixture_billing_policy,
     fixture_blocks,
     fixture_calendar,
+    fixture_export_credit,
     fixture_fixed,
     fixture_flat,
     fixture_free_basic,
@@ -150,6 +151,12 @@ def _instances() -> list[object]:
         ),
         fixture_vat_table(),
         fixture_version(fixture_tou_energy(), tou_calendar=fixture_calendar()),
+        fixture_version(
+            fixture_tou_energy(),
+            fixture_export_credit(),
+            tou_calendar=fixture_calendar(),
+            billing=fixture_billing_policy(export_cap=ExportCap.USE_IN_PERIOD_PER_CALENDAR_MONTH),
+        ),
         fixture_calendar(),
         fixture_calendar(
             holidays=fixture_holiday_list(
