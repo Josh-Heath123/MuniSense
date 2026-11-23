@@ -7,7 +7,10 @@ versions, seasons or VAT rates, priced part by part.
 3. Share the kWh by days (the billing policy's `consumption_split`): each part ends at a
    cumulative factor, days so far / days in the period, rounded at the rounding policy's
    `pro_rating` point; a part's kWh are the difference of two cumulative shares. The shares
-   never go negative and always add up to the period's kWh exactly.
+   never go negative and always add up to the period's kWh exactly. For a tariff priced by
+   time of use, each period's kWh are shared this way on their own (with the same factors,
+   so a part's total equals the share of the period total); sharing across a change of
+   calendar season always warns, because a supplier bills each season's metered use.
 4. Price each part with its own version (`price_part`). A part that is not a whole
    calendar month has its monthly values scaled by days in the part / days in its month,
    rounded at the same point (the billing policy's `pro_rating`).
@@ -54,6 +57,7 @@ from munisense.domain.tariffs import (
     SeasonDates,
     TariffVersion,
     TouPeriod,
+    UndefinedPeriodError,
 )
 
 
@@ -68,10 +72,13 @@ def calculate_period(
     """Price a period that may span months, versions, seasons and VAT rates, or raise a
     `DomainError` explaining why it cannot."""
     ordered = _check_versions(versions)
-    readings = [read_consumption(version, consumption) for version in ordered]
-    total_kwh, used = readings[0]  # every version accepts the same consumption
     parts = _split(ordered, period, vat_table)
+    pricing = list(dict.fromkeys(version for _, version in parts))
+    readings = [read_consumption(version, consumption) for version in pricing]
+    total_kwh, used = readings[0]  # every version that prices a part accepts it
     ranges = [part for part, _ in parts]
+    if used is not None:
+        _check_each_season_has_the_periods(parts, used)
     if used is None:
         shares = _shares(total_kwh, period, ranges, parts[0][1])
         by_period: list[dict[TouPeriod, Decimal] | None] = [None] * len(parts)
@@ -96,6 +103,7 @@ def calculate_period(
         for (part, version), kwh, part_used in zip(parts, shares, by_period, strict=True)
     ]
     split = len(bills) > 1 or any(bill.month_fraction is not None for bill in bills)
+    across_seasons = used is not None and len(_calendar_seasons(parts)) > 1
     policies = list(dict.fromkeys(version.billing_policy for _, version in parts))
     rounding = list(dict.fromkeys(version.rounding_policy for _, version in parts))
     status = weakest_kind(bill.status for bill in bills)
@@ -112,7 +120,7 @@ def calculate_period(
         billing_policy_status=weakest_kind(policy.status.kind for policy in policies),
         rounding_policies=tuple(dict.fromkeys(policy.name for policy in rounding)),
         rounding_policy_status=weakest_kind(policy.status.kind for policy in rounding),
-        warnings=_warnings(bills, policies, split=split),
+        warnings=_warnings(bills, policies, split=split, across_seasons=across_seasons),
     )
 
 
@@ -153,9 +161,9 @@ def _split(
             for component in version.components:
                 if isinstance(component, SeasonalEnergy):
                     cuts |= _season_starts([s.dates.value for s in component.seasons], own)
-            if version.tou_calendar is not None:
-                seasons = [s.dates.value for s in version.tou_calendar.seasons]
-                cuts |= _season_starts(seasons, own)
+            calendar = version.tou_calendar
+            if calendar is not None and any(c.needs_calendar for c in version.components):
+                cuts |= _season_starts([s.dates.value for s in calendar.seasons], own)
     # The VAT table is contiguous, so every change is some rate's end; a period reaching
     # past the table's first start or last end is refused by `rate_for` either way.
     cuts |= {
@@ -167,6 +175,35 @@ def _split(
         part = DateRange(start=start, end=end)
         parts.append((part, _version_for(versions, part)))
     return parts
+
+
+def _calendar_seasons(parts: list[tuple[DateRange, TariffVersion]]) -> set[str]:
+    return {
+        version.tou_calendar.season_for(part.start).name
+        for part, version in parts
+        if version.tou_calendar is not None
+    }
+
+
+def _check_each_season_has_the_periods(
+    parts: list[tuple[DateRange, TariffVersion]], used: dict[TouPeriod, Decimal]
+) -> None:
+    """Sharing by days puts some of each period's kWh in every part, so every part's season
+    must have every period with use; otherwise no share-out can be priced."""
+    given = {period for period, kwh in used.items() if kwh > 0}
+    for part, version in parts:
+        calendar = version.tou_calendar
+        if calendar is None:  # pragma: no cover - read_consumption refused this version
+            continue
+        season = calendar.season_for(part.start).name
+        missing = sorted(given - calendar.periods_in(season))
+        if missing:
+            msg = (
+                f"kWh for {', '.join(missing)} cannot be shared over this period: the "
+                f"{season} season it reaches does not have that period, so a bill per "
+                "season, or interval readings, are needed"
+            )
+            raise UndefinedPeriodError(msg)
 
 
 def _overlap(version: TariffVersion, period: DateRange) -> DateRange | None:
@@ -275,7 +312,7 @@ def _month_fraction(part: DateRange, version: TariffVersion, *, eligible: bool) 
 
 
 def _warnings(
-    bills: list[Bill], policies: list[BillingPolicy], *, split: bool
+    bills: list[Bill], policies: list[BillingPolicy], *, split: bool, across_seasons: bool
 ) -> tuple[BillWarning, ...]:
     # One warning per distinct message: parts priced by different versions may warn about
     # different policies or statuses, and none of them may be lost.
@@ -292,6 +329,16 @@ def _warnings(
                 f"The period was split (and pro-rated where monthly values apply) by billing "
                 f"policy {names}, which is not verified; how the supplier shares a period may "
                 "differ."
+            ),
+        )
+        seen[(warning.code, warning.message)] = warning
+    if across_seasons:
+        warning = BillWarning(
+            code=WarningCode.TIME_OF_USE_SHARED_ACROSS_SEASONS,
+            message=(
+                "The kWh of each time-of-use period were shared between seasons by days; "
+                "the supplier bills each season's metered use, so the bill may differ, "
+                "even if the billing policy is verified."
             ),
         )
         seen[(warning.code, warning.message)] = warning

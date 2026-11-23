@@ -337,7 +337,12 @@ class TimeOfUseEnergy(_ComponentBase):
         return True
 
     def rate_for(self, season: str, period: TouPeriod) -> Cited[Rate]:
-        return next(r.rate for r in self.rates if (r.season, r.period) == (season, period))
+        """The rate of a period in a season (the version guarantees there is one)."""
+        found = next((r.rate for r in self.rates if (r.season, r.period) == (season, period)), None)
+        if found is None:  # pragma: no cover - only reachable if validation was skipped
+            msg = f"{self.name} has no rate for {period} in the season {season!r}"
+            raise AssertionError(msg)
+        return found
 
 
 Component = Annotated[

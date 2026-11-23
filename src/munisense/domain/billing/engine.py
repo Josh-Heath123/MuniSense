@@ -7,8 +7,11 @@ Steps (architecture overview, "How a calculation works", for a single version):
    monthly charges and levies, a free allocation that applies; pro-rating is P1-13),
    prices printed including VAT (not built yet), a period without one VAT rate, an
    eligible customer on a tariff without a free basic allocation, a missing eligibility
-   input where one is needed, and a period across a season boundary of a seasonal
-   component (splitting is P1-13).
+   input where one is needed, a period across a season boundary of a seasonal component
+   or of the time-of-use calendar (`calculate_period` splits), and consumption of the
+   wrong shape (`read_consumption`: a period total on a tariff priced by time of use, kWh
+   per period on any other, an absent or undefined period, exported kWh until P4-8, use
+   in a period the bill's season lacks).
 2. Evaluate each component into line items, exactly, then quantise each line if the
    policy names a line-amount point. A free basic allocation, for an eligible customer,
    becomes credit lines that mirror the energy lines of the kWh it makes free.
@@ -20,8 +23,9 @@ All arithmetic is exact (`Rate.charge`, `Money`, `exact()`); rounding happens on
 the version's rounding policy. A negative amount (a credit) is rounded as the positive
 amount it mirrors, then negated (`Money.quantised`), so a credit cancels its charge
 exactly whatever the rounding mode. The work done grows with the number of components
-and blocks, never with kWh; days count only through the season lookup, which checks at
-most 366 days per seasonal component, whatever the length of the period.
+and blocks, never with kWh; days count only through the season lookups, which check at
+most 366 days per seasonal component and for the time-of-use calendar, whatever the length
+of the period.
 """
 
 from collections.abc import Iterator, Mapping
@@ -79,6 +83,7 @@ from munisense.domain.tariffs import (
     SeasonalEnergy,
     TariffVersion,
     TimeOfUseEnergy,
+    TouCalendar,
     TouPeriod,
     UndefinedPeriodError,
     VatTreatment,
@@ -122,7 +127,7 @@ def read_consumption(
     calendar defines given (an absent period is never read as zero use, P4-4); any other
     version needs a period total. Exported kWh are refused until the export credit is
     built (P4-8)."""
-    priced_by_period = any(isinstance(c, TimeOfUseEnergy) for c in version.components)
+    priced_by_period = any(c.needs_calendar for c in version.components)
     if isinstance(consumption, PeriodTotal):
         if priced_by_period:
             msg = "this tariff is priced by time of use: give the kWh used in each period"
@@ -132,7 +137,7 @@ def read_consumption(
         msg = "kWh per time-of-use period price only a tariff priced by time of use"
         raise UnsupportedConsumptionError(msg)
     if consumption.exported_kwh:
-        msg = "exported kWh cannot be priced until the export credit is built (P4-8)"
+        msg = "exported kWh (even 0) cannot be priced until the export credit is built (P4-8)"
         raise UnsupportedConsumptionError(msg)
     calendar = version.tou_calendar
     calendar.require_defined(consumption.used_kwh)
@@ -304,12 +309,14 @@ def _time_of_use(
     """The part's calendar season and kWh per period, for a version priced by time of use;
     refuses a part across a calendar season boundary (`calculate_period` splits first) and
     use in a period the part's season does not have."""
-    if used is None or version.tou_calendar is None:
-        return None
     calendar = version.tou_calendar
+    if calendar is None or not any(c.needs_calendar for c in version.components):
+        return None  # not priced by time of use, even with a calendar for its seasons
+    if used is None:  # pragma: no cover - read_consumption refuses this first
+        msg = "this tariff is priced by time of use: give the kWh used in each period"
+        raise UnsupportedConsumptionError(msg)
     first = calendar.season_for(period.start).name
-    days = (period.start + timedelta(days=n) for n in range(period.days))
-    if any(calendar.season_for(day).name != first for day in days):
+    if len(calendar.seasons) > 1 and _crosses_a_season(calendar, period):
         msg = (
             "the billing period crosses a season boundary of the time-of-use calendar; "
             "split it with calculate_period"
@@ -320,6 +327,17 @@ def _time_of_use(
         msg = f"kWh are given for {', '.join(unused)}, which the {first} season does not have"
         raise UndefinedPeriodError(msg)
     return _TouPart(calendar.season_for(period.start), used)
+
+
+def _crosses_a_season(calendar: TouCalendar, period: DateRange) -> bool:
+    """True when some day of the period is in another season than its first day. With two
+    or more seasons, each is shorter than a year, so a period of more than 366 days always
+    crosses; otherwise at most 366 days are checked (the bounded work above)."""
+    if period.days > 366:
+        return True
+    first = calendar.season_for(period.start).name
+    days = (period.start + timedelta(days=n) for n in range(period.days))
+    return any(calendar.season_for(day).name != first for day in days)
 
 
 def _is_monthly(component: Component, free_basic_eligible: bool) -> bool:
@@ -349,7 +367,7 @@ def _evaluate(
     by_period: _TouPart | None,
 ) -> Iterator[LineItem]:
     if isinstance(component, TimeOfUseEnergy):
-        if by_period is None:  # pragma: no cover - read_consumption refuses this first
+        if by_period is None:  # pragma: no cover - _time_of_use refuses this first
             raise AssertionError
         yield from _time_of_use_lines(component, by_period)
     elif isinstance(component, FixedCharge):
