@@ -6,7 +6,6 @@ standard 150, off-peak 100. The fixture VAT rate is 12.5%.
 """
 
 import json
-import time
 from datetime import date
 from decimal import Decimal
 from typing import get_args
@@ -303,7 +302,9 @@ def test_only_versions_that_price_a_part_are_asked_about_the_consumption() -> No
     assert bill.subtotal.rand == Decimal("8.00")
 
 
-def test_a_long_period_on_a_one_season_calendar_does_no_unbounded_work() -> None:
+def test_a_long_period_on_a_one_season_calendar_does_no_unbounded_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """One season covers every day, so no day is checked; with two seasons, a period of
     more than 366 days crosses one without checking each day."""
     whole_year = SeasonDates(start_month=1, start_day=1, end_month=12, end_day=31)
@@ -324,11 +325,18 @@ def test_a_long_period_on_a_one_season_calendar_does_no_unbounded_work() -> None
         fixture_tou_energy(cents), start=date(2026, 7, 1), end=None, tou_calendar=one_season
     )
     long_period = BillingPeriod(start=date(2026, 7, 1), end=date(9999, 1, 1))
-    started = time.perf_counter()
-    assert calculate_bill(version, long_period, used("1", "1", "1"), VAT).subtotal.rand == Decimal(
-        "8.00"
-    )
-    assert time.perf_counter() - started < 1
+    lookups: list[date] = []
+    real = TouCalendar.season_for
+
+    def counted(self: TouCalendar, day: date) -> CalendarSeason:
+        lookups.append(day)
+        return real(self, day)
+
+    monkeypatch.setattr(TouCalendar, "season_for", counted)
+    bill = calculate_bill(version, long_period, used("1", "1", "1"), VAT)
+    assert bill.subtotal.rand == Decimal("8.00")
+    assert len(lookups) < 10  # a handful of lookups, not one per day of ~2.9 million
+    lookups.clear()
     with pytest.raises(PeriodCrossesSeasonError):
         calculate_bill(
             tou_version(start=date(2026, 7, 1), end=date(2027, 8, 1)),
@@ -336,6 +344,7 @@ def test_a_long_period_on_a_one_season_calendar_does_no_unbounded_work() -> None
             used("1", "1", "1"),
             VAT,
         )
+    assert len(lookups) < 10  # refused without reading each of the 367 days
 
 
 def test_every_component_priced_by_period_needs_a_calendar() -> None:

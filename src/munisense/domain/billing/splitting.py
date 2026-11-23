@@ -77,7 +77,7 @@ def calculate_period(
     readings = [read_consumption(version, consumption) for version in pricing]
     total_kwh, used = readings[0]  # every version that prices a part accepts it
     ranges = [part for part, _ in parts]
-    if used is not None:
+    if used is not None and len(_calendar_seasons(parts)) > 1:
         _check_each_season_has_the_periods(parts, used)
     if used is None:
         shares = _shares(total_kwh, period, ranges, parts[0][1])
