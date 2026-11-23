@@ -2,6 +2,7 @@
 
 from munisense.domain.billing.consumption import (
     ConsumptionProfile,
+    CustomerQuantities,
     PeriodTotal,
     TimeOfUseBuckets,
     require_period_total,
@@ -12,6 +13,7 @@ from munisense.domain.billing.errors import (
     FreeBasicNotOfferedError,
     IncompatibleVersionsError,
     InvalidPurchaseError,
+    InvalidQuantityError,
     NegativeBillError,
     NonMonthlyPeriodError,
     PeriodCrossesSeasonError,
@@ -45,10 +47,12 @@ __all__ = [
     "BillWarning",
     "BillingPeriod",
     "ConsumptionProfile",
+    "CustomerQuantities",
     "FreeBasicEligibilityRequiredError",
     "FreeBasicNotOfferedError",
     "IncompatibleVersionsError",
     "InvalidPurchaseError",
+    "InvalidQuantityError",
     "LineItem",
     "MonthSoFar",
     "NegativeBillError",

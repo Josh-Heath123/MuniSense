@@ -20,6 +20,7 @@ class RateUnit(StrEnum):
     RAND_PER_KWH = "R/kWh"
     RAND_PER_DAY = "R/day"
     RAND_PER_MONTH = "R/month"
+    RAND_PER_KVA_PER_MONTH = "R/kVA/month"
 
 
 class CanonicalUnit(StrEnum):
@@ -28,6 +29,7 @@ class CanonicalUnit(StrEnum):
     RAND_PER_KWH = "R/kWh"
     RAND_PER_DAY = "R/day"
     RAND_PER_MONTH = "R/month"
+    RAND_PER_KVA_PER_MONTH = "R/kVA/month"
 
 
 # (cents-to-rand exponent shift, canonical unit) per printed unit.
@@ -36,6 +38,7 @@ _CANONICAL: dict[RateUnit, tuple[int, CanonicalUnit]] = {
     RateUnit.RAND_PER_KWH: (0, CanonicalUnit.RAND_PER_KWH),
     RateUnit.RAND_PER_DAY: (0, CanonicalUnit.RAND_PER_DAY),
     RateUnit.RAND_PER_MONTH: (0, CanonicalUnit.RAND_PER_MONTH),
+    RateUnit.RAND_PER_KVA_PER_MONTH: (0, CanonicalUnit.RAND_PER_KVA_PER_MONTH),
 }
 
 

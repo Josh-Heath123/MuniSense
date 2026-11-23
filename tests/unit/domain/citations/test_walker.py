@@ -50,6 +50,7 @@ from support.builders import (
     fixture_holiday_list,
     fixture_levy,
     fixture_policy,
+    fixture_quantity_charge,
     fixture_season,
     fixture_seasonal,
     fixture_tou_energy,
@@ -151,6 +152,11 @@ def _instances() -> list[object]:
         ),
         fixture_vat_table(),
         fixture_version(fixture_tou_energy(), tou_calendar=fixture_calendar()),
+        fixture_version(
+            fixture_flat("100"),
+            fixture_quantity_charge(seasons=("high",)),
+            tou_calendar=fixture_calendar(),
+        ),
         fixture_version(
             fixture_tou_energy(),
             fixture_export_credit(),

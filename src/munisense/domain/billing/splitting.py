@@ -29,15 +29,22 @@ from decimal import Decimal
 from itertools import pairwise
 from typing import assert_never
 
-from munisense.domain.billing.consumption import PeriodTotal, TimeOfUseBuckets
+from munisense.domain.billing.consumption import (
+    CustomerQuantities,
+    PeriodTotal,
+    TimeOfUseBuckets,
+)
 from munisense.domain.billing.engine import (
     check_price_basis,
+    check_quantities,
     has_monthly_values,
     price_part,
+    prices_by_period,
     read_consumption,
 )
 from munisense.domain.billing.errors import (
     IncompatibleVersionsError,
+    InvalidQuantityError,
     NonMonthlyPeriodError,
     PeriodOutsideVersionError,
 )
@@ -54,6 +61,7 @@ from munisense.domain.tariffs import (
     BillingPolicy,
     ConsumptionSplit,
     ProRating,
+    QuantityCharge,
     SeasonalEnergy,
     SeasonDates,
     TariffVersion,
@@ -69,6 +77,7 @@ def calculate_period(
     vat_table: VatTable,
     *,
     free_basic_eligible: bool | None = None,
+    quantities: CustomerQuantities | None = None,
 ) -> PeriodBill:
     """Price a period that may span months, versions, seasons and VAT rates, or raise a
     `DomainError` explaining why it cannot."""
@@ -76,6 +85,14 @@ def calculate_period(
     parts = _split(ordered, period, vat_table)
     pricing = list(dict.fromkeys(version for _, version in parts))
     readings = [read_consumption(version, consumption) for version in pricing]
+    check_quantities(pricing, quantities)
+    charged = any(isinstance(c, QuantityCharge) for v in pricing for c in v.components)
+    if charged and len({(part.start.year, part.start.month) for part, _ in parts}) > 1:
+        msg = (
+            "a demand or capacity charge is priced on the customer's figure for one month: "
+            "give one bill per calendar month"
+        )
+        raise InvalidQuantityError(msg)
     total_kwh, used, exported = readings[0]  # every version that prices a part accepts it
     ranges = [part for part, _ in parts]
     if used is not None and len(_calendar_seasons(parts)) > 1:
@@ -112,6 +129,7 @@ def calculate_period(
             month_fraction=_month_fraction(part, version, eligible=eligible),
             used_by_period=part_used,
             exported_by_period=part_exported,
+            quantities=quantities,
         )
         for (part, version), kwh, part_used, part_exported in zip(
             parts, shares, by_period, exports, strict=True
@@ -177,7 +195,8 @@ def _split(
                 if isinstance(component, SeasonalEnergy):
                     cuts |= _season_starts([s.dates.value for s in component.seasons], own)
             calendar = version.tou_calendar
-            if calendar is not None and any(c.needs_calendar for c in version.components):
+            seasonal = any(isinstance(c, QuantityCharge) and c.seasons for c in version.components)
+            if calendar is not None and (prices_by_period(version) or seasonal):
                 cuts |= _season_starts([s.dates.value for s in calendar.seasons], own)
     # The VAT table is contiguous, so every change is some rate's end; a period reaching
     # past the table's first start or last end is refused by `rate_for` either way.

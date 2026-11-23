@@ -18,6 +18,7 @@ class QuantityUnit(StrEnum):
     KWH = "kWh"
     DAY = "day"
     MONTH = "month"
+    KVA_MONTH = "kVA month"
 
 
 class SourceRole(StrEnum):

@@ -29,6 +29,7 @@ from munisense.domain.tariffs.components import (
     FlatEnergy,
     FreeBasicAllocation,
     PrintedLabel,
+    QuantityCharge,
     SeasonalEnergy,
     SeasonDates,
     TimeOfUseEnergy,
@@ -95,6 +96,7 @@ class TariffVersion(DomainModel):
         else:
             self._check_holiday_coverage(calendar)
             self._check_time_of_use_rates(calendar)
+            self._check_quantity_charges(calendar)
         self._check_export_credit()
         seasons: dict[str, SeasonDates] = (
             {s.name: s.dates.value for s in calendar.seasons} if calendar is not None else {}
@@ -118,6 +120,21 @@ class TariffVersion(DomainModel):
                         f"from {against}"
                     )
                     raise ValueError(msg)
+
+    def _check_quantity_charges(self, calendar: TouCalendar) -> None:
+        """A quantity charge's seasons and periods must be the calendar's."""
+        seasons = {s.name for s in calendar.seasons}
+        for component in self.components:
+            if not isinstance(component, QuantityCharge):
+                continue
+            unknown = sorted(set(component.seasons) - seasons)
+            if unknown:
+                msg = f"{component.name} names the season {unknown[0]!r}, which the calendar lacks"
+                raise ValueError(msg)
+            undefined = sorted(set(component.periods) - calendar.periods)
+            if undefined:
+                msg = f"{component.name} names the period {undefined[0]}, which the calendar lacks"
+                raise ValueError(msg)
 
     def _check_export_credit(self) -> None:
         """At most one export credit (a second would pay the cap twice); it needs a

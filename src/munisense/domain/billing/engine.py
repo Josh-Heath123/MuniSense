@@ -37,12 +37,14 @@ from decimal import Decimal
 from typing import assert_never
 
 from munisense.domain.billing.consumption import (
+    CustomerQuantities,
     PeriodTotal,
     TimeOfUseBuckets,
 )
 from munisense.domain.billing.errors import (
     FreeBasicEligibilityRequiredError,
     FreeBasicNotOfferedError,
+    InvalidQuantityError,
     NegativeBillError,
     NonMonthlyPeriodError,
     PeriodCrossesSeasonError,
@@ -86,6 +88,8 @@ from munisense.domain.tariffs import (
     FreeBasicAllocation,
     Levy,
     PriceBasis,
+    Quantity,
+    QuantityCharge,
     Season,
     SeasonalEnergy,
     TariffVersion,
@@ -104,14 +108,18 @@ def calculate_bill(
     vat_table: VatTable,
     *,
     free_basic_eligible: bool | None = None,
+    quantities: CustomerQuantities | None = None,
 ) -> Bill:
     """Calculate a bill, or raise a `DomainError` explaining why it cannot.
 
     `free_basic_eligible` says whether the customer qualifies for the tariff's free basic
     allocation. It is an input, never inferred: it must be given (`True` or `False`) for a
     tariff that has an allocation, and `True` is refused for a tariff without one.
+    `quantities` are the customer's quantities for the month (a maximum demand or a
+    capacity, in kVA) that the tariff's quantity charges are priced on (P4-9).
     """
     total_kwh, used_by_period, exported_by_period = read_consumption(version, consumption)
+    check_quantities([version], quantities)
     _check_calculable(version, period, free_basic_eligible=free_basic_eligible)
     return price_part(
         version,
@@ -122,7 +130,43 @@ def calculate_bill(
         month_fraction=None,
         used_by_period=used_by_period,
         exported_by_period=exported_by_period,
+        quantities=quantities,
     )
+
+
+def prices_by_period(version: TariffVersion) -> bool:
+    """True when the version prices kWh per time-of-use period (a time-of-use energy charge
+    or an export credit). A quantity charge limited to seasons needs the calendar too, but
+    does not price kWh per period."""
+    return any(is_priced_by_period(c) for c in version.components)
+
+
+def is_priced_by_period(component: Component) -> bool:
+    """True for a component priced from kWh per time-of-use period."""
+    return isinstance(component, TimeOfUseEnergy | ExportCredit)
+
+
+def check_quantities(
+    versions: list[TariffVersion],
+    quantities: CustomerQuantities | None,
+    *,
+    allow_unused: bool = False,
+) -> dict[Quantity, Decimal]:
+    """The quantities by name, once every quantity the versions' quantity charges are
+    priced on is given and none is given that no charge uses (it would be silently
+    ignored). A charge limited to seasons needs its quantity on any bill of its tariff.
+    Messages name only the fixed quantity names, never what was given."""
+    given = quantities.given() if quantities is not None else {}
+    needed = {c.quantity for v in versions for c in v.components if isinstance(c, QuantityCharge)}
+    missing = sorted(needed - given.keys())
+    if missing:
+        msg = f"give the customer's {missing[0].replace('_', ' ')} for the month"
+        raise InvalidQuantityError(msg)
+    unused = sorted(given.keys() - needed)
+    if unused and not allow_unused:
+        msg = f"the tariff has no charge on the {unused[0].replace('_', ' ')}"
+        raise InvalidQuantityError(msg)
+    return given
 
 
 def read_consumption(
@@ -136,7 +180,7 @@ def read_consumption(
     given (an absent period is never read as zero use, P4-4); any other version needs a
     period total. Exported kWh price only a version with an export credit; a period absent
     from the exports exported nothing (export is optional, P4-4)."""
-    priced_by_period = any(c.needs_calendar for c in version.components)
+    priced_by_period = prices_by_period(version)
     if isinstance(consumption, PeriodTotal):
         if priced_by_period:
             msg = "this tariff is priced by time of use: give the kWh used in each period"
@@ -174,6 +218,7 @@ def price_part(
     month_fraction: Decimal | None,
     used_by_period: Mapping[TouPeriod, Decimal] | None = None,
     exported_by_period: Mapping[TouPeriod, Decimal] | None = None,
+    quantities: CustomerQuantities | None = None,
 ) -> Bill:
     """Price one part of a period with one version (used by `calculate_bill` and by period
     splitting). `month_fraction` scales every monthly value (monthly charges and levies,
@@ -193,11 +238,19 @@ def price_part(
     }
 
     by_period = _time_of_use(version, period, used_by_period, exported_by_period)
+    calendar_season = _calendar_season(version, period)
+    # The entry points refused unused quantities across all the versions; a part priced by a
+    # version without a charge on one (a mid-month tariff change) must not refuse it again.
+    given = check_quantities([version], quantities, allow_unused=True)
     lines = [
         _quantise_line(line, policy.line_amount)
         for component in version.components
-        for line in _evaluate(
-            component, period, total_kwh, energy, seasons, eligible, scale, by_period
+        for line in (
+            _quantity_lines(component, given, calendar_season, scale)
+            if isinstance(component, QuantityCharge)
+            else _evaluate(
+                component, period, total_kwh, energy, seasons, eligible, scale, by_period
+            )
         )
     ]
     lines, vat = _apply_vat(lines, vat_rate, policy)
@@ -341,7 +394,7 @@ def _time_of_use(
     refuses a part across a calendar season boundary (`calculate_period` splits first) and
     use in a period the part's season does not have."""
     calendar = version.tou_calendar
-    if calendar is None or not any(c.needs_calendar for c in version.components):
+    if calendar is None or not prices_by_period(version):
         return None  # not priced by time of use, even with a calendar for its seasons
     if used is None:  # pragma: no cover - read_consumption refuses this first
         msg = "this tariff is priced by time of use: give the kWh used in each period"
@@ -369,6 +422,62 @@ def _time_of_use(
     return _TouPart(calendar.season_for(period.start), used, exported)
 
 
+def _calendar_season(version: TariffVersion, period: DateRange) -> CalendarSeason | None:
+    """The calendar season of a part, for a version with a quantity charge limited to
+    seasons; refuses a part across a season boundary (`calculate_period` splits first)."""
+    calendar = version.tou_calendar
+    limited = any(isinstance(c, QuantityCharge) and c.seasons for c in version.components)
+    if calendar is None or not limited:
+        return None
+    if len(calendar.seasons) > 1 and _crosses_a_season(calendar, period):
+        msg = (
+            "the billing period crosses a season boundary of the time-of-use calendar; "
+            "split it with calculate_period"
+        )
+        raise PeriodCrossesSeasonError(msg)
+    return calendar.season_for(period.start)
+
+
+def _quantity_lines(
+    component: QuantityCharge,
+    quantities: Mapping[Quantity, Decimal],
+    season: CalendarSeason | None,
+    scale: Decimal,
+) -> Iterator[LineItem]:
+    """The charge for the month (pro-rated like any monthly value): the customer's quantity
+    x the rate, only in the seasons it is limited to (citing the season's dates and
+    label)."""
+    if component.seasons and (season is None or season.name not in component.seasons):
+        return
+    quantity = quantities[component.quantity]
+    with exact():
+        kva_months = quantity * scale
+    name = component.quantity.value.replace("_", " ").replace(" kva", "")
+    during = (
+        f", in {' and '.join(p.value.replace('_', '-') for p in component.periods)} periods"
+        if component.periods
+        else ""
+    )
+    months = "1 month" if scale == 1 else f"{scale:f} of a month"
+    description = f"{name} {quantity:f} kVA{during}, {months}"
+    extra: tuple[Source, ...] = ()
+    if season is not None and component.seasons:
+        description = f"{season.label.value}: {description}"
+        extra = (
+            Source(
+                role=SourceRole.SEASON, citation=season.dates.citation, status=season.dates.kind
+            ),
+            Source(
+                role=SourceRole.SEASON_LABEL,
+                citation=season.label.citation,
+                status=season.label.kind,
+            ),
+        )
+    yield _line(
+        component, description, kva_months, QuantityUnit.KVA_MONTH, component.rate, extra=extra
+    )
+
+
 def _crosses_a_season(calendar: TouCalendar, period: DateRange) -> bool:
     """True when some day of the period is in another season than its first day. With two
     or more seasons, each is shorter than a year, so a period of more than 366 days always
@@ -381,7 +490,7 @@ def _crosses_a_season(calendar: TouCalendar, period: DateRange) -> bool:
 
 
 def _is_monthly(component: Component, free_basic_eligible: bool) -> bool:
-    if isinstance(component, BlockEnergy):
+    if isinstance(component, BlockEnergy | QuantityCharge):
         return True
     if isinstance(component, SeasonalEnergy):
         return component.has_thresholds
@@ -425,6 +534,8 @@ def _evaluate(
         if free_basic_eligible:
             target = energy[component.energy_component]
             yield from _free_basic(component, target, kwh, seasons, scale)
+    elif isinstance(component, QuantityCharge):  # pragma: no cover - priced by price_part
+        raise AssertionError
     else:
         yield from _energy(component, kwh, seasons, scale)
 

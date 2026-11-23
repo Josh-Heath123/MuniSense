@@ -25,6 +25,7 @@ from munisense.domain.billing import (
     calculate_period,
     calculate_purchase,
 )
+from munisense.domain.billing.engine import is_priced_by_period
 from munisense.domain.billing.errors import PeriodCrossesSeasonError
 from munisense.domain.citations import Cited
 from munisense.domain.money import Money, RateUnit, VatRate, VatTable
@@ -53,6 +54,7 @@ from support.builders import (
     fixture_flat,
     fixture_free_basic,
     fixture_levy,
+    fixture_quantity_charge,
     fixture_season,
     fixture_seasonal,
     fixture_tou_energy,
@@ -349,15 +351,17 @@ def test_a_long_period_on_a_one_season_calendar_does_no_unbounded_work(
 
 
 def test_every_component_priced_by_period_needs_a_calendar() -> None:
-    """Pricing by time of use and needing a calendar must not drift apart: only the
-    time-of-use energy charge needs one, and every member of the union is checked."""
-    instances = {
+    """Pricing by period and needing a calendar must not drift apart. Every member of the
+    union is checked: only time-of-use energy and the export credit price kWh per period
+    (`prices_by_period`); those and a quantity charge limited to seasons need a calendar."""
+    instances: dict[str, Component] = {
         "fixed_charge": fixture_fixed("1"),
         "flat_energy": fixture_flat("1"),
         "block_energy": fixture_blocks((None, "1")),
         "seasonal_energy": fixture_seasonal(fixture_season("all", (1, 1), (12, 31), (None, "1"))),
         "time_of_use_energy": fixture_tou_energy(),
         "export_credit": fixture_export_credit(),
+        "quantity_charge": fixture_quantity_charge(),
         "levy": fixture_levy("1"),
         "free_basic_allocation": fixture_free_basic("50"),
     }
@@ -368,6 +372,9 @@ def test_every_component_priced_by_period_needs_a_calendar() -> None:
         "time_of_use_energy",
         "export_credit",
     }
+    assert fixture_quantity_charge(seasons=("high",)).needs_calendar
+    by_period = {kind for kind, component in instances.items() if is_priced_by_period(component)}
+    assert by_period == {"time_of_use_energy", "export_credit"}
 
 
 def test_a_free_basic_allocation_cannot_target_time_of_use_energy() -> None:
