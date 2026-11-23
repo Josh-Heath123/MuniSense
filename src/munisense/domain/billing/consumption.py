@@ -21,6 +21,7 @@ from pydantic import AfterValidator, Field, model_validator
 from munisense.domain.base import DomainModel
 from munisense.domain.billing.errors import UnsupportedConsumptionError
 from munisense.domain.money import ExactDecimal
+from munisense.domain.tariffs.components import Quantity
 from munisense.domain.tariffs.tou_period import TouPeriod
 
 
@@ -61,6 +62,21 @@ class TimeOfUseBuckets(DomainModel):
             msg = "a period is exported but not given as used (give its use, even 0)"
             raise ValueError(msg)
         return self
+
+
+class CustomerQuantities(DomainModel):
+    """The customer's quantities for one billing month, in kVA, that quantity charges are
+    priced on (P4-9). Each is optional, exact, never negative (a negative zero becomes
+    zero); unknown names are refused, and nothing here is ever stored or logged."""
+
+    measured_maximum_demand_kva: Kwh | None = None
+    notified_maximum_demand_kva: Kwh | None = None
+    annual_utilised_capacity_kva: Kwh | None = None
+
+    def given(self) -> dict[Quantity, Decimal]:
+        """The quantities given, by name."""
+        values = {q: getattr(self, q.value) for q in Quantity}
+        return {q: v for q, v in values.items() if v is not None}
 
 
 ConsumptionProfile = Annotated[PeriodTotal | TimeOfUseBuckets, Field(discriminator="kind")]

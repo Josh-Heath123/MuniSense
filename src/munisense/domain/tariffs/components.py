@@ -364,8 +364,11 @@ class Quantity(StrEnum):
 
     MEASURED_MAXIMUM_DEMAND_KVA = "measured_maximum_demand_kva"
     NOTIFIED_MAXIMUM_DEMAND_KVA = "notified_maximum_demand_kva"
-    UTILISED_CAPACITY_KVA = "utilised_capacity_kva"
-    """Eskom: "the higher of the notified maximum demand (NMD) or the maximum demand"."""
+    ANNUAL_UTILISED_CAPACITY_KVA = "annual_utilised_capacity_kva"
+    """Eskom: "the higher of the notified maximum demand (NMD) or the maximum demand, per
+    POD/point of supply measured in kVA, and registered during a rolling 12-month period"
+    (2026/27 tariff book, definitions). Eskom's "monthly utilised capacity" (registered
+    during the billing month) is a different quantity, not modelled yet."""
 
 
 class QuantityCharge(_ComponentBase):

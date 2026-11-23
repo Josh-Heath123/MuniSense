@@ -7,9 +7,9 @@ class UnsupportedConsumptionError(DomainError):
     """The consumption profile is of a kind the engine cannot evaluate yet."""
 
 
-class MissingQuantityError(DomainError):
-    """A quantity a charge is priced on (a maximum demand or a capacity) is missing,
-    negative, or given for a tariff with no charge on it."""
+class InvalidQuantityError(DomainError):
+    """A quantity a charge is priced on (a maximum demand or a capacity) is missing, or
+    given for a tariff with no charge on it, or for a period of more than one month."""
 
 
 class NegativeBillError(DomainError):

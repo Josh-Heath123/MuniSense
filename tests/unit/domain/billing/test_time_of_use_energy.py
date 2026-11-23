@@ -25,6 +25,7 @@ from munisense.domain.billing import (
     calculate_period,
     calculate_purchase,
 )
+from munisense.domain.billing.engine import is_priced_by_period
 from munisense.domain.billing.errors import PeriodCrossesSeasonError
 from munisense.domain.citations import Cited
 from munisense.domain.money import Money, RateUnit, VatRate, VatTable
@@ -350,9 +351,10 @@ def test_a_long_period_on_a_one_season_calendar_does_no_unbounded_work(
 
 
 def test_every_component_priced_by_period_needs_a_calendar() -> None:
-    """Pricing by time of use and needing a calendar must not drift apart: only the
-    time-of-use energy charge needs one, and every member of the union is checked."""
-    instances = {
+    """Pricing by period and needing a calendar must not drift apart. Every member of the
+    union is checked: only time-of-use energy and the export credit price kWh per period
+    (`prices_by_period`); those and a quantity charge limited to seasons need a calendar."""
+    instances: dict[str, Component] = {
         "fixed_charge": fixture_fixed("1"),
         "flat_energy": fixture_flat("1"),
         "block_energy": fixture_blocks((None, "1")),
@@ -370,6 +372,9 @@ def test_every_component_priced_by_period_needs_a_calendar() -> None:
         "time_of_use_energy",
         "export_credit",
     }
+    assert fixture_quantity_charge(seasons=("high",)).needs_calendar
+    by_period = {kind for kind, component in instances.items() if is_priced_by_period(component)}
+    assert by_period == {"time_of_use_energy", "export_credit"}
 
 
 def test_a_free_basic_allocation_cannot_target_time_of_use_energy() -> None:

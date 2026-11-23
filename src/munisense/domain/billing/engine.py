@@ -37,13 +37,14 @@ from decimal import Decimal
 from typing import assert_never
 
 from munisense.domain.billing.consumption import (
+    CustomerQuantities,
     PeriodTotal,
     TimeOfUseBuckets,
 )
 from munisense.domain.billing.errors import (
     FreeBasicEligibilityRequiredError,
     FreeBasicNotOfferedError,
-    MissingQuantityError,
+    InvalidQuantityError,
     NegativeBillError,
     NonMonthlyPeriodError,
     PeriodCrossesSeasonError,
@@ -107,7 +108,7 @@ def calculate_bill(
     vat_table: VatTable,
     *,
     free_basic_eligible: bool | None = None,
-    quantities: Mapping[Quantity, Decimal] | None = None,
+    quantities: CustomerQuantities | None = None,
 ) -> Bill:
     """Calculate a bill, or raise a `DomainError` explaining why it cannot.
 
@@ -137,28 +138,32 @@ def prices_by_period(version: TariffVersion) -> bool:
     """True when the version prices kWh per time-of-use period (a time-of-use energy charge
     or an export credit). A quantity charge limited to seasons needs the calendar too, but
     does not price kWh per period."""
-    return any(isinstance(c, TimeOfUseEnergy | ExportCredit) for c in version.components)
+    return any(is_priced_by_period(c) for c in version.components)
+
+
+def is_priced_by_period(component: Component) -> bool:
+    """True for a component priced from kWh per time-of-use period."""
+    return isinstance(component, TimeOfUseEnergy | ExportCredit)
 
 
 def check_quantities(
-    versions: list[TariffVersion], quantities: Mapping[Quantity, Decimal] | None
-) -> None:
-    """Every quantity the versions' quantity charges are priced on is given, none is
-    negative, and none is given that no charge uses (it would be silently ignored)."""
-    given = dict(quantities or {})
+    versions: list[TariffVersion], quantities: CustomerQuantities | None
+) -> dict[Quantity, Decimal]:
+    """The quantities by name, once every quantity the versions' quantity charges are
+    priced on is given and none is given that no charge uses (it would be silently
+    ignored). A charge limited to seasons needs its quantity on any bill of its tariff.
+    Messages name only the fixed quantity names, never what was given."""
+    given = quantities.given() if quantities is not None else {}
     needed = {c.quantity for v in versions for c in v.components if isinstance(c, QuantityCharge)}
     missing = sorted(needed - given.keys())
     if missing:
         msg = f"give the customer's {missing[0].replace('_', ' ')} for the month"
-        raise MissingQuantityError(msg)
+        raise InvalidQuantityError(msg)
     unused = sorted(given.keys() - needed)
     if unused:
         msg = f"the tariff has no charge on the {unused[0].replace('_', ' ')}"
-        raise MissingQuantityError(msg)
-    for value in given.values():
-        if not isinstance(value, Decimal) or not value.is_finite() or value < 0:
-            msg = "a quantity must be a non-negative exact decimal"
-            raise MissingQuantityError(msg)
+        raise InvalidQuantityError(msg)
+    return given
 
 
 def read_consumption(
@@ -210,7 +215,7 @@ def price_part(
     month_fraction: Decimal | None,
     used_by_period: Mapping[TouPeriod, Decimal] | None = None,
     exported_by_period: Mapping[TouPeriod, Decimal] | None = None,
-    quantities: Mapping[Quantity, Decimal] | None = None,
+    quantities: CustomerQuantities | None = None,
 ) -> Bill:
     """Price one part of a period with one version (used by `calculate_bill` and by period
     splitting). `month_fraction` scales every monthly value (monthly charges and levies,
@@ -231,11 +236,12 @@ def price_part(
 
     by_period = _time_of_use(version, period, used_by_period, exported_by_period)
     calendar_season = _calendar_season(version, period)
+    given = check_quantities([version], quantities)
     lines = [
         _quantise_line(line, policy.line_amount)
         for component in version.components
         for line in (
-            _quantity_lines(component, quantities or {}, calendar_season, scale)
+            _quantity_lines(component, given, calendar_season, scale)
             if isinstance(component, QuantityCharge)
             else _evaluate(
                 component, period, total_kwh, energy, seasons, eligible, scale, by_period
@@ -434,7 +440,8 @@ def _quantity_lines(
     scale: Decimal,
 ) -> Iterator[LineItem]:
     """The charge for the month (pro-rated like any monthly value): the customer's quantity
-    x the rate, only in the seasons it is limited to."""
+    x the rate, only in the seasons it is limited to (citing the season's dates and
+    label)."""
     if component.seasons and (season is None or season.name not in component.seasons):
         return
     quantity = quantities[component.quantity]
@@ -450,9 +457,15 @@ def _quantity_lines(
     description = f"{name} {quantity:f} kVA{during}, {months}"
     extra: tuple[Source, ...] = ()
     if season is not None and component.seasons:
+        description = f"{season.label.value}: {description}"
         extra = (
             Source(
                 role=SourceRole.SEASON, citation=season.dates.citation, status=season.dates.kind
+            ),
+            Source(
+                role=SourceRole.SEASON_LABEL,
+                citation=season.label.citation,
+                status=season.label.kind,
             ),
         )
     yield _line(

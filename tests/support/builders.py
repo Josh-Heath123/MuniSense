@@ -512,7 +512,7 @@ def fixture_export_credit(
 
 def fixture_quantity_charge(
     rand_per_kva: str = "50.00",
-    quantity: Quantity = Quantity.UTILISED_CAPACITY_KVA,
+    quantity: Quantity = Quantity.ANNUAL_UTILISED_CAPACITY_KVA,
     name: str = "network_capacity",
     seasons: tuple[str, ...] = (),
     periods: tuple[TouPeriod, ...] = (),
