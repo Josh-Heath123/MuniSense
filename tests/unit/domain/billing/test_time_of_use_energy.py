@@ -48,6 +48,7 @@ from support.builders import (
     fixture_blocks,
     fixture_calendar,
     fixture_citation,
+    fixture_export_credit,
     fixture_fixed,
     fixture_flat,
     fixture_free_basic,
@@ -356,13 +357,17 @@ def test_every_component_priced_by_period_needs_a_calendar() -> None:
         "block_energy": fixture_blocks((None, "1")),
         "seasonal_energy": fixture_seasonal(fixture_season("all", (1, 1), (12, 31), (None, "1"))),
         "time_of_use_energy": fixture_tou_energy(),
+        "export_credit": fixture_export_credit(),
         "levy": fixture_levy("1"),
         "free_basic_allocation": fixture_free_basic("50"),
     }
     union = get_args(get_args(Component)[0])
     kinds = {get_args(m.model_fields["kind"].annotation)[0] for m in union}
     assert kinds == set(instances)
-    assert {k for k, c in instances.items() if c.needs_calendar} == {"time_of_use_energy"}
+    assert {k for k, c in instances.items() if c.needs_calendar} == {
+        "time_of_use_energy",
+        "export_credit",
+    }
 
 
 def test_a_free_basic_allocation_cannot_target_time_of_use_energy() -> None:

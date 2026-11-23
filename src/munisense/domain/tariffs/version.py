@@ -25,6 +25,7 @@ from munisense.domain.periods import DateRange
 from munisense.domain.tariffs.components import (
     BlockEnergy,
     Component,
+    ExportCredit,
     FlatEnergy,
     FreeBasicAllocation,
     PrintedLabel,
@@ -94,6 +95,10 @@ class TariffVersion(DomainModel):
         else:
             self._check_holiday_coverage(calendar)
             self._check_time_of_use_rates(calendar)
+        has_credit = any(isinstance(c, ExportCredit) for c in self.components)
+        if has_credit and self.billing_policy.export_cap is None:
+            msg = "a version with an export credit needs its billing policy's export cap"
+            raise ValueError(msg)
         seasons: dict[str, SeasonDates] = (
             {s.name: s.dates.value for s in calendar.seasons} if calendar is not None else {}
         )
@@ -122,7 +127,7 @@ class TariffVersion(DomainModel):
         of the calendar uses: none missing, none for a season or period it lacks (P4-7)."""
         expected = {(s.name, p) for s in calendar.seasons for p in calendar.periods_in(s.name)}
         for component in self.components:
-            if not isinstance(component, TimeOfUseEnergy):
+            if not isinstance(component, TimeOfUseEnergy | ExportCredit):
                 continue
             given = {(r.season, r.period) for r in component.rates}
             if given - expected:

@@ -31,6 +31,8 @@ from munisense.domain.tariffs import (
     ConsumptionSplit,
     DaySchedule,
     DayType,
+    ExportCap,
+    ExportCredit,
     FixedCharge,
     FlatEnergy,
     FreeBasicAllocation,
@@ -110,6 +112,7 @@ MILLIONTHS_HALF_UP = Quantisation(step=Decimal("0.000001"), mode=RoundingMode.HA
 def fixture_billing_policy(
     status: Status = FIXTURE_STATUS,
     fixed_charges: PrepaidFixedCharges = PrepaidFixedCharges.FIRST_PURCHASE_OF_MONTH,
+    export_cap: ExportCap | None = None,
 ) -> BillingPolicy:
     return BillingPolicy(
         name="fixture-billing",
@@ -117,6 +120,7 @@ def fixture_billing_policy(
         consumption_split=ConsumptionSplit.BY_DAYS,
         block_reset=BlockReset.CALENDAR_MONTH,
         prepaid_fixed_charges=fixed_charges,
+        export_cap=export_cap,
         status=status,
         evidence=() if isinstance(status, Estimated) else (fixture_citation("pro rata"),),
     )
@@ -463,6 +467,38 @@ def fixture_tou_energy(
         name=name,
         label=cited_label("Active energy charge", status),
         vat=cited_vat(status=status),
+        rates=tuple(
+            TouRate(
+                season=season, period=period, rate=cited_rate(c, RateUnit.CENTS_PER_KWH, status)
+            )
+            for (season, period), c in cents.items()
+        ),
+    )
+
+
+# Made-up export credit rates, each below the fixture energy rate of its period.
+FIXTURE_EXPORT_CENTS: dict[tuple[str, TouPeriod], str] = {
+    ("high", TouPeriod.PEAK): "400",
+    ("high", TouPeriod.STANDARD): "150",
+    ("high", TouPeriod.OFF_PEAK): "80",
+    ("low", TouPeriod.PEAK): "250",
+    ("low", TouPeriod.STANDARD): "120",
+    ("low", TouPeriod.OFF_PEAK): "80",
+}
+
+
+def fixture_export_credit(
+    cents: dict[tuple[str, TouPeriod], str] = FIXTURE_EXPORT_CENTS,
+    name: str = "export_credit",
+    vat: VatTreatment = VatTreatment.STANDARD,
+    status: Status = FIXTURE_STATUS,
+) -> ExportCredit:
+    return ExportCredit(
+        schema_version=1,
+        kind="export_credit",
+        name=name,
+        label=cited_label("Gen-offset credit", status),
+        vat=cited_vat(vat, status),
         rates=tuple(
             TouRate(
                 season=season, period=period, rate=cited_rate(c, RateUnit.CENTS_PER_KWH, status)

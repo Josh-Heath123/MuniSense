@@ -314,22 +314,21 @@ class TouRate(DomainModel):
     rate: Cited[Rate]
 
 
-class TimeOfUseEnergy(_ComponentBase):
-    """Energy priced by time of use (ADR-0016 point 6): a cited rate per kWh for each
-    period of each season of the version's calendar. The version checks that the rates
-    name exactly the seasons and periods its calendar defines."""
+class _PerPeriodRates(_ComponentBase):
+    """A component with a cited rate per kWh for each period of each season of the
+    version's calendar; the version checks the rates name exactly the seasons and periods
+    its calendar defines."""
 
-    kind: Literal["time_of_use_energy"]
     rates: Annotated[tuple[TouRate, ...], Field(min_length=1, max_length=36)]
 
     @model_validator(mode="after")
     def _one_rate_per_season_and_period(self) -> Self:
         keys = [(r.season, r.period) for r in self.rates]
         if len(set(keys)) != len(keys):
-            msg = "a time-of-use energy charge has one rate per season and period"
+            msg = "a time-of-use component has one rate per season and period"
             raise ValueError(msg)
         for rate in self.rates:
-            _require_unit(rate.rate, {CanonicalUnit.RAND_PER_KWH}, "a time-of-use energy rate")
+            _require_unit(rate.rate, {CanonicalUnit.RAND_PER_KWH}, "a time-of-use rate")
         return self
 
     @property
@@ -345,12 +344,28 @@ class TimeOfUseEnergy(_ComponentBase):
         return found
 
 
+class TimeOfUseEnergy(_PerPeriodRates):
+    """Energy priced by time of use (ADR-0016 point 6): a cited rate per kWh used in each
+    period of each season."""
+
+    kind: Literal["time_of_use_energy"]
+
+
+class ExportCredit(_PerPeriodRates):
+    """A credit for exported energy (ADR-0016 point 6): a cited rate per kWh credited in
+    each period of each season. The kWh credited are capped by the billing policy's
+    `export_cap`; the credit is a negative line with its own cited VAT treatment."""
+
+    kind: Literal["export_credit"]
+
+
 Component = Annotated[
     FixedCharge
     | FlatEnergy
     | BlockEnergy
     | SeasonalEnergy
     | TimeOfUseEnergy
+    | ExportCredit
     | Levy
     | FreeBasicAllocation,
     Field(discriminator="kind"),

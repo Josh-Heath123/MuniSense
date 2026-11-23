@@ -75,18 +75,21 @@ def calculate_period(
     parts = _split(ordered, period, vat_table)
     pricing = list(dict.fromkeys(version for _, version in parts))
     readings = [read_consumption(version, consumption) for version in pricing]
-    total_kwh, used = readings[0]  # every version that prices a part accepts it
+    total_kwh, used, exported = readings[0]  # every version that prices a part accepts it
     ranges = [part for part, _ in parts]
     if used is not None and len(_calendar_seasons(parts)) > 1:
         _check_each_season_has_the_periods(parts, used)
     if used is None:
         shares = _shares(total_kwh, period, ranges, parts[0][1])
         by_period: list[dict[TouPeriod, Decimal] | None] = [None] * len(parts)
+        exports: list[dict[TouPeriod, Decimal] | None] = [None] * len(parts)
     else:
         # Each period's kWh are shared on their own; a part's total is the sum of its
         # periods' shares, so the two always agree.
         per_period = {p: _shares(kwh, period, ranges, parts[0][1]) for p, kwh in used.items()}
         by_period = [{p: per_period[p][i] for p in used} for i in range(len(parts))]
+        out = {p: _shares(kwh, period, ranges, parts[0][1]) for p, kwh in (exported or {}).items()}
+        exports = [{p: out[p][i] for p in out} for i in range(len(parts))]
         with exact():
             shares = [sum(part.values(), Decimal(0)) for part in by_period if part is not None]
     eligible = bool(free_basic_eligible)
@@ -99,8 +102,11 @@ def calculate_period(
             free_basic_eligible=free_basic_eligible,
             month_fraction=_month_fraction(part, version, eligible=eligible),
             used_by_period=part_used,
+            exported_by_period=part_exported,
         )
-        for (part, version), kwh, part_used in zip(parts, shares, by_period, strict=True)
+        for (part, version), kwh, part_used, part_exported in zip(
+            parts, shares, by_period, exports, strict=True
+        )
     ]
     split = len(bills) > 1 or any(bill.month_fraction is not None for bill in bills)
     across_seasons = used is not None and len(_calendar_seasons(parts)) > 1

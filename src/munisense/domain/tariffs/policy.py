@@ -47,6 +47,15 @@ class PrepaidFixedCharges(StrEnum):
     """Not deducted from purchases (for example billed separately); purchases buy energy."""
 
 
+class ExportCap(StrEnum):
+    """How much exported energy an export credit pays for (ADR-0016 point 6)."""
+
+    USE_IN_PERIOD_PER_CALENDAR_MONTH = "use_in_period_per_calendar_month"
+    """In each time-of-use period, at most the kWh used in that period in the same calendar
+    month (Eskom: "up to and equal to the consumption per time-of-use period", credited "at
+    the end of each month"; reading "month" as the calendar month is this policy's choice)."""
+
+
 class BillingPolicy(DomainModel):
     """A supplier's named way of applying its tariff to a billing period."""
 
@@ -55,6 +64,9 @@ class BillingPolicy(DomainModel):
     consumption_split: ConsumptionSplit
     block_reset: BlockReset
     prepaid_fixed_charges: PrepaidFixedCharges
+    export_cap: ExportCap | None = Field(default=None, exclude_if=lambda value: value is None)
+    """Needed by a version with an export credit (P4-8); added under schema version 1 and
+    left out of the output when absent (ADR-0016 point 3)."""
     status: VerificationStatus
     evidence: Annotated[tuple[Citation, ...], Field(max_length=100)]
     """Citations of what the policy rests on: a schedule's own words (for example "billed
