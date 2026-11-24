@@ -26,6 +26,9 @@ Two departures from ADR-0012 section 6, put to the owner as W22: the tables are 
 refilled in one transaction rather than the schema dropped and recreated (the migration role
 may not create a schema, and a failed load keeps the previous contents), and publications
 load in record order rather than sorted path order (the order the foreign keys need).
+
+A source manifest's `drawn` list (ADR-0016 point 5) is not loaded: only the publish step and
+the publication guards use it, and the database never re-runs the citation check.
 """
 
 import hashlib

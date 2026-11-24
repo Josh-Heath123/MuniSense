@@ -19,7 +19,6 @@ from munisense.provenance.sources import (
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-ESKOM: dict[str, Any] = json.loads((ROOT / "data/sources/eskom/sources.json").read_text("utf-8"))
 SARS: dict[str, Any] = json.loads((ROOT / "data/sources/sars/sources.json").read_text("utf-8"))
 SHA = "a" * 64
 
@@ -91,32 +90,6 @@ def test_drawn_texts_are_per_page_and_whitespace_normalised() -> None:
     assert document.drawn_texts(2) == {"Peak 6 to 8", "Standard 8 to 17"}
     assert document.drawn_texts(3) == {"x"}
     assert document.drawn_texts(4) == frozenset()
-
-
-def test_the_eskom_manifest_lists_the_three_drawn_pages() -> None:
-    manifest = SourceManifest.model_validate_json(json.dumps(ESKOM))
-    pages = {
-        document.file: [item.page for item in document.drawn or ()]
-        for document in manifest.documents
-    }
-    assert pages == {
-        "schedule-of-standard-prices-2026-27.pdf": [33, 56],
-        "tariffs-and-charges-booklet-2026-27.pdf": [45],
-    }
-
-
-def test_the_book_and_the_schedule_read_the_clocks_alike() -> None:
-    """The six ring readings agree between book page 45 and schedule page 56, apart from
-    how each page spells the season (with or without a hyphen)."""
-    manifest = SourceManifest.model_validate_json(json.dumps(ESKOM))
-    texts = {
-        (document.file, item.page): [t.replace("-Demand", " Demand") for t in item.texts]
-        for document in manifest.documents
-        for item in document.drawn or ()
-    }
-    book = texts[("tariffs-and-charges-booklet-2026-27.pdf", 45)]
-    assert book == texts[("schedule-of-standard-prices-2026-27.pdf", 56)]
-    assert len(book) == 6
 
 
 # --- a citation's drawn flag -----------------------------------------------------------

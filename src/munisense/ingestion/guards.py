@@ -246,17 +246,16 @@ def check_set(data: Path, loaded: list[Loaded]) -> list[str]:  # one rule per bl
 
 
 def _drawn_count_shape(publication: Loaded) -> list[str]:
-    """A version records a `drawn` count exactly when its label is not an earlier one."""
+    """A version records a `drawn` count under the current label and never under an
+    earlier one. Any other label is refused elsewhere (an added file must carry the
+    current label; files on the base cannot change)."""
     checks = publication.publication.publication.checks
     if not isinstance(checks, PublishChecks):
         return []
-    has_drawn = checks.citation_check.drawn is not None
-    earlier = checks.tool_version in EARLIER_TOOL_VERSIONS
-    if earlier and has_drawn:
-        label = checks.tool_version
+    label, has_drawn = checks.tool_version, checks.citation_check.drawn is not None
+    if label in EARLIER_TOOL_VERSIONS and has_drawn:
         return [f"{publication.id}: tool label {label!r} never records a drawn count"]
-    if not earlier and not has_drawn:
-        label = checks.tool_version
+    if label == TOOL_VERSION and not has_drawn:
         return [f"{publication.id}: tool label {label!r} must record a drawn count"]
     return []
 
@@ -412,7 +411,7 @@ def _drawn_lists(repo: Path, revision: str, path: str) -> dict[str, object] | No
         return {
             str(document["sha256"]): document.get("drawn") for document in manifest["documents"]
         }
-    except (json.JSONDecodeError, KeyError, TypeError):
+    except (json.JSONDecodeError, KeyError, TypeError, RecursionError):
         return None
 
 
@@ -421,25 +420,38 @@ def drawn_lists_unchanged(repo: Path, base: str) -> list[str]:
 
     Compares the raw lists of every source manifest changed since the merge base, so any
     edit to a list (or a list added with a new document or manifest) is refused, whatever
-    its formatting."""
+    its formatting. Any symbolic link or submodule added, removed or changed under
+    `data/sources/` is refused too: the loader follows a linked folder, so a manifest read
+    through one would not be the one compared here (P4-11 security review)."""
     commit = _git(repo, "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}").strip()
     merge_base = _git(repo, "merge-base", commit, "HEAD").strip()
-    changed = [
-        n
-        for n in _git(
-            repo,
-            "diff",
-            "--name-only",
-            "-z",
-            "--no-renames",
-            merge_base,
-            "HEAD",
-            "--",
-            ":(icase)data/sources",
-        ).split("\0")
-        if n
+    raw = _git(
+        repo,
+        "diff",
+        "--raw",
+        "-z",
+        "--no-color",
+        "--no-ext-diff",
+        "--no-renames",
+        merge_base,
+        "HEAD",
+        "--",
+        ":(icase)data/sources",
+    ).split("\0")
+    changed, links = [], []
+    for header, path in zip(raw[0:-1:2], raw[1::2], strict=True):
+        old_mode, new_mode = header.lstrip(":").split(" ")[:2]
+        # The loader's glob follows a symbolic link to a folder, so a manifest could be read
+        # from outside what git shows here: refuse links and submodules outright.
+        if {old_mode, new_mode} - {"000000", "100644", "100755"}:
+            links.append(path)
+        else:
+            changed.append(path)
+    problems = [
+        f"{path}: a symbolic link or submodule under data/sources; change it in its own"
+        " pull request"
+        for path in sorted(links)
     ]
-    problems = []
     for path in sorted(changed):
         if not path.casefold().endswith("/sources.json"):
             continue

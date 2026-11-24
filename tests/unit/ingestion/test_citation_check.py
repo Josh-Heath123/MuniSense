@@ -491,61 +491,68 @@ class _Drawn(DomainModel):
     values: tuple[Cited[str], ...]
 
 
-def _drawn_citations(*, drawn: bool, change: str = "") -> tuple[_Drawn, list[str]]:
-    """One citation per listed drawn text of every committed manifest."""
-    values, texts = [], []
-    for _path, document in sorted(_documents().values(), key=lambda pair: pair[0]):
-        for item in document.drawn or ():
-            for text in item.texts:
-                citation = Citation(
-                    document_sha256=document.sha256,
-                    page=item.page,
+def _book_listing(*texts: str) -> dict[str, tuple[Path, SourceDocument]]:
+    """The committed documents, with `texts` listed as drawn on the book's page 45."""
+    documents = _documents()
+    path, book = next(
+        (p, d) for p, d in documents.values() if d.file.startswith("tariffs-and-charges")
+    )
+    item = {"page": 45, "what": "a test listing", "texts": list(texts)}
+    listed = SourceDocument.model_validate_json(
+        json.dumps({**json.loads(book.model_dump_json()), "drawn": [item]})
+    )
+    return {**documents, book.sha256: (path, listed)}
+
+
+def _cite(documents: dict[str, tuple[Path, SourceDocument]], *texts: str, drawn: bool) -> _Drawn:
+    book = next(d for _, d in documents.values() if d.file.startswith("tariffs-and-charges"))
+    return _Drawn(
+        values=tuple(
+            Cited[str](
+                value="x",
+                citation=Citation(
+                    document_sha256=book.sha256,
+                    page=45,
                     locator="drawn item",
-                    printed_text=text + change,
+                    printed_text=text,
                     drawn=True if drawn else None,
-                )
-                values.append(
-                    Cited[str](value="x", citation=citation, status=Estimated(reason="test"))
-                )
-                texts.append(text)
-    return _Drawn(values=tuple(values)), texts
+                ),
+                status=Estimated(reason="test"),
+            )
+            for text in texts
+        )
+    )
+
+
+TEST_RINGS = ("Test ring, Weekdays: Peak 6 to 8", "Test ring, Sunday: Standard 17 to 19")
 
 
 @pytest.mark.slow
-def test_every_listed_drawn_text_gives_drawn_on_its_committed_page() -> None:
-    """Every listed text is usable: none is in its page's text layer (ADR-0016 point 5)."""
-    model, texts = _drawn_citations(drawn=True)
-    results = check_citations(model, _documents())
-    assert len(results) == len(texts) == 13
-    assert {r.outcome for r in results} == {Outcome.DRAWN}
-    assert sorted({r.page for r in results}) == [33, 45, 56]
+def test_a_listed_drawn_text_gives_drawn_on_the_real_page() -> None:
+    documents = _book_listing(*TEST_RINGS)
+    results = check_citations(_cite(documents, *TEST_RINGS, drawn=True), documents)
+    assert [r.outcome for r in results] == [Outcome.DRAWN, Outcome.DRAWN]
 
 
 @pytest.mark.slow
-def test_listed_drawn_texts_fail_unflagged_or_mistyped() -> None:
-    unflagged, _ = _drawn_citations(drawn=False)
-    mistyped, _ = _drawn_citations(drawn=True, change="0")
-    for model in (unflagged, mistyped):
-        assert {r.outcome for r in check_citations(model, _documents())} == {Outcome.FAILED}
+def test_a_listed_text_fails_unflagged_unlisted_or_mistyped() -> None:
+    listed = _book_listing(*TEST_RINGS)
+    cases = [
+        (listed, _cite(listed, *TEST_RINGS, drawn=False)),  # not flagged
+        (_documents(), _cite(listed, *TEST_RINGS, drawn=True)),  # not listed
+        (listed, _cite(listed, *(t + "0" for t in TEST_RINGS), drawn=True)),  # mistyped
+        (listed, _cite(listed, "Peak 6 to 8", drawn=True)),  # a substring of a listed text
+    ]
+    for documents, model in cases:
+        assert {r.outcome for r in check_citations(model, documents)} == {Outcome.FAILED}
 
 
 @pytest.mark.slow
 def test_a_text_in_the_text_layer_cannot_be_claimed_as_drawn() -> None:
     """Book page 45 prints "Peak" as text (the legend). Even if a manifest listed it as
     drawn, a drawn citation of it fails."""
-    documents = _documents()
-    path, book = next(
-        (p, d) for p, d in documents.values() if d.file.startswith("tariffs-and-charges")
-    )
-    item = {"page": 45, "what": "the legend", "texts": ["Peak"]}
-    listed = SourceDocument.model_validate_json(
-        json.dumps({**json.loads(book.model_dump_json()), "drawn": [item]})
-    )
-    citation = Citation(
-        document_sha256=book.sha256, page=45, locator="legend", printed_text="Peak", drawn=True
-    )
-    model = _Drawn(values=(Cited[str](value="x", citation=citation, status=Estimated(reason="t")),))
-    [result] = check_citations(model, {**documents, book.sha256: (path, listed)})
+    documents = _book_listing("Peak")
+    [result] = check_citations(_cite(documents, "Peak", drawn=True), documents)
     assert (result.outcome, result.reason) == (
         Outcome.FAILED,
         "the text is in the page's text layer; cite it without drawn",

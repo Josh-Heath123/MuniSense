@@ -68,6 +68,21 @@ def git(repo: Path, *args: str) -> str:
     ).stdout
 
 
+ESKOM_MANIFEST = Path("data/sources/eskom/sources.json")
+
+
+def _change_manifest_at(path: Path, change: object) -> None:
+    body = json.loads(path.read_text("utf-8"))
+    change(body)  # type: ignore[operator]
+    path.write_text(canonical.dumps(body), encoding="utf-8")
+
+
+def _list_drawn_items(body: dict[str, Any]) -> None:
+    """Made-up drawn lists on both Eskom documents, committed on the base branch."""
+    for document in body["documents"]:
+        document["drawn"] = [{"page": 33, "what": "a test figure", "texts": ["Test 1"]}]
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """A repository whose main branch holds Tariff B r1 and the VAT rate r1."""
@@ -78,6 +93,7 @@ def repo(tmp_path: Path) -> Path:
         tmp_path / "data" / "sources",
         ignore=shutil.ignore_patterns("*.pdf"),
     )
+    _change_manifest_at(tmp_path / ESKOM_MANIFEST, _list_drawn_items)
     git(tmp_path, "init", "-q", "-b", "main")
     clock = Clock()
     data = tmp_path / "data"
@@ -741,9 +757,6 @@ def test_an_added_label_2_publication_is_refused(repo: Path) -> None:
     ]
 
 
-ESKOM_MANIFEST = Path("data/sources/eskom/sources.json")
-
-
 def _change_manifest(repo: Path, change: object) -> None:
     path = repo / ESKOM_MANIFEST
     body = json.loads(path.read_text("utf-8"))
@@ -756,7 +769,7 @@ def _drop_book_drawn(body: dict[str, Any]) -> None:
 
 
 def _edit_a_drawn_text(body: dict[str, Any]) -> None:
-    body["documents"][0]["drawn"][0]["texts"] = ["Homeflex 3 R 52.89"]
+    body["documents"][0]["drawn"][0]["texts"] = ["Test 2"]
 
 
 def _retitle(body: dict[str, Any]) -> None:
@@ -821,3 +834,43 @@ def test_a_manifest_that_cannot_be_compared_is_refused_with_publications(repo: P
     assert (
         f"{ESKOM_MANIFEST}: cannot compare its drawn lists; change it in its own pull request"
     ) in found
+
+
+def test_a_symlinked_manifest_folder_is_refused_with_publications(repo: Path) -> None:
+    """The loader's glob would read a manifest through the link; git shows only the link."""
+    _second(repo, Clock(START + timedelta(minutes=30)))
+    shutil.move(repo / "data/sources/eskom", repo / "data/elsewhere")
+    _change_manifest_at(repo / "data/elsewhere/sources.json", _edit_a_drawn_text)
+    (repo / "data/sources/eskom").symlink_to("../elsewhere")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "a linked manifest folder")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert (
+        "data/sources/eskom: a symbolic link or submodule under data/sources; change it in its"
+        " own pull request"
+    ) in found
+
+
+def test_a_recorded_drawn_count_that_differs_from_the_rerun_is_refused(repo: Path) -> None:
+    _added(repo)
+    path = repo / FOLDER / "2026-07-01.r2.json"
+    body = json.loads(path.read_text("utf-8"))
+    body["publication"]["checks"]["citation_check"] = {
+        "passed": 0,
+        "no_text_layer": 15,
+        "drawn": 1,
+        "failed": 0,
+    }
+    path.write_text(canonical.dumps(body), encoding="utf-8")
+    git(repo, "commit", "-qam", "a claimed drawn value")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert found == [
+        f"{TARIFF}/2026-07-01/r2: the recorded citation check {{'passed': 0, 'no_text_layer': 15,"
+        " 'drawn': 1, 'failed': 0} differs from this run's {'passed': 0, 'no_text_layer': 16,"
+        " 'drawn': 0, 'failed': 0}"
+    ]
+
+
+def test_an_unknown_label_is_refused_only_as_a_label(repo: Path) -> None:
+    _counts_and_label(repo / FOLDER / "2026-07-01.r1.json", "hand made", drawn=False)
+    assert problems(repo) == []
