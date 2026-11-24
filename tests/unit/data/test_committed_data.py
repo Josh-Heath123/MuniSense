@@ -59,8 +59,11 @@ def test_the_layout_holds_the_expected_files() -> None:
         "sources/sars/sources.json",
     ]
     # Every draft committed before P2-13 was published, then deleted (E55). A draft
-    # committed later is checked by the draft tests below.
-    assert not list((DATA / "drafts").rglob("*.json"))
+    # committed later is checked by the draft tests below, and is never one already
+    # published (its publication pull request deletes it).
+    published = {path.parent.relative_to(DATA / "tariffs") for path in TARIFF_PUBLICATIONS}
+    for draft in (DATA / "drafts").rglob("*.json"):
+        assert Path(draft.parts[-3], draft.stem) not in published, draft
 
 
 # ------------------------------------------------- drafts (committed ones, and the fixtures)
@@ -83,10 +86,14 @@ def _catalogue() -> SupplierCatalogue:
     return load_file(DATA / "catalogue" / "suppliers.json", SupplierCatalogue)
 
 
-def test_the_fixture_drafts_are_the_three_published_ones() -> None:
+def test_the_fixture_drafts_are_the_published_ones_and_homeflex() -> None:
     assert [str(p.relative_to(FIXTURE_DRAFTS)) for p in _tariff_drafts(FIXTURE_DRAFTS)] == [
         "city-of-ekurhuleni/2026-27/b-residential-1-phase.json",
         "city-of-ekurhuleni/2026-27/b-residential-3-phase.json",
+        "eskom-direct/2026-27/homeflex-1.json",
+        "eskom-direct/2026-27/homeflex-2.json",
+        "eskom-direct/2026-27/homeflex-3.json",
+        "eskom-direct/2026-27/homeflex-4.json",
     ]
     assert [p.name for p in _vat_drafts(FIXTURE_DRAFTS)] == ["2018-04-01.json"]
 
