@@ -7,7 +7,8 @@
 | **Tariff version** | One tariff's prices for one validity period, such as 1 July 2026 to 30 June 2027. Corrections create new versions |
 | **Draft** | A bare tariff version or VAT rate under `data/drafts/`, committed but not published; never used in a calculation; publishing it removes it (ADR-0012) |
 | **Supplier catalogue** | `data/catalogue/suppliers.json`: every supplier's code, name, kind and cited tariff-year start month |
-| **Source manifest** | `data/sources/<publisher>/sources.json`: the committed source documents of one publisher, by SHA-256, with URL, retrieval date, approval, page count and text layer |
+| **Source manifest** | `data/sources/<publisher>/sources.json`: the committed source documents of one publisher, by SHA-256, with URL, retrieval date, approval, page count and text layer, and, for a document with a text layer, an optional list of drawn items |
+| **Drawn item** | Something a source draws rather than prints as text (the TOU clocks; a rate table that is a picture), listed in its source manifest with the texts a citation may give for it. A citation flagged `drawn: true` whose text is listed exactly, and is not in the page's text layer, gets the citation-check outcome `drawn`; it is verified by eye (ADR-0016 point 5) |
 | **Publication** | One committed, immutable file under `data/tariffs/` or `data/vat/`: a tariff version or VAT rate in an envelope that records when it was published (record time) and the publish step's own checks (ADR-0012) |
 | **Revision** | The `r<N>` in a publication's id and file name. Every publication takes the next free revision under the date it is filed under; `supersedes` records what it replaces (ADR-0013) |
 | **Withdrawal** | A publication with no version: it ends what MuniSense believes about a published version, from its own record time, and puts nothing in its place |

@@ -13,6 +13,7 @@ from munisense.domain.citations.model import (
     Verified,
     cited_statuses,
     iter_cited,
+    normalise_whitespace,
     weakest,
     weakest_kind,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "Verified",
     "cited_statuses",
     "iter_cited",
+    "normalise_whitespace",
     "weakest",
     "weakest_kind",
 ]

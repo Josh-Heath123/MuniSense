@@ -62,13 +62,37 @@ Handle = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]{1,39}$")]
 """A pseudonymous handle such as `owner` or `reviewer-1`; never a name or email."""
 
 
+def _only_true(value: bool) -> bool:
+    if not value:
+        msg = "drawn is either true or left out"
+        raise ValueError(msg)
+    return value
+
+
+def normalise_whitespace(text: str) -> str:
+    """Every run of whitespace (`str.isspace`) to one space; the ends trimmed.
+
+    The citation check's whitespace rule (P2-7), also used to match a drawn citation's text
+    against its manifest's allowed texts exactly (ADR-0016 point 5)."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
 class Citation(DomainModel):
-    """Where a value is printed: document (by SHA-256), page, table or row, and the text."""
+    """Where a value is printed: document (by SHA-256), page, table or row, and the text.
+
+    `drawn: true` says the value is drawn on the page, not printed as text (ADR-0016 point
+    5): the citation check then gives `drawn` only if the page and text are an item the
+    document's manifest lists as drawn, and the text is not in the page's text layer.
+    Omitted when absent, so citations written before it are unchanged (ADR-0016 point 3).
+    """
 
     document_sha256: Sha256
     page: Annotated[int, Field(ge=1)]
     locator: Text
     printed_text: PrintedText
+    drawn: Annotated[bool, AfterValidator(_only_true)] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class StatusKind(StrEnum):
@@ -102,6 +126,9 @@ class TextCheck(StrEnum):
     PASSED = "passed"
     NO_TEXT_LAYER = "no_text_layer"
     """A scanned page: the check cannot run, so the human check stands alone."""
+    DRAWN = "drawn"
+    """A value drawn on a page with a text layer, listed as drawn in the manifest
+    (ADR-0016 point 5): the human check is a visual comparison with the page."""
 
 
 class Verified(DomainModel):

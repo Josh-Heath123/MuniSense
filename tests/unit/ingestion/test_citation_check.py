@@ -16,6 +16,8 @@ from pathlib import Path
 import pytest
 from pypdf import Configuration
 
+from munisense.domain.base import DomainModel
+from munisense.domain.citations import Citation, Cited, Estimated
 from munisense.domain.money import VatRate
 from munisense.domain.tariffs import TariffVersion
 from munisense.ingestion import citation_check, pdf_text
@@ -106,6 +108,65 @@ def test_the_outcome_rules_fail_closed(
     got, why = _outcome(printed, page, text_layer=text_layer)
     assert got is outcome
     assert reason in why
+
+
+LISTED = frozenset({"High-Demand Season, Sunday: Off-peak 24 to 17"})
+
+
+@pytest.mark.parametrize(
+    ("printed", "page", "drawn", "outcome", "reason"),
+    [
+        # all three hold: flagged, listed, not in the text layer (empty counts as not in it)
+        (
+            "High-Demand Season, Sunday: Off-peak 24 to 17",
+            "Appendix A",
+            True,
+            Outcome.DRAWN,
+            "listed",
+        ),
+        (" High-Demand  Season,\nSunday: Off-peak 24 to 17", "", True, Outcome.DRAWN, "listed"),
+        # flagged, but the same text is not listed (a mistype, a substring, a pattern)
+        ("High-Demand Season, Sunday: Off-peak 24 to 18", "", True, Outcome.FAILED, "not a drawn"),
+        ("Off-peak 24 to 17", "", True, Outcome.FAILED, "not a drawn item"),
+        ("High-Demand Season.*", "", True, Outcome.FAILED, "not a drawn item"),
+        # flagged and listed, but the text is in the text layer: cite it as text
+        (
+            "High-Demand Season, Sunday: Off-peak 24 to 17",
+            "see High-Demand Season, Sunday: Off-peak 24 to 17 here",
+            True,
+            Outcome.FAILED,
+            "cite it without drawn",
+        ),
+        # a listed text that is not flagged behaves as before: missing means failed
+        (
+            "High-Demand Season, Sunday: Off-peak 24 to 17",
+            "Appendix A",
+            False,
+            Outcome.FAILED,
+            "not found",
+        ),
+        (
+            "High-Demand Season, Sunday: Off-peak 24 to 18",
+            "Appendix A",
+            False,
+            Outcome.FAILED,
+            "not found",
+        ),
+        ("  ", "", True, Outcome.FAILED, "printed text is empty"),
+    ],
+)
+def test_the_drawn_outcome_needs_all_three_conditions(
+    printed: str, page: str, *, drawn: bool, outcome: Outcome, reason: str
+) -> None:
+    got, why = _outcome(printed, page, text_layer=True, drawn=drawn, allowed=LISTED)
+    assert got is outcome
+    assert reason in why
+
+
+def test_a_drawn_citation_of_a_scan_fails() -> None:
+    got, why = _outcome("x", "", text_layer=False, drawn=True, allowed=frozenset({"x"}))
+    assert got is Outcome.FAILED
+    assert "needs a document with a text layer" in why
 
 
 def test_every_pypdf_limit_is_pinned() -> None:
@@ -422,3 +483,70 @@ def test_set_limits_sets_hard_limits_on_everything_the_child_needs_capped(
         resource.RLIMIT_CORE: (0, 0),
         resource.RLIMIT_NOFILE: (64, 64),
     }
+
+
+class _Drawn(DomainModel):
+    """Cited texts, to run the real check on any page."""
+
+    values: tuple[Cited[str], ...]
+
+
+def _drawn_citations(*, drawn: bool, change: str = "") -> tuple[_Drawn, list[str]]:
+    """One citation per listed drawn text of every committed manifest."""
+    values, texts = [], []
+    for _path, document in sorted(_documents().values(), key=lambda pair: pair[0]):
+        for item in document.drawn or ():
+            for text in item.texts:
+                citation = Citation(
+                    document_sha256=document.sha256,
+                    page=item.page,
+                    locator="drawn item",
+                    printed_text=text + change,
+                    drawn=True if drawn else None,
+                )
+                values.append(
+                    Cited[str](value="x", citation=citation, status=Estimated(reason="test"))
+                )
+                texts.append(text)
+    return _Drawn(values=tuple(values)), texts
+
+
+@pytest.mark.slow
+def test_every_listed_drawn_text_gives_drawn_on_its_committed_page() -> None:
+    """Every listed text is usable: none is in its page's text layer (ADR-0016 point 5)."""
+    model, texts = _drawn_citations(drawn=True)
+    results = check_citations(model, _documents())
+    assert len(results) == len(texts) == 13
+    assert {r.outcome for r in results} == {Outcome.DRAWN}
+    assert sorted({r.page for r in results}) == [33, 45, 56]
+
+
+@pytest.mark.slow
+def test_listed_drawn_texts_fail_unflagged_or_mistyped() -> None:
+    unflagged, _ = _drawn_citations(drawn=False)
+    mistyped, _ = _drawn_citations(drawn=True, change="0")
+    for model in (unflagged, mistyped):
+        assert {r.outcome for r in check_citations(model, _documents())} == {Outcome.FAILED}
+
+
+@pytest.mark.slow
+def test_a_text_in_the_text_layer_cannot_be_claimed_as_drawn() -> None:
+    """Book page 45 prints "Peak" as text (the legend). Even if a manifest listed it as
+    drawn, a drawn citation of it fails."""
+    documents = _documents()
+    path, book = next(
+        (p, d) for p, d in documents.values() if d.file.startswith("tariffs-and-charges")
+    )
+    item = {"page": 45, "what": "the legend", "texts": ["Peak"]}
+    listed = SourceDocument.model_validate_json(
+        json.dumps({**json.loads(book.model_dump_json()), "drawn": [item]})
+    )
+    citation = Citation(
+        document_sha256=book.sha256, page=45, locator="legend", printed_text="Peak", drawn=True
+    )
+    model = _Drawn(values=(Cited[str](value="x", citation=citation, status=Estimated(reason="t")),))
+    [result] = check_citations(model, {**documents, book.sha256: (path, listed)})
+    assert (result.outcome, result.reason) == (
+        Outcome.FAILED,
+        "the text is in the page's text layer; cite it without drawn",
+    )

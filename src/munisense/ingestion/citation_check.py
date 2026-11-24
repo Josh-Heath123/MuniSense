@@ -7,6 +7,11 @@ document. Whitespace is normalised on both sides: every run of whitespace (as Py
 - `passed`: the normalised printed text is in the normalised page text;
 - `no_text_layer`: only when the manifest says the document has no text layer *and* the
   page yields no text;
+- `drawn` (ADR-0016 point 5): only when the citation says `drawn: true`, its page and
+  normalised printed text are an item the document's manifest lists as drawn (an exact
+  match, never a substring or pattern), and the text is not in the page's text layer (an
+  empty text layer counts as "not in it"). A citation that says drawn but whose text is in
+  the text layer fails, so the flag cannot be used by habit;
 - `failed`: everything else, including an empty printed text, a document not in a
   manifest, a file that is not the listed document (not a regular file, the wrong size or
   the wrong SHA-256), extraction errors, time-outs, output of the wrong shape, a page count
@@ -33,7 +38,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from munisense.domain.citations import iter_cited
+from munisense.domain.citations import iter_cited, normalise_whitespace
 from munisense.provenance.sources import SourceDocument
 
 CHILD = Path(__file__).with_name("pdf_text.py")
@@ -76,6 +81,7 @@ class Outcome(StrEnum):
 
     PASSED = "passed"
     NO_TEXT_LAYER = "no_text_layer"
+    DRAWN = "drawn"
     FAILED = "failed"
 
 
@@ -93,9 +99,8 @@ class ExtractionError(Exception):
     """Extraction did not produce page text; the citations it was for fail."""
 
 
-def normalise(text: str) -> str:
-    """Every run of whitespace (`str.isspace`) to one space; the ends trimmed."""
-    return re.sub(r"\s+", " ", text).strip()
+normalise = normalise_whitespace
+"""Every run of whitespace (`str.isspace`) to one space; the ends trimmed."""
 
 
 def _clean(text: str) -> str:
@@ -190,10 +195,26 @@ def _parse_output(
     return result["page_count"], {int(page): text for page, text in result["pages"].items()}
 
 
-def _outcome(printed: str, page_text: str, *, text_layer: bool) -> tuple[Outcome, str]:
+def _outcome(
+    printed: str,
+    page_text: str,
+    *,
+    text_layer: bool,
+    drawn: bool = False,
+    allowed: frozenset[str] = frozenset(),
+) -> tuple[Outcome, str]:
+    """The decision table. `allowed` holds the page's listed drawn texts, normalised."""
     wanted, page = normalise(printed), normalise(page_text)
     if not wanted:
         return Outcome.FAILED, "the printed text is empty"
+    if drawn:
+        if not text_layer:
+            return Outcome.FAILED, "a drawn citation needs a document with a text layer"
+        if wanted not in allowed:
+            return Outcome.FAILED, "the text is not a drawn item listed for the cited page"
+        if wanted in page:
+            return Outcome.FAILED, "the text is in the page's text layer; cite it without drawn"
+        return Outcome.DRAWN, "a listed drawn item, not in the text layer"
     if not text_layer:
         if page:
             return Outcome.FAILED, "the manifest says no text layer, but the page has text"
@@ -208,7 +229,7 @@ def _outcome(printed: str, page_text: str, *, text_layer: bool) -> tuple[Outcome
 @dataclass(frozen=True)
 class _Extracted:
     texts: dict[int, str]
-    text_layer: bool
+    document: SourceDocument
 
 
 def _extract_document(
@@ -229,7 +250,7 @@ def _extract_document(
         return str(error)
     if count != document.pages:
         return f"the document has {count} pages, but the manifest says {document.pages}"
-    return _Extracted(texts, document.text_layer)
+    return _Extracted(texts, document)
 
 
 def check_citations(
@@ -258,7 +279,11 @@ def check_citations(
             results.append(CitationResult(path, citation.page, Outcome.FAILED, document))
             continue
         outcome, reason = _outcome(
-            citation.printed_text, document.texts[citation.page], text_layer=document.text_layer
+            citation.printed_text,
+            document.texts[citation.page],
+            text_layer=document.document.text_layer,
+            drawn=citation.drawn is True,
+            allowed=document.document.drawn_texts(citation.page),
         )
         results.append(CitationResult(path, citation.page, outcome, reason))
     return results
