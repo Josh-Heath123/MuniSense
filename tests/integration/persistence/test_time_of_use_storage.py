@@ -5,7 +5,7 @@ export credit with its cap, and a quantity charge limited to the high season) go
 publish step, the publication guards and the loader, and is read back as the application
 role. It must come back equal as JSON text and bill identically from the file and from the
 database. Every value is a fixture marked "not real tariff data"; its citations are pointed
-at a committed document only because the loader requires every cited document to be listed
+at a committed document only because the loader requires every cited document to be listed.
 The citation checker is a stand-in that gives one calendar range `drawn`, so the recorded
 `drawn` count is 1 and a lost or altered count would be caught. The Python entry points stand
 in for the commands (`publish(check_only=True)` for `poe publish --check`, `rebuild` for
@@ -309,3 +309,4 @@ def test_the_citation_and_status_queries_find_every_new_value(
     for document, page in pages:
         found = _found(values_citing(connection, document, page, LATER))
         assert found == _expected(version, document, page)
+    assert _found(values_citing(connection, BOOK, 2, LATER)) == []  # a page it does not cite
