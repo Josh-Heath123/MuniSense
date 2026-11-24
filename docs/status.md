@@ -1,11 +1,11 @@
 # Status
 
-_Last updated: 2026-11-23, on branch `feat/p4-10-interval-readings`._
+_Last updated: 2026-11-24, on branch `docs/p4-checkpoint-report`._
 
 ## Now
 
 - **Last gate:** P2 Versioned storage, approved on 2026-11-21 (E59). P1 approved on 2026-11-18 (E40), P0 on 2026-11-17 (W4).
-- **Phase:** P4 Time-of-use and demand (W25 option a, E59; task list approved by the architect, E61), while the owner continues W11 for P3. ADR-0016 accepted (E61). Working through P4-2 to P4-10, then **stop for the architect checkpoint**.
+- **Phase:** P4 Time-of-use and demand (W25 option a, E59; task list approved by the architect, E61), while the owner continues W11 for P3. ADR-0016 accepted (E61). P4-2 to P4-10 are done (#49 to #57). **Stopped:** waiting for the architect's checkpoint review (`docs/reports/2026-11-24-P4-checkpoint.md`) before P4-11.
 - **Blocked on:** nothing.
 - **Scheduled (E59), at a natural break between P4 tasks:** W23 on or after 2026-11-26; W24 on or after 2026-12-02 (see "Notes for later phases").
 - **Design checkpoint:** P1-10 report written and reviewed by the architect; decisions E34 to E39 recorded.
@@ -15,7 +15,7 @@ _Last updated: 2026-11-23, on branch `feat/p4-10-interval-readings`._
 | ID | Question | Recommendation |
 | --- | --- | --- |
 | P4-13 (later) | Homeflex 3's network capacity charge: the book prints R52.89, the schedule R62.89 (see "Source inconsistencies"). Decided at the P4-13 hand check, not now | R62.89, `estimated`, until you confirm it |
-| W31 | `uv run poe check` (the Stop hook) is at E43's 25 s limit: median 25.0 s of five runs on `main` on 2026-11-23 (23.6 to 33.1 s, load average 1.2). E43's remedy (move the slowest property tests behind `slow`) would save about 1 s: all property tests in `poe check` take about 1 s together, and the pytest step's ~22 s is mostly collection and import overhead on `/mnt/c`. Options: (a) raise the limit to the measured median plus 5 s (30 s), as E51 did after W19; (b) also move the data tests that run the PDF child process behind `slow` (saves under 2 s); (c) keep 25 s and look for collection overhead in a chore task | (a): the overrun is overhead, not slow tests, and E43's remedy cannot fix it |
+| W31 | `uv run poe check` (the Stop hook) is over E43's 25 s limit: median 30.4 s of five runs on `main` on 2026-11-24 (27.2 to 31.2 s; it was 25.0 s on 2026-11-23 (23.6 to 33.1 s), before P4-6 to P4-10). E43's remedy (move the slowest property tests behind `slow`) would save about 1 s: all property tests in `poe check` take about 1 s together, and the pytest step's ~22 s is mostly collection and import overhead on `/mnt/c`. Options: (a) raise the limit to the measured median plus 5 s (35 s), as E51 did after W19; (b) also move the data tests that run the PDF child process behind `slow` (saves under 2 s); (c) keep 25 s and look for collection overhead in a chore task | (a): the overrun is overhead, not slow tests, and E43's remedy cannot fix it |
 | W11 | Ekurhuleni household receipts and bills for P3 (E42): continue recruiting, or revisit the pilot municipality (option c). If household data arrives, Claude Code tells the owner so P3 can be reconsidered (E59) | Continue recruiting |
 
 ## Decided (owner: Josh Heath, 2026-11-17)
