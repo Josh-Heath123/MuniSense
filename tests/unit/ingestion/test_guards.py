@@ -871,6 +871,8 @@ def test_a_recorded_drawn_count_that_differs_from_the_rerun_is_refused(repo: Pat
     ]
 
 
-def test_an_unknown_label_is_refused_only_as_a_label(repo: Path) -> None:
+def test_an_unknown_label_on_the_base_gets_no_drawn_count_message(repo: Path) -> None:
+    """Only labels 2 and 3 have a drawn-count shape; any other label is refused on an added
+    file (`test_a_changed_tool_label_is_refused`), and files on the base cannot change."""
     _counts_and_label(repo / FOLDER / "2026-07-01.r1.json", "hand made", drawn=False)
     assert problems(repo) == []
