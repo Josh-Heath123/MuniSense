@@ -30,9 +30,9 @@ from itertools import pairwise
 from typing import assert_never
 
 from munisense.domain.billing.consumption import (
+    Consumption,
     CustomerQuantities,
-    PeriodTotal,
-    TimeOfUseBuckets,
+    IntervalReadings,
 )
 from munisense.domain.billing.engine import (
     check_price_basis,
@@ -48,6 +48,7 @@ from munisense.domain.billing.errors import (
     NonMonthlyPeriodError,
     PeriodOutsideVersionError,
 )
+from munisense.domain.billing.intervals import classify
 from munisense.domain.billing.result import (
     Bill,
     BillWarning,
@@ -73,7 +74,7 @@ from munisense.domain.tariffs import (
 def calculate_period(
     versions: Sequence[TariffVersion],
     period: DateRange,
-    consumption: PeriodTotal | TimeOfUseBuckets,
+    consumption: Consumption,
     vat_table: VatTable,
     *,
     free_basic_eligible: bool | None = None,
@@ -95,21 +96,26 @@ def calculate_period(
         raise InvalidQuantityError(msg)
     total_kwh, used, exported = readings[0]  # every version that prices a part accepts it
     ranges = [part for part, _ in parts]
-    if used is not None and len(_calendar_seasons(parts)) > 1:
-        _check_each_season_has_the_periods(parts, used)
-    if exported and any(kwh > 0 for kwh in exported.values()) and len(parts) > 1:
-        msg = (
-            "exported kWh can be credited only on a bill of one calendar month priced in one "
-            "part: this period is split (by months, a tariff change, a season or a VAT "
-            "change), and the credit is capped by each part's use, which shared-out figures "
-            "cannot show"
-        )
-        raise NonMonthlyPeriodError(msg)
-    if used is None:
+    by_period: list[dict[TouPeriod, Decimal] | None]
+    exports: list[dict[TouPeriod, Decimal] | None]
+    if isinstance(consumption, IntervalReadings):
+        # The readings say what each part used: no share-out by days (ADR-0016 point 4).
+        classified = classify(consumption, period, parts)
+        by_period = [used_part for used_part, _ in classified]
+        exports = [exported_part or None for _, exported_part in classified]
+        if any(exports) and len(parts) > 1:
+            _refuse_exports_over_parts()
+        with exact():
+            shares = [sum(part.values(), Decimal(0)) for part in by_period if part is not None]
+    elif used is None:
         shares = _shares(total_kwh, period, ranges, parts[0][1])
-        by_period: list[dict[TouPeriod, Decimal] | None] = [None] * len(parts)
-        exports: list[dict[TouPeriod, Decimal] | None] = [None] * len(parts)
+        by_period = [None] * len(parts)
+        exports = [None] * len(parts)
     else:
+        if len(_calendar_seasons(parts)) > 1:
+            _check_each_season_has_the_periods(parts, used)
+        if exported and any(kwh > 0 for kwh in exported.values()) and len(parts) > 1:
+            _refuse_exports_over_parts()
         # Each period's kWh are shared on their own; a part's total is the sum of its
         # periods' shares, so the two always agree.
         per_period = {p: _shares(kwh, period, ranges, parts[0][1]) for p, kwh in used.items()}
@@ -209,6 +215,15 @@ def _split(
         part = DateRange(start=start, end=end)
         parts.append((part, _version_for(versions, part)))
     return parts
+
+
+def _refuse_exports_over_parts() -> None:
+    msg = (
+        "exported kWh can be credited only on a bill of one calendar month priced in one "
+        "part: this period is split (by months, a tariff change, a season or a VAT change), "
+        "and the credit is capped by each part's use, which shared-out figures cannot show"
+    )
+    raise NonMonthlyPeriodError(msg)
 
 
 def _calendar_seasons(parts: list[tuple[DateRange, TariffVersion]]) -> set[str]:

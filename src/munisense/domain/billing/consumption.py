@@ -13,10 +13,12 @@ which also refuses a key given twice: JSON parsers (Pydantic's included) silentl
 last of two equal keys.
 """
 
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, Field, model_validator
+from pydantic import AfterValidator, AwareDatetime, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from munisense.domain.base import DomainModel
 from munisense.domain.billing.errors import UnsupportedConsumptionError
@@ -80,10 +82,80 @@ class CustomerQuantities(DomainModel):
         return {q: v for q, v in values.items() if v is not None}
 
 
-ConsumptionProfile = Annotated[PeriodTotal | TimeOfUseBuckets, Field(discriminator="kind")]
+# Interval readings (P4-10, ADR-0016 point 4).
+MAX_INTERVALS = 44_640  # a 31-day month of 1-minute readings
+SAST = timedelta(hours=2)  # South African Standard Time, UTC+02:00, no daylight saving
 
 
-def require_period_total(profile: PeriodTotal | TimeOfUseBuckets) -> PeriodTotal:
+class IntervalReading(DomainModel):
+    """The kWh used, and exported, in one interval starting at `start` (SAST, +02:00)."""
+
+    start: AwareDatetime
+    used_kwh: Kwh
+    exported_kwh: Kwh = Decimal(0)
+
+
+class IntervalReadings(DomainModel):
+    """kWh per interval of one fixed length that divides an hour, one after another with
+    no gap or overlap, each starting on the interval grid in South African Standard Time.
+
+    The readings show when people are at home: they are calculation inputs only, never
+    stored or logged, and a refusal names at most the interval's position, never a time
+    or a kWh figure (ADR-0016 point 4)."""
+
+    kind: Literal["intervals"] = "intervals"
+    minutes: Literal[1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60]
+    readings: Annotated[tuple[IntervalReading, ...], Field(min_length=1, max_length=MAX_INTERVALS)]
+
+    @model_validator(mode="after")
+    def _a_grid_without_gaps(self) -> Self:
+        step = timedelta(minutes=self.minutes)
+        previous: datetime | None = None
+        for index, reading in enumerate(self.readings):
+            start = reading.start
+            # Each refusal has its own error type (a fixed code) and names only the
+            # interval's position (in `ctx`), never a time or a kWh figure.
+            if start.utcoffset() != SAST:
+                raise PydanticCustomError(
+                    "interval_not_sast",
+                    "interval {index}: its start is not in South African Standard Time (+02:00)",
+                    {"index": index},
+                )
+            if start.second or start.microsecond or (start.hour * 60 + start.minute) % self.minutes:
+                raise PydanticCustomError(
+                    "interval_off_grid",
+                    "interval {index}: it does not start on the interval grid",
+                    {"index": index},
+                )
+            if previous is not None and start > previous + step:
+                raise PydanticCustomError(
+                    "interval_gap", "interval {index}: a gap before it", {"index": index}
+                )
+            if previous is not None and start < previous + step:
+                raise PydanticCustomError(
+                    "interval_overlap",
+                    "interval {index}: it overlaps the one before",
+                    {"index": index},
+                )
+            previous = start
+        return self
+
+    @property
+    def first_start(self) -> datetime:
+        return self.readings[0].start
+
+    @property
+    def end(self) -> datetime:
+        return self.readings[-1].start + timedelta(minutes=self.minutes)
+
+
+type Consumption = PeriodTotal | TimeOfUseBuckets | IntervalReadings
+ConsumptionProfile = Annotated[
+    PeriodTotal | TimeOfUseBuckets | IntervalReadings, Field(discriminator="kind")
+]
+
+
+def require_period_total(profile: Consumption) -> PeriodTotal:
     """Return the profile if the engine can evaluate it; refuse anything else."""
     if isinstance(profile, PeriodTotal):
         return profile

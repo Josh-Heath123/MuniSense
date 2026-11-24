@@ -7,6 +7,16 @@ class UnsupportedConsumptionError(DomainError):
     """The consumption profile is of a kind the engine cannot evaluate yet."""
 
 
+class IntervalReadingsError(DomainError):
+    """Interval readings cannot price this bill. `code` is fixed: `readings_do_not_cover_period`
+    or `interval_crosses_period_boundary`. Messages name at most an interval's position,
+    never a time or a kWh figure."""
+
+    def __init__(self, message: str, code: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 class InvalidQuantityError(DomainError):
     """A quantity a charge is priced on (a maximum demand or a capacity) is missing, or
     given for a tariff with no charge on it, or for a period of more than one month."""

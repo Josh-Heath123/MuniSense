@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 from pydantic import TypeAdapter
 
-from munisense.domain.billing import ConsumptionProfile, TimeOfUseBuckets
+from munisense.domain.billing import ConsumptionProfile, IntervalReadings, TimeOfUseBuckets
 from munisense.domain.tariffs import TouPeriod
 from munisense.services.consumption import (
     ConsumptionJsonError,
@@ -128,3 +128,38 @@ def test_a_refusal_carries_only_error_type_codes() -> None:
 def test_an_unknown_kind_is_a_fixed_refusal() -> None:
     with pytest.raises(ConsumptionJsonError, match=r"^the consumption kind is not one"):
         parse_consumption_json('{"kind": "interval", "readings": []}')
+
+
+def _intervals(starts: list[str], minutes: int = 60) -> str:
+    readings = ", ".join(f'{{"start": "{s}", "used_kwh": "98765"}}' for s in starts)
+    return f'{{"kind": "intervals", "minutes": {minutes}, "readings": [{readings}]}}'
+
+
+def test_interval_readings_parse_from_json() -> None:
+    profile = parse_consumption_json(
+        _intervals(["2026-07-15T00:00:00+02:00", "2026-07-15T01:00:00+02:00"])
+    )
+    assert isinstance(profile, IntervalReadings)
+    assert len(profile.readings) == 2
+
+
+@pytest.mark.parametrize(
+    ("starts", "code"),
+    [
+        (["2026-07-15T00:00:00+02:00", "2026-07-15T02:00:00+02:00"], "interval_gap"),
+        (["2026-07-15T00:00:00+02:00", "2026-07-15T00:00:00+02:00"], "interval_overlap"),
+        (["2026-07-15T00:15:00+02:00"], "interval_off_grid"),
+        (["2026-07-15T00:00:00Z"], "interval_not_sast"),
+        (["2026-07-15T00:00:00+00:00"], "interval_not_sast"),
+        (["2026-07-15T00:00:00"], "timezone_aware"),
+    ],
+)
+def test_each_interval_refusal_arrives_with_its_own_code_and_no_reading(
+    starts: list[str], code: str
+) -> None:
+    with pytest.raises(ConsumptionJsonError) as caught:
+        parse_consumption_json(_intervals(starts))
+    assert code in caught.value.codes
+    shown = str(caught.value) + repr(caught.value.args) + repr(caught.value.codes)
+    for planted in ("98765", "2026-07-15", "00:15"):
+        assert planted not in shown
