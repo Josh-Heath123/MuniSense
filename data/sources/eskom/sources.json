@@ -10,7 +10,51 @@
       "retrieved_on": "2026-11-21",
       "approval": "E60",
       "pages": 57,
-      "text_layer": true
+      "text_layer": true,
+      "drawn": [
+        {
+          "page": 33,
+          "what": "Table 13 (Homeflex non-local authority), a picture: Homeflex 3's network capacity charge, R/POD/day, without VAT",
+          "texts": [
+            "Homeflex 3 R 62.89"
+          ]
+        },
+        {
+          "page": 56,
+          "what": "Figure 2, the TOU clocks for Homeflex and others, one per season, rings Weekdays, Saturday, Sunday. One text per time range: hour labels at segment edges, period by legend colour",
+          "texts": [
+            "High Demand Season, Weekdays: Off-peak 24 to 6",
+            "High Demand Season, Weekdays: Peak 6 to 8",
+            "High Demand Season, Weekdays: Standard 8 to 17",
+            "High Demand Season, Weekdays: Peak 17 to 20",
+            "High Demand Season, Weekdays: Standard 20 to 22",
+            "High Demand Season, Weekdays: Off-peak 22 to 24",
+            "High Demand Season, Saturday: Off-peak 24 to 7",
+            "High Demand Season, Saturday: Standard 7 to 12",
+            "High Demand Season, Saturday: Off-peak 12 to 17",
+            "High Demand Season, Saturday: Standard 17 to 19",
+            "High Demand Season, Saturday: Off-peak 19 to 24",
+            "High Demand Season, Sunday: Off-peak 24 to 17",
+            "High Demand Season, Sunday: Standard 17 to 19",
+            "High Demand Season, Sunday: Off-peak 19 to 24",
+            "Low Demand Season, Weekdays: Off-peak 24 to 6",
+            "Low Demand Season, Weekdays: Standard 6 to 7",
+            "Low Demand Season, Weekdays: Peak 7 to 9",
+            "Low Demand Season, Weekdays: Standard 9 to 18",
+            "Low Demand Season, Weekdays: Peak 18 to 21",
+            "Low Demand Season, Weekdays: Standard 21 to 22",
+            "Low Demand Season, Weekdays: Off-peak 22 to 24",
+            "Low Demand Season, Saturday: Off-peak 24 to 7",
+            "Low Demand Season, Saturday: Standard 7 to 12",
+            "Low Demand Season, Saturday: Off-peak 12 to 18",
+            "Low Demand Season, Saturday: Standard 18 to 20",
+            "Low Demand Season, Saturday: Off-peak 20 to 24",
+            "Low Demand Season, Sunday: Off-peak 24 to 18",
+            "Low Demand Season, Sunday: Standard 18 to 20",
+            "Low Demand Season, Sunday: Off-peak 20 to 24"
+          ]
+        }
+      ]
     },
     {
       "sha256": "eef82b077d7df4dd7b157ce757e2e56368170cec3bb69614fd81042451a1be84",
@@ -20,7 +64,44 @@
       "retrieved_on": "2026-11-21",
       "approval": "E59",
       "pages": 57,
-      "text_layer": true
+      "text_layer": true,
+      "drawn": [
+        {
+          "page": 45,
+          "what": "Appendix A, the TOU clocks for Homeflex and others, one per season, rings Weekdays, Saturday, Sunday. One text per time range: hour labels at segment edges, period by legend colour",
+          "texts": [
+            "High-Demand Season, Weekdays: Off-peak 24 to 6",
+            "High-Demand Season, Weekdays: Peak 6 to 8",
+            "High-Demand Season, Weekdays: Standard 8 to 17",
+            "High-Demand Season, Weekdays: Peak 17 to 20",
+            "High-Demand Season, Weekdays: Standard 20 to 22",
+            "High-Demand Season, Weekdays: Off-peak 22 to 24",
+            "High-Demand Season, Saturday: Off-peak 24 to 7",
+            "High-Demand Season, Saturday: Standard 7 to 12",
+            "High-Demand Season, Saturday: Off-peak 12 to 17",
+            "High-Demand Season, Saturday: Standard 17 to 19",
+            "High-Demand Season, Saturday: Off-peak 19 to 24",
+            "High-Demand Season, Sunday: Off-peak 24 to 17",
+            "High-Demand Season, Sunday: Standard 17 to 19",
+            "High-Demand Season, Sunday: Off-peak 19 to 24",
+            "Low-Demand Season, Weekdays: Off-peak 24 to 6",
+            "Low-Demand Season, Weekdays: Standard 6 to 7",
+            "Low-Demand Season, Weekdays: Peak 7 to 9",
+            "Low-Demand Season, Weekdays: Standard 9 to 18",
+            "Low-Demand Season, Weekdays: Peak 18 to 21",
+            "Low-Demand Season, Weekdays: Standard 21 to 22",
+            "Low-Demand Season, Weekdays: Off-peak 22 to 24",
+            "Low-Demand Season, Saturday: Off-peak 24 to 7",
+            "Low-Demand Season, Saturday: Standard 7 to 12",
+            "Low-Demand Season, Saturday: Off-peak 12 to 18",
+            "Low-Demand Season, Saturday: Standard 18 to 20",
+            "Low-Demand Season, Saturday: Off-peak 20 to 24",
+            "Low-Demand Season, Sunday: Off-peak 24 to 18",
+            "Low-Demand Season, Sunday: Standard 18 to 20",
+            "Low-Demand Season, Sunday: Off-peak 20 to 24"
+          ]
+        }
+      ]
     }
   ]
 }

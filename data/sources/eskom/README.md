@@ -17,7 +17,14 @@ The book's cover says the same as the schedule's title: non-local-authority char
 - **The book, page 27:** Homeflex's description and supply sizes. **Page 28:** Homeflex charges. **Page 43:** Gen-offset Homeflex credit rates. **Page 8:** seasons. **Page 45:** TOU hours (drawn). **Page 50:** public holidays. **Page 56:** pro-rating. For P4-13.
 - **The schedule, page 33:** Table 13, the Homeflex rates as a picture, with the column labels the book lacks and the figure R62.89 where the book prints R52.89 (see "Source inconsistencies" in `docs/status.md`). **Page 56:** TOU hours (drawn). For P4-13.
 
-Values that are only drawn cannot pass the text check until ADR-0016 point 5's `drawn` outcome is built (P4-11). Until then this manifest has no `drawn` list.
+## Drawn items (P4-11, ADR-0016 point 5; W32)
+
+`sources.json` lists what is drawn, not printed as text, on three pages, with the texts a citation flagged `drawn: true` may give for it. A citation's text must equal one of them exactly (after the whitespace rule); it then gets the `drawn` outcome and stays `estimated` until the owner compares it with the page by eye. A test checks that every listed text is absent from its page's text layer and gives `drawn` (`tests/unit/data/test_eskom_drawn_items.py`). The list changes only in a pull request that adds no publication, and the owner reviews it.
+
+- **The book, page 45** and **the schedule, page 56:** the TOU clocks for Homeflex and the other TOU tariffs, one per season, with rings for weekdays, Saturday and Sunday. These print only hour numerals, which also occur in the page's text layer, so the listed texts are **transcriptions**, one per time range, in the form "<season>, <day>: <period> <from> to <to>", using the hour labels printed at the segment edges (24 at the top) and the legend's colours. The season is spelled as each page spells it ("High-Demand Season" in the book, "High Demand Season" in the schedule). 29 ranges per page.
+- **The schedule, page 33:** Table 13's network capacity charge for Homeflex 3, "Homeflex 3 R 62.89" (R/POD/day without VAT; the row label and the cell joined), the value the book prints as R52.89 (an inconsistency the owner decides in P4-13).
+
+**How the clocks were read (2026-11-24):** each page rendered with poppler's `pdftoppm` at 400 dpi, and the colour of each one-hour segment of each ring sampled at its middle angle by a short Python script (not committed), then checked by eye. Independently, the tariff-verifier agent measured each colour change to 0.1 degrees at 400 dpi and read the hour labels at 600 dpi: it agrees with every ring on both pages, and found the two pages identical segment for segment. That agreement is the readers' claim, not a test; the owner's check by eye is what verifies each value.
 
 ## Extraction needs (P4-2)
 
