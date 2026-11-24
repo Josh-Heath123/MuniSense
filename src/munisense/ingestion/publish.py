@@ -13,7 +13,9 @@ Refusals (each tested):
 - the supplier is not in the catalogue;
 - any citation fails the citation check (P2-7), which also covers a document not in a
   manifest and a file that is not the listed document;
-- a `Verified` value whose declared text check differs from the computed one;
+- a `Verified` value whose declared text check differs from the computed one: so
+  `Verified(text_check=drawn)` is accepted only on a `drawn` outcome, and a `drawn` outcome
+  accepts only that or a status that is not `Verified` (ADR-0016 point 5);
 - `--supersedes` or `--withdraw` names a publication that does not exist, is a withdrawal,
   or is already superseded; a correction that supersedes a publication of another tariff;
 - the new version overlaps, in valid time, a current publication of the same tariff that it
@@ -59,8 +61,11 @@ from munisense.provenance.publication import (
 )
 from munisense.provenance.sources import SourceDocument, SourceManifest
 
-TOOL_VERSION = "munisense publish 2"
-"""A fixed label (the package has no version yet); raised when the checks change (2: ADR-0013)."""
+TOOL_VERSION = "munisense publish 3"
+"""A fixed label (the package has no version yet); raised when the checks change (2: ADR-0013;
+3: the `drawn` outcome and count, ADR-0016 point 5)."""
+EARLIER_TOOL_VERSIONS = ("munisense publish 2",)
+"""Labels of files already published, which never record a `drawn` count."""
 DOCUMENTS_CHECKED = "all cited documents in a manifest; hashes match"
 
 Checker = Callable[[BaseModel, dict[str, tuple[Path, SourceDocument]]], list[CitationResult]]
@@ -106,6 +111,11 @@ class Result:
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def new_counts() -> dict[str, int]:
+    """Zero for every outcome: the citation check counts a label-3 file records."""
+    return {outcome.value: 0 for outcome in Outcome}
 
 
 def documents(data: Path) -> dict[str, tuple[Path, SourceDocument]]:
@@ -185,7 +195,11 @@ def _next_revision(existing: list[Existing], day: date) -> int:
 
 def text_check_reasons(model: BaseModel, results: list[CitationResult]) -> list[str]:
     computed = {r.path: r.outcome for r in results}
-    expected = {TextCheck.PASSED: Outcome.PASSED, TextCheck.NO_TEXT_LAYER: Outcome.NO_TEXT_LAYER}
+    expected = {
+        TextCheck.PASSED: Outcome.PASSED,
+        TextCheck.NO_TEXT_LAYER: Outcome.NO_TEXT_LAYER,
+        TextCheck.DRAWN: Outcome.DRAWN,
+    }
     reasons = []
     for path, cited in iter_cited(model):
         status = cited.status
@@ -270,7 +284,7 @@ def publish(  # one refusal list, built in order
     publication_id = f"{scope}/{code}/{day.isoformat()}/r{revision}"
     target_path = publication_folder(data, scope, code) / f"{day.isoformat()}.r{revision}.json"
     result = Result(target_path, publication_id)
-    counts = {"passed": 0, "no_text_layer": 0, "failed": 0}
+    counts = new_counts()
     if version is not None:
         result.citations = checker(version, documents(data))
         for cited in result.citations:

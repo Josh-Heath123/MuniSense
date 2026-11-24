@@ -11,6 +11,7 @@ import shutil
 import subprocess
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
@@ -67,6 +68,21 @@ def git(repo: Path, *args: str) -> str:
     ).stdout
 
 
+ESKOM_MANIFEST = Path("data/sources/eskom/sources.json")
+
+
+def _change_manifest_at(path: Path, change: object) -> None:
+    body = json.loads(path.read_text("utf-8"))
+    change(body)  # type: ignore[operator]
+    path.write_text(canonical.dumps(body), encoding="utf-8")
+
+
+def _list_drawn_items(body: dict[str, Any]) -> None:
+    """Made-up drawn lists on both Eskom documents, committed on the base branch."""
+    for document in body["documents"]:
+        document["drawn"] = [{"page": 33, "what": "a test figure", "texts": ["Test 1"]}]
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """A repository whose main branch holds Tariff B r1 and the VAT rate r1."""
@@ -77,6 +93,7 @@ def repo(tmp_path: Path) -> Path:
         tmp_path / "data" / "sources",
         ignore=shutil.ignore_patterns("*.pdf"),
     )
+    _change_manifest_at(tmp_path / ESKOM_MANIFEST, _list_drawn_items)
     git(tmp_path, "init", "-q", "-b", "main")
     clock = Clock()
     data = tmp_path / "data"
@@ -295,6 +312,7 @@ def test_recorded_checks_that_differ_from_a_rerun_are_refused(repo: Path) -> Non
     body["publication"]["checks"]["citation_check"] = {
         "passed": 16,
         "no_text_layer": 0,
+        "drawn": 0,
         "failed": 0,
     }
     path.write_text(canonical.dumps(body), encoding="utf-8")
@@ -302,7 +320,8 @@ def test_recorded_checks_that_differ_from_a_rerun_are_refused(repo: Path) -> Non
     found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
     assert found == [
         f"{TARIFF}/2026-07-01/r2: the recorded citation check {{'passed': 16, 'no_text_layer': 0,"
-        " 'failed': 0} differs from this run's {'passed': 0, 'no_text_layer': 16, 'failed': 0}"
+        " 'drawn': 0, 'failed': 0} differs from this run's {'passed': 0, 'no_text_layer': 16,"
+        " 'drawn': 0, 'failed': 0}"
     ]
 
 
@@ -570,7 +589,7 @@ def test_a_changed_tool_label_is_refused(repo: Path) -> None:
     path.write_text(canonical.dumps(body), encoding="utf-8")
     git(repo, "commit", "-qam", "label")
     found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
-    assert f"{TARIFF}/2026-07-01/r2: tool label 'hand made', not 'munisense publish 2'" in found
+    assert f"{TARIFF}/2026-07-01/r2: tool label 'hand made', not 'munisense publish 3'" in found
 
 
 def test_unreadable_manifests_are_reported_not_raised(repo: Path) -> None:
@@ -684,3 +703,176 @@ def test_a_later_revision_recorded_earlier_under_its_date_is_refused(repo: Path)
         f"{TARIFF}/2026-07-01/r2 is not recorded later than {TARIFF}/2026-07-01/r1,"
         " which it supersedes" in found
     )
+
+
+# --- the drawn count and the drawn lists (P4-11, ADR-0016 point 5) ----------------------
+
+
+def _counts_and_label(path: Path, label: str, *, drawn: bool) -> None:
+    body = json.loads(path.read_text("utf-8"))
+    checks = body["publication"]["checks"]
+    checks["tool_version"] = label
+    if drawn:
+        checks["citation_check"]["drawn"] = 0
+    else:
+        checks["citation_check"].pop("drawn", None)
+    path.write_text(canonical.dumps(body), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("label", "drawn", "message"),
+    [
+        (
+            "munisense publish 2",
+            True,
+            "tool label 'munisense publish 2' never records a drawn count",
+        ),
+        (
+            "munisense publish 3",
+            False,
+            "tool label 'munisense publish 3' must record a drawn count",
+        ),
+    ],
+)
+def test_the_drawn_count_goes_with_the_label(
+    repo: Path, label: str, *, drawn: bool, message: str
+) -> None:
+    _counts_and_label(repo / FOLDER / "2026-07-01.r1.json", label, drawn=drawn)
+    assert problems(repo) == [f"{TARIFF}/2026-07-01/r1: {message}"]
+
+
+def test_a_label_2_publication_without_a_drawn_count_is_in_order(repo: Path) -> None:
+    _counts_and_label(repo / FOLDER / "2026-07-01.r1.json", "munisense publish 2", drawn=False)
+    assert problems(repo) == []
+
+
+def test_an_added_label_2_publication_is_refused(repo: Path) -> None:
+    path = _second(repo, Clock(START + timedelta(minutes=30)))
+    _counts_and_label(path, "munisense publish 2", drawn=False)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "an old label")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert found == [
+        f"{TARIFF}/2026-07-01/r2: tool label 'munisense publish 2', not 'munisense publish 3'"
+    ]
+
+
+def _change_manifest(repo: Path, change: object) -> None:
+    path = repo / ESKOM_MANIFEST
+    body = json.loads(path.read_text("utf-8"))
+    change(body)  # type: ignore[operator]
+    path.write_text(canonical.dumps(body), encoding="utf-8")
+
+
+def _drop_book_drawn(body: dict[str, Any]) -> None:
+    del body["documents"][1]["drawn"]
+
+
+def _edit_a_drawn_text(body: dict[str, Any]) -> None:
+    body["documents"][0]["drawn"][0]["texts"] = ["Test 2"]
+
+
+def _retitle(body: dict[str, Any]) -> None:
+    body["documents"][0]["title"] = "Schedule of Standard Prices"
+
+
+@pytest.mark.parametrize(
+    ("change", "which"), [(_drop_book_drawn, "eef82b077d7d"), (_edit_a_drawn_text, "915a93b2d71a")]
+)
+def test_a_publication_pull_request_may_not_change_a_drawn_list(
+    repo: Path, change: object, which: str
+) -> None:
+    _second(repo, Clock(START + timedelta(minutes=30)))
+    _change_manifest(repo, change)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "publication and a drawn list")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert found == [
+        f"{ESKOM_MANIFEST}: a pull request that adds publications may not change a drawn list"
+        f" (ADR-0016 point 5); changed for {which}"
+    ]
+
+
+def test_a_new_manifest_with_a_drawn_list_counts_as_a_change(repo: Path) -> None:
+    _second(repo, Clock(START + timedelta(minutes=30)))
+    shutil.copy(repo / ESKOM_MANIFEST, repo / "data/sources/eskom2.json")
+    (repo / "data/sources/other").mkdir()
+    shutil.move(repo / "data/sources/eskom2.json", repo / "data/sources/other/sources.json")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "a manifest added with publications")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert any(
+        f.startswith("data/sources/other/sources.json: a pull request that adds publications")
+        for f in found
+    ), found
+
+
+def test_other_manifest_changes_are_not_drawn_list_changes(repo: Path) -> None:
+    _second(repo, Clock(START + timedelta(minutes=30)))
+    _change_manifest(repo, _retitle)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "publication and a retitled document")
+    assert (
+        problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+        == []
+    )
+
+
+def test_a_drawn_list_may_change_without_publications(repo: Path) -> None:
+    _change_manifest(repo, _edit_a_drawn_text)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "a drawn list on its own")
+    assert problems(repo, base="main", pull_request=True, clock=lambda: START) == []
+
+
+def test_a_manifest_that_cannot_be_compared_is_refused_with_publications(repo: Path) -> None:
+    _second(repo, Clock(START + timedelta(minutes=30)))
+    (repo / ESKOM_MANIFEST).write_text('{"documents": 1}\n', encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "a broken manifest")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert (
+        f"{ESKOM_MANIFEST}: cannot compare its drawn lists; change it in its own pull request"
+    ) in found
+
+
+def test_a_symlinked_manifest_folder_is_refused_with_publications(repo: Path) -> None:
+    """The loader's glob would read a manifest through the link; git shows only the link."""
+    _second(repo, Clock(START + timedelta(minutes=30)))
+    shutil.move(repo / "data/sources/eskom", repo / "data/elsewhere")
+    _change_manifest_at(repo / "data/elsewhere/sources.json", _edit_a_drawn_text)
+    (repo / "data/sources/eskom").symlink_to("../elsewhere")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "a linked manifest folder")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert (
+        "data/sources/eskom: a symbolic link or submodule under data/sources; change it in its"
+        " own pull request"
+    ) in found
+
+
+def test_a_recorded_drawn_count_that_differs_from_the_rerun_is_refused(repo: Path) -> None:
+    _added(repo)
+    path = repo / FOLDER / "2026-07-01.r2.json"
+    body = json.loads(path.read_text("utf-8"))
+    body["publication"]["checks"]["citation_check"] = {
+        "passed": 0,
+        "no_text_layer": 15,
+        "drawn": 1,
+        "failed": 0,
+    }
+    path.write_text(canonical.dumps(body), encoding="utf-8")
+    git(repo, "commit", "-qam", "a claimed drawn value")
+    found = problems(repo, base="main", pull_request=True, clock=lambda: START + timedelta(hours=1))
+    assert found == [
+        f"{TARIFF}/2026-07-01/r2: the recorded citation check {{'passed': 0, 'no_text_layer': 15,"
+        " 'drawn': 1, 'failed': 0} differs from this run's {'passed': 0, 'no_text_layer': 16,"
+        " 'drawn': 0, 'failed': 0}"
+    ]
+
+
+def test_an_unknown_label_on_the_base_gets_no_drawn_count_message(repo: Path) -> None:
+    """Only labels 2 and 3 have a drawn-count shape; any other label is refused on an added
+    file (`test_a_changed_tool_label_is_refused`), and files on the base cannot change."""
+    _counts_and_label(repo / FOLDER / "2026-07-01.r1.json", "hand made", drawn=False)
+    assert problems(repo) == []

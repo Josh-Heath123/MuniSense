@@ -9,6 +9,9 @@
 - every publication is canonical and valid (through the converter for its schema version),
   names a supplier in the catalogue, and holds no free basic allocation while TD-10 is open
   (E49);
+- a version's recorded citation check has a `drawn` count exactly when its tool label is
+  "munisense publish 3" or later: a label-2 file with one, or a label-3 file without one, is
+  refused (ADR-0016 point 5);
 - every `supersedes` names an existing publication of the same tariff that is not a
   withdrawal; no publication has two successors; a successor's record time is later; no two
   publications of one tariff share a record time.
@@ -22,7 +25,9 @@ hours of now, not in the future, and later than every other publication of the s
 it could follow; the citation check and `Verified` text checks, with the counts compared to
 those recorded; the overlap with the publications current when it was published; and the
 tool label. Only added publications are re-checked: a later pypdf may extract an old page
-differently, and old files cannot be edited.
+differently, and old files cannot be edited. A pull request that adds publications may not
+add, change or remove any manifest's `drawn` list (ADR-0016 point 5): the list is a trusted
+input of the citation check, so it changes apart from the publications that rely on it.
 
 The checks run the pull request's own code, so they catch mistakes made through the normal
 path; they are not a boundary against a change that also edits the guards (security
@@ -30,6 +35,7 @@ register).
 """
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -45,10 +51,12 @@ from munisense.catalogue.suppliers import SupplierCatalogue
 from munisense.domain.tariffs import FreeBasicAllocation
 from munisense.ingestion.citation_check import Outcome, check_citations
 from munisense.ingestion.publish import (
+    EARLIER_TOOL_VERSIONS,
     TOOL_VERSION,
     Checker,
     Clock,
     documents,
+    new_counts,
     overlaps,
     text_check_reasons,
     valid_period,
@@ -186,6 +194,7 @@ def check_set(data: Path, loaded: list[Loaded]) -> list[str]:  # one rule per bl
                     f"{publication.id}: a free basic allocation cannot be published until TD-10"
                     " is done (E49)"
                 )
+        problems.extend(_drawn_count_shape(publication))
         moment = (publication.key, publication.published_at)
         if moment in times:
             problems.append(f"{publication.id} and {times[moment]} share a record time")
@@ -234,6 +243,21 @@ def check_set(data: Path, loaded: list[Loaded]) -> list[str]:  # one rule per bl
                 f" (missing {', '.join(f'r{n}' for n in missing)}; ADR-0013)"
             )
     return problems
+
+
+def _drawn_count_shape(publication: Loaded) -> list[str]:
+    """A version records a `drawn` count under the current label and never under an
+    earlier one. Any other label is refused elsewhere (an added file must carry the
+    current label; files on the base cannot change)."""
+    checks = publication.publication.publication.checks
+    if not isinstance(checks, PublishChecks):
+        return []
+    label, has_drawn = checks.tool_version, checks.citation_check.drawn is not None
+    if label in EARLIER_TOOL_VERSIONS and has_drawn:
+        return [f"{publication.id}: tool label {label!r} never records a drawn count"]
+    if label == TOOL_VERSION and not has_drawn:
+        return [f"{publication.id}: tool label {label!r} must record a drawn count"]
+    return []
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -337,7 +361,7 @@ def check_added(  # one list of problems, check by check
                 f"{publication.id}: tool label {record.checks.tool_version!r}, not {TOOL_VERSION!r}"
             )
         version = publication.publication.version
-        counts = {"passed": 0, "no_text_layer": 0, "failed": 0}
+        counts = new_counts()
         if version is not None and sources is None:
             continue  # cannot re-run the citation check; already reported
         if version is not None and sources is not None:
@@ -365,11 +389,87 @@ def check_added(  # one list of problems, check by check
             continue  # a withdrawal's own checks: its target is checked in check_set
         checks = record.checks
         assert isinstance(checks, PublishChecks)  # noqa: S101  # the envelope ties checks to a version
-        recorded = checks.citation_check.model_dump()
+        # Absent means 0 (label 2; such a file is refused above by its label).
+        recorded = {key: getattr(checks.citation_check, key) or 0 for key in counts}
         if recorded != counts:
             problems.append(
                 f"{publication.id}: the recorded citation check {recorded} differs from"
                 f" this run's {counts}"
+            )
+    return problems
+
+
+def _drawn_lists(repo: Path, revision: str, path: str) -> dict[str, object] | None:
+    """Each document's raw `drawn` list in the manifest at `path` as of `revision` (an
+    absent file has none), or `None` if the file is not a JSON object with documents."""
+    try:
+        text = _git(repo, "show", f"{revision}:{path}")
+    except subprocess.CalledProcessError:
+        return {}  # not in this revision
+    try:
+        manifest = json.loads(text)
+        return {
+            str(document["sha256"]): document.get("drawn") for document in manifest["documents"]
+        }
+    except (json.JSONDecodeError, KeyError, TypeError, RecursionError):
+        return None
+
+
+def drawn_lists_unchanged(repo: Path, base: str) -> list[str]:
+    """ADR-0016 point 5: a pull request that adds publications changes no `drawn` list.
+
+    Compares the raw lists of every source manifest changed since the merge base, so any
+    edit to a list (or a list added with a new document or manifest) is refused, whatever
+    its formatting. Any symbolic link or submodule added, removed or changed under
+    `data/sources/` is refused too: the loader follows a linked folder, so a manifest read
+    through one would not be the one compared here (P4-11 security review)."""
+    commit = _git(repo, "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}").strip()
+    merge_base = _git(repo, "merge-base", commit, "HEAD").strip()
+    raw = _git(
+        repo,
+        "diff",
+        "--raw",
+        "-z",
+        "--no-color",
+        "--no-ext-diff",
+        "--no-renames",
+        merge_base,
+        "HEAD",
+        "--",
+        ":(icase)data/sources",
+    ).split("\0")
+    changed, links = [], []
+    for header, path in zip(raw[0:-1:2], raw[1::2], strict=True):
+        old_mode, new_mode = header.lstrip(":").split(" ")[:2]
+        # The loader's glob follows a symbolic link to a folder, so a manifest could be read
+        # from outside what git shows here: refuse links and submodules outright.
+        if {old_mode, new_mode} - {"000000", "100644", "100755"}:
+            links.append(path)
+        else:
+            changed.append(path)
+    problems = [
+        f"{path}: a symbolic link or submodule under data/sources; change it in its own"
+        " pull request"
+        for path in sorted(links)
+    ]
+    for path in sorted(changed):
+        if not path.casefold().endswith("/sources.json"):
+            continue
+        before, after = _drawn_lists(repo, merge_base, path), _drawn_lists(repo, "HEAD", path)
+        if before is None or after is None:
+            problems.append(
+                f"{path}: cannot compare its drawn lists; change it in its own pull request"
+            )
+            continue
+        differs = sorted(
+            sha256
+            for sha256 in before.keys() | after.keys()
+            if before.get(sha256) != after.get(sha256)
+        )
+        if differs:
+            problems.append(
+                f"{path}: a pull request that adds publications may not change a drawn list"
+                f" (ADR-0016 point 5); changed for {', '.join(d[:12] for d in differs)}"
             )
     return problems
 
@@ -412,6 +512,8 @@ def run_checks(
         problems += changed
         if pull_request:
             problems += data_only(data.parent, base)
+            if added:
+                problems += drawn_lists_unchanged(data.parent, base)
             problems += check_added(data, loaded, added, clock(), checker)
     return problems
 

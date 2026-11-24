@@ -333,7 +333,7 @@ def test_a_withdrawal_holds_no_version_and_ends_the_version(data: Path) -> None:
     assert withdrawal.version is None
     assert withdrawal.publication.checks.model_dump() == {
         "kind": "withdrawal",
-        "tool_version": "munisense publish 2",
+        "tool_version": "munisense publish 3",
         "withdrawn": "exists and is current",
     }
 
@@ -701,3 +701,89 @@ def test_a_changed_printed_text_is_refused_end_to_end(data: Path) -> None:
 
 def test_the_default_clock_gives_an_offset() -> None:
     assert publish_module._now().utcoffset() is not None
+
+
+# --- the drawn outcome (P4-11, ADR-0016 point 5) ---------------------------------------
+
+
+def _drawn_checker(drawn: tuple[str, ...]) -> publish_module.Checker:
+    """A stand-in: the paths in `drawn` give `drawn`, every other tariff citation has no
+    text layer."""
+
+    def check(
+        model: BaseModel, _documents: dict[str, tuple[Path, SourceDocument]]
+    ) -> list[CitationResult]:
+        return [
+            CitationResult(
+                path,
+                cited.citation.page,
+                Outcome.DRAWN if path in drawn else Outcome.NO_TEXT_LAYER,
+                "stand-in",
+            )
+            for path, cited in iter_cited(model)
+        ]
+
+    return check
+
+
+def _name_verified(original: TariffVersion, text_check: TextCheck) -> TariffVersion:
+    status = Verified(
+        verifier="owner",
+        verifier_kind="human",
+        method="visual comparison with the source page",
+        verified_on=date(2026, 12, 1),
+        text_check=text_check,
+    )
+    name = original.printed_name.model_copy(update={"status": status})
+    return original.model_copy(update={"printed_name": name})
+
+
+def test_a_drawn_value_publishes_with_its_count(data: Path, original: TariffVersion) -> None:
+    _write_tariff(data, _name_verified(original, TextCheck.DRAWN))
+    result = publish(
+        data,
+        Request(reason="t", draft=tariff_draft(data)),
+        Clock(),
+        _drawn_checker(("printed_name",)),
+    )
+    counts = _counts(_tariff_file(data, "2026-07-01.r1.json").publication.checks)
+    assert result.written
+    assert (counts.passed, counts.no_text_layer, counts.drawn, counts.failed) == (0, 15, 1, 0)
+
+
+def test_an_estimated_drawn_value_publishes(data: Path) -> None:
+    publish(
+        data,
+        Request(reason="t", draft=tariff_draft(data)),
+        Clock(),
+        _drawn_checker(("printed_name",)),
+    )
+    assert _counts(_tariff_file(data, "2026-07-01.r1.json").publication.checks).drawn == 1
+
+
+def test_a_label_3_publication_always_records_a_drawn_count(data: Path) -> None:
+    _publish(data, draft=tariff_draft(data))
+    text = (data / "tariffs" / TARIFF / "2026-07-01.r1.json").read_text("utf-8")
+    checks = json.loads(text)["publication"]["checks"]
+    assert checks["tool_version"] == "munisense publish 3"
+    assert checks["citation_check"] == {"passed": 0, "no_text_layer": 16, "drawn": 0, "failed": 0}
+
+
+@pytest.mark.parametrize(
+    ("declared", "drawn", "computed"),
+    [
+        (TextCheck.DRAWN, (), "no_text_layer"),  # verified as drawn, but not a drawn outcome
+        (TextCheck.PASSED, ("printed_name",), "drawn"),  # a drawn outcome verified otherwise
+        (TextCheck.NO_TEXT_LAYER, ("printed_name",), "drawn"),
+    ],
+)
+def test_verified_drawn_and_the_drawn_outcome_pair_exactly(
+    data: Path, original: TariffVersion, declared: TextCheck, drawn: tuple[str, ...], computed: str
+) -> None:
+    _write_tariff(data, _name_verified(original, declared))
+    with pytest.raises(PublishRefusedError) as refused:
+        publish(data, Request(reason="t", draft=tariff_draft(data)), Clock(), _drawn_checker(drawn))
+    assert refused.value.reasons == [
+        f"printed_name: verified with text check {declared.value}, but the citation check"
+        f" gives {computed}"
+    ]

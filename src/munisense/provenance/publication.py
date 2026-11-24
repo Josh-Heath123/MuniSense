@@ -75,10 +75,18 @@ class ParsedId(DomainModel):
 
 
 class CitationCheckCounts(DomainModel):
-    """How many cited values each outcome had. A publication never has a failure."""
+    """How many cited values each outcome had. A publication never has a failure.
+
+    `drawn` (ADR-0016 point 5, amending ADR-0013) is absent from files written under tool
+    label "munisense publish 2" (absent means 0, and those files stay byte-identical) and
+    always written by "munisense publish 3", even when 0. Which label goes with which shape
+    is checked by the publication guards."""
 
     passed: Annotated[int, Field(ge=0)]
     no_text_layer: Annotated[int, Field(ge=0)]
+    drawn: Annotated[int, Field(ge=0)] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     failed: Literal[0]
 
 
