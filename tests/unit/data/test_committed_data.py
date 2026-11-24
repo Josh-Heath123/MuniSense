@@ -61,15 +61,49 @@ def test_the_layout_holds_the_expected_files() -> None:
     # Every draft committed before P2-13 was published, then deleted (E55). A draft
     # committed later is checked by the draft tests below, and is never one already
     # published (its publication pull request deletes it).
-    published = {path.parent.relative_to(DATA / "tariffs") for path in TARIFF_PUBLICATIONS}
-    for draft in (DATA / "drafts").rglob("*.json"):
-        assert Path(draft.parts[-3], draft.stem) not in published, draft
+    assert _already_published(DATA) == []
+
+
+def _already_published(data: Path) -> list[Path]:
+    """Committed tariff drafts whose version (supplier, code, effective date) is published."""
+    found = []
+    for draft in _tariff_drafts(data / "drafts"):
+        version = load_file(draft, TariffVersion)
+        folder = data / "tariffs" / version.supplier / version.tariff_code
+        if list(folder.glob(f"{version.effective_from.value.isoformat()}.r*.json")):
+            found.append(draft)
+    return found
+
+
+def test_a_draft_already_published_is_found(tmp_path: Path) -> None:
+    source = FIXTURE_DRAFTS / "city-of-ekurhuleni/2026-27/b-residential-1-phase.json"
+    draft = tmp_path / "drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json"
+    draft.parent.mkdir(parents=True)
+    draft.write_bytes(source.read_bytes())
+    folder = tmp_path / "tariffs/city-of-ekurhuleni/b-residential-1-phase"
+    folder.mkdir(parents=True)
+    assert _already_published(tmp_path) == []
+    (folder / "2027-07-01.r1.json").write_text("{}", encoding="utf-8")  # another year
+    assert _already_published(tmp_path) == []
+    (folder / "2026-07-01.r1.json").write_text("{}", encoding="utf-8")
+    assert _already_published(tmp_path) == [draft]
+
+
+def test_each_committed_draft_is_its_fixture_copy() -> None:
+    """The tests check the fixture copies (E62); a committed draft must be the same bytes,
+    so what the owner checks and publishes is what was tested. Passes when no draft is
+    committed, so a publication pull request can delete the drafts without touching code."""
+    for draft in sorted((DATA / "drafts").rglob("*.json")):
+        fixture = FIXTURE_DRAFTS / draft.relative_to(DATA / "drafts")
+        assert fixture.is_file(), draft
+        assert draft.read_bytes() == fixture.read_bytes(), draft
 
 
 # ------------------------------------------------- drafts (committed ones, and the fixtures)
 #
-# `data/drafts/` holds no draft since P2-13, so each check also runs on the fixture drafts
-# (`tests/fixtures/drafts/`): a check that never meets a draft could not fail.
+# `data/drafts/` may hold no draft (none from P2-13 to P4-13), so each check also runs on
+# the fixture drafts (`tests/fixtures/drafts/`): a check that never meets a draft could not
+# fail. These checks read whatever is committed and pass when nothing is.
 
 DRAFT_ROOTS = {"committed": DATA / "drafts", "fixtures": FIXTURE_DRAFTS}
 

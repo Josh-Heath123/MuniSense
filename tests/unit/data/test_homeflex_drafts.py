@@ -5,12 +5,15 @@ The real citation check runs on every citation; the values themselves are only `
 until the owner's hand check.
 """
 
-from decimal import Decimal
+import re
+from decimal import ROUND_HALF_UP, Decimal
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
 
 from munisense.domain.citations import Estimated, iter_cited
+from munisense.domain.money import Rate
 from munisense.domain.tariffs import (
     ExportCredit,
     FixedCharge,
@@ -18,6 +21,7 @@ from munisense.domain.tariffs import (
     TariffVersion,
     TimeOfUseEnergy,
 )
+from munisense.domain.tariffs.time_of_use import TimeRange
 from munisense.ingestion.citation_check import Outcome, check_citations
 from munisense.ingestion.publish import documents, text_check_reasons
 from munisense.provenance.drafts import load_file
@@ -74,13 +78,74 @@ def test_no_credit_rate_is_above_its_energy_rate(path: Path) -> None:
 
 
 def test_the_drafts_differ_only_in_name_size_and_capacity_charges() -> None:
-    first = _version(HOMEFLEX[0])
-    for path in HOMEFLEX[1:]:
-        other = _version(path)
-        assert other.components[:5] == first.components[:5]
-        assert other.components[-1] == first.components[-1]
-        assert other.tou_calendar == first.tou_calendar
-        assert other.billing_policy == first.billing_policy
+    """Everything but the tariff code, printed name, supply size and the two capacity
+    charges is the same in all four; those differ in each."""
+    differ = {"tariff_code", "printed_name", "applies_to"}
+    dumps = [_version(path).model_dump(mode="json") for path in HOMEFLEX]
+    for dump in dumps[1:]:
+        assert {k: v for k, v in dump.items() if k not in differ | {"components"}} == {
+            k: v for k, v in dumps[0].items() if k not in differ | {"components"}
+        }
+        same = [c for n, c in enumerate(dump["components"]) if n not in (5, 6)]
+        assert same == [c for n, c in enumerate(dumps[0]["components"]) if n not in (5, 6)]
+    for name in (5, 6):
+        rates = [d["components"][name]["rate"]["value"]["value"] for d in dumps]
+        assert len(set(rates)) == 4, rates
+    assert [d["components"][5]["rate"]["value"]["value"] for d in dumps] == [
+        "13.19",
+        "29.44",
+        "62.89",
+        "9.08",
+    ]
+    assert [d["components"][6]["rate"]["value"]["value"] for d in dumps] == [
+        "1.09",
+        "1.93",
+        "4.70",
+        "0.71",
+    ]
+
+
+FIGURE = re.compile(r"[0-9]+[.,][0-9]{2}")
+
+
+@pytest.mark.parametrize("path", HOMEFLEX, ids=lambda p: p.stem)
+def test_each_rate_is_the_first_figure_of_its_text_and_the_second_includes_vat(
+    path: Path,
+) -> None:
+    """The citation check finds the text on the page; this ties the value to the text: the
+    first figure is the value, and the second (where printed) is it with 15% VAT, rounded
+    half up ("R0,82" read as 0.82)."""
+    checked = 0
+    for _, cited in iter_cited(_version(path)):
+        if not isinstance(cited.value, Rate):
+            continue
+        figures = [
+            Decimal(f.replace(",", ".")) for f in FIGURE.findall(cited.citation.printed_text)
+        ]
+        assert figures[0] == cited.value.value, cited.citation.printed_text
+        if len(figures) > 1:
+            with_vat = (cited.value.value * Decimal("1.15")).quantize(
+                Decimal("0.01"), ROUND_HALF_UP
+            )
+            assert figures[1] == with_vat, cited.citation.printed_text
+        checked += 1
+    assert checked == 18  # 6 energy, 6 credit, 3 flat energy and 3 fixed-charge rates
+
+
+@pytest.mark.parametrize("path", HOMEFLEX, ids=lambda p: p.stem)
+def test_each_drawn_range_is_cited_once_and_adjacent_ranges_differ(path: Path) -> None:
+    """The adjacent-range decision (P4-13): every range has its own transcription, cited by
+    no other range, and two ranges next to each other in a day never share a period. The
+    off-peak arc across midnight (for example 22 to 6) is two ranges, 22 to 24 and 0 to 6,
+    each with its own transcription."""
+    calendar = _version(path).tou_calendar
+    assert calendar is not None
+    texts = [r.citation.printed_text for s in calendar.schedules for r in s.ranges]
+    assert len(texts) == len(set(texts)) == 29
+    for schedule in calendar.schedules:
+        ranges: list[TimeRange] = [r.value for r in schedule.ranges]
+        for before, after in pairwise(ranges):
+            assert before.period != after.period, (schedule.season, schedule.day_type)
 
 
 @pytest.mark.slow

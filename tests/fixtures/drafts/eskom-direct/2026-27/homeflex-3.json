@@ -17,16 +17,16 @@
     }
   },
   "applies_to": {
-    "value": "Residential TOU, dual-phase 100 kVA or three-phase 100 kVA",
+    "value": "dual-phase 100 kVA or three-phase 100 kVA",
     "citation": {
       "document_sha256": "eef82b077d7df4dd7b157ce757e2e56368170cec3bb69614fd81042451a1be84",
       "page": 27,
       "locator": "Homeflex supply sizes, printed page 28",
-      "printed_text": "Homeflex 3 dual-phase 100 kVA (225 A per phase)"
+      "printed_text": "Homeflex 3 dual-phase 100 kVA (225 A per phase)three-phase 100 kVA (150 A per phase)"
     },
     "status": {
       "kind": "estimated",
-      "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+      "reason": "estimated until the owner's hand check (P4-13); the page prints the two sizes in two columns, and the extracted text joins them without a space"
     }
   },
   "effective_from": {
@@ -106,7 +106,7 @@
     "export_cap": "use_in_period_per_calendar_month",
     "status": {
       "kind": "estimated",
-      "reason": "by days (book PDF p56); exports credited up to use per period each month (book p28, schedule p53), read as the calendar month; no blocks or prepayment on Homeflex"
+      "reason": "by days (book PDF p56); exports credited up to use per period each month (book p28, schedule p53), read as the calendar month; the block and prepaid fields are unused by these components"
     },
     "evidence": [
       {
@@ -124,7 +124,7 @@
       {
         "document_sha256": "915a93b2d71a453855e76a3ffe2223826f9f63a89bb542d58f92249f52c4d675",
         "page": 53,
-        "locator": "46. Gen-offset tariff, item 2",
+        "locator": "46. Gen-offset tariff, item 2, printed page 53 of 57",
         "printed_text": "the total exported energy per TOU credited shall not be greater than the active energy (kWh) measured by Eskom in peak, standard and off-peak periods for each month."
       }
     ]
@@ -1159,13 +1159,13 @@
         "citation": {
           "document_sha256": "915a93b2d71a453855e76a3ffe2223826f9f63a89bb542d58f92249f52c4d675",
           "page": 33,
-          "locator": "Table 13 (a picture), Network capacity charge [R/POD/day], Homeflex 3 row",
+          "locator": "Table 13 (a picture), Network capacity charge [R/POD/day], Homeflex 3 row, printed page 33 of 57",
           "printed_text": "Homeflex 3 R 62.89",
           "drawn": true
         },
         "status": {
           "kind": "estimated",
-          "reason": "schedule Table 13 (PDF p33, picture): R62.89, VAT incl R72.32 (=62.89 x 1.15); the book (PDF p28) prints R52.89 with R72.32; the owner decides (P4-13)"
+          "reason": "schedule Table 13 (PDF p33, picture): R62.89, VAT incl R72.32 (62.89 x 1.15 rounds half up to it); the book (PDF p28) prints R52.89 with R72.32; the owner decides (P4-13)"
         }
       }
     },
