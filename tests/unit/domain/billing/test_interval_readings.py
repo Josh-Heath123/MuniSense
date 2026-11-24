@@ -7,6 +7,7 @@ standard 200, off-peak 100. VAT 12.5%.
 
 from datetime import UTC, date, datetime, timedelta, timezone
 from decimal import Decimal
+from typing import get_args
 
 import pytest
 from pydantic import ValidationError
@@ -14,6 +15,8 @@ from pydantic import ValidationError
 from munisense.domain.base import DomainError
 from munisense.domain.billing import (
     BillingPeriod,
+    Consumption,
+    ConsumptionProfile,
     IntervalReading,
     IntervalReadings,
     NonMonthlyPeriodError,
@@ -234,6 +237,8 @@ def test_a_period_wholly_inside_one_interval_is_refused() -> None:
         version, day(date(2026, 7, 15)), readings(date(2026, 7, 15), 1, 5, "5"), VAT
     )
     assert five_minutes.consumption_kwh == Decimal(24 * 60)
+    standard = next(line for line in five_minutes.lines if "standard" in line.description)
+    assert standard.quantity == Decimal(10)  # two 5-minute readings of 5 kWh, 07:25 to 07:35
 
 
 def test_interval_readings_price_only_a_tariff_priced_by_time_of_use() -> None:
@@ -450,3 +455,9 @@ def test_a_full_month_of_one_minute_readings_is_classified_with_bounded_work() -
     assert bill.consumption_kwh == Decimal("44.640")
     assert calls["schedule_for"] == 31
     assert calls["period_at"] == 3 * 1440  # weekday, Saturday and Sunday tables
+
+
+def test_the_two_spellings_of_the_consumption_union_agree() -> None:
+    """`Consumption` (for type hints) and `ConsumptionProfile` (for Pydantic) list the same
+    kinds, so a new kind cannot be added to one and missed in the other."""
+    assert get_args(Consumption.__value__) == get_args(get_args(ConsumptionProfile)[0])
