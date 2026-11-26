@@ -1,18 +1,20 @@
 """The Homeflex 2026/27 drafts (P4-13), read from their fixture copies, never from
 `data/drafts/` (E62): the publication pull request deletes the drafts without touching code.
 
-The real citation check runs on every citation; the values themselves are only `estimated`
-until the owner's hand check.
+The real citation check runs on every citation. The owner's hand check (2026-11-26) made
+`Verified` exactly the values it covers; the legacy charge (H2) and every VAT treatment
+(H6) stay `estimated`, as do the rounding and billing policies.
 """
 
 import re
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from itertools import pairwise
 from pathlib import Path
 
 import pytest
 
-from munisense.domain.citations import Estimated, iter_cited
+from munisense.domain.citations import Estimated, TextCheck, Verified, iter_cited
 from munisense.domain.money import Rate
 from munisense.domain.tariffs import (
     ExportCredit,
@@ -39,10 +41,39 @@ def test_there_are_four_homeflex_drafts() -> None:
     assert [p.stem for p in HOMEFLEX] == [f"homeflex-{n}" for n in (1, 2, 3, 4)]
 
 
+# The owner's words for the legacy charge (hand check, H2).
+LEGACY = (
+    "billed separately as Homeflex item 4 and both tables show; schedule footnote 2 says it"
+    " is included in the energy charge (text shared with Homepower)"
+)
+# Kept `estimated` by the hand check: the legacy charge (H2) and each VAT treatment (H6).
+KEPT_ESTIMATED = [
+    "components[0].vat",
+    "components[1].label",
+    "components[1].vat",
+    "components[1].rate",
+    *(f"components[{n}].vat" for n in range(2, 8)),
+]
+
+
 @pytest.mark.parametrize("path", HOMEFLEX, ids=lambda p: p.stem)
-def test_every_value_is_estimated_until_the_hand_check(path: Path) -> None:
+def test_the_hand_check_verified_exactly_the_values_it_covers(path: Path) -> None:
     version = _version(path)
-    assert all(isinstance(c.status, Estimated) for _, c in iter_cited(version))
+    cited = list(iter_cited(version))
+    assert sorted(p for p, c in cited if isinstance(c.status, Estimated)) == sorted(KEPT_ESTIMATED)
+    for where, value in cited:
+        status = value.status
+        if where in KEPT_ESTIMATED:
+            assert isinstance(status, Estimated)
+            assert (status.reason == LEGACY) is where.startswith("components[1]"), where
+            assert where.startswith("components[1]") or "H6" in status.reason, where
+            continue
+        assert isinstance(status, Verified), where
+        assert (status.verifier, status.verifier_kind) == ("owner", "human")
+        assert status.method == "visual comparison with the source page"
+        assert status.verified_on == date(2026, 11, 26)
+        # The slow test below checks each text check against the computed outcome.
+        assert (status.text_check is TextCheck.DRAWN) is bool(value.citation.drawn), where
     assert isinstance(version.billing_policy.status, Estimated)
     assert isinstance(version.rounding_policy.status, Estimated)
 
@@ -166,10 +197,11 @@ def test_every_citation_passes_the_real_check(path: Path, passed: int, drawn: in
     assert text_check_reasons(version, results) == []
 
 
-def test_homeflex_3_carries_the_schedules_figure_until_the_owner_decides() -> None:
+def test_homeflex_3_carries_the_schedules_figure() -> None:
+    """H1: R62.89 (schedule Table 13, drawn), confirmed by the owner."""
     capacity = _version(HOMEFLEX[2]).components[5]
     assert isinstance(capacity, FixedCharge)
     assert capacity.rate.value.value == Decimal("62.89")
     assert capacity.rate.citation.drawn is True
-    assert isinstance(capacity.rate.status, Estimated)
-    assert "R52.89" in capacity.rate.status.reason
+    assert isinstance(capacity.rate.status, Verified)
+    assert capacity.rate.status.text_check is TextCheck.DRAWN

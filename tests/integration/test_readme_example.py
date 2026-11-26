@@ -15,6 +15,7 @@ import pytest
 
 from munisense.domain.citations import StatusKind
 from munisense.persistence.loader import rebuild
+from munisense.provenance.publication import TariffPublication, VatRatePublication, load_bytes
 from munisense.services import demo
 from support.database import TestDatabase
 
@@ -35,8 +36,26 @@ def _readme_block() -> str:
 def loaded(test_database: TestDatabase) -> TestDatabase:
     """The test database rebuilt from the committed publications."""
     summary = rebuild(ROOT / "data", test_database.migration)
-    assert (summary.publications, summary.tariff_versions, summary.vat_rates) == (3, 2, 1)
+    assert (summary.publications, summary.tariff_versions, summary.vat_rates) == _committed()
     return test_database
+
+
+def _committed() -> tuple[int, int, int]:
+    """Publications, tariff versions and VAT rates in the committed files, counted from the
+    files, so adding publications never breaks this test (architect, P4-13 stop)."""
+    tariffs = [
+        load_bytes(p.read_bytes(), TariffPublication)
+        for p in (ROOT / "data" / "tariffs").rglob("*.json")
+    ]
+    vat = [
+        load_bytes(p.read_bytes(), VatRatePublication)
+        for p in (ROOT / "data" / "vat").rglob("*.json")
+    ]
+    return (
+        len(tariffs) + len(vat),
+        sum(p.version is not None for p in tariffs),
+        sum(p.version is not None for p in vat),
+    )
 
 
 def _env(database: TestDatabase) -> dict[str, str]:

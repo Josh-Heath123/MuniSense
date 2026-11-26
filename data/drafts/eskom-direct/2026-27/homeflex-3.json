@@ -12,8 +12,12 @@
       "printed_text": "Homeflex 3 R"
     },
     "status": {
-      "kind": "estimated",
-      "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+      "kind": "verified",
+      "verifier": "owner",
+      "verifier_kind": "human",
+      "method": "visual comparison with the source page",
+      "verified_on": "2026-11-26",
+      "text_check": "passed"
     }
   },
   "applies_to": {
@@ -25,8 +29,12 @@
       "printed_text": "Homeflex 3 dual-phase 100 kVA (225 A per phase)three-phase 100 kVA (150 A per phase)"
     },
     "status": {
-      "kind": "estimated",
-      "reason": "estimated until the owner's hand check (P4-13); the page prints the two sizes in two columns, and the extracted text joins them without a space"
+      "kind": "verified",
+      "verifier": "owner",
+      "verifier_kind": "human",
+      "method": "visual comparison with the source page",
+      "verified_on": "2026-11-26",
+      "text_check": "passed"
     }
   },
   "effective_from": {
@@ -38,8 +46,12 @@
       "printed_text": "Charges for non-local authorities effective from 1 April 2026 to 31 March 2027"
     },
     "status": {
-      "kind": "estimated",
-      "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+      "kind": "verified",
+      "verifier": "owner",
+      "verifier_kind": "human",
+      "method": "visual comparison with the source page",
+      "verified_on": "2026-11-26",
+      "text_check": "passed"
     }
   },
   "effective_to": {
@@ -51,8 +63,12 @@
       "printed_text": "Charges for non-local authorities effective from 1 April 2026 to 31 March 2027"
     },
     "status": {
-      "kind": "estimated",
-      "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+      "kind": "verified",
+      "verifier": "owner",
+      "verifier_kind": "human",
+      "method": "visual comparison with the source page",
+      "verified_on": "2026-11-26",
+      "text_check": "passed"
     }
   },
   "price_basis": {
@@ -64,8 +80,12 @@
       "printed_text": "VAT incl"
     },
     "status": {
-      "kind": "estimated",
-      "reason": "each rate is printed beside a 'VAT incl' figure 15% higher, so the first excludes VAT; owner to check (P4-13)"
+      "kind": "verified",
+      "verifier": "owner",
+      "verifier_kind": "human",
+      "method": "visual comparison with the source page",
+      "verified_on": "2026-11-26",
+      "text_check": "passed"
     }
   },
   "rounding_policy": {
@@ -142,8 +162,12 @@
             "printed_text": "High-demand season means the TOU Period from 1 June to 31 August of each year."
           },
           "status": {
-            "kind": "estimated",
-            "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+            "kind": "verified",
+            "verifier": "owner",
+            "verifier_kind": "human",
+            "method": "visual comparison with the source page",
+            "verified_on": "2026-11-26",
+            "text_check": "passed"
           }
         },
         "dates": {
@@ -160,8 +184,12 @@
             "printed_text": "High-demand season means the TOU Period from 1 June to 31 August of each year."
           },
           "status": {
-            "kind": "estimated",
-            "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+            "kind": "verified",
+            "verifier": "owner",
+            "verifier_kind": "human",
+            "method": "visual comparison with the source page",
+            "verified_on": "2026-11-26",
+            "text_check": "passed"
           }
         }
       },
@@ -176,8 +204,12 @@
             "printed_text": "Low-demand season means the TOU Period from 1 September to 31 May of each year."
           },
           "status": {
-            "kind": "estimated",
-            "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+            "kind": "verified",
+            "verifier": "owner",
+            "verifier_kind": "human",
+            "method": "visual comparison with the source page",
+            "verified_on": "2026-11-26",
+            "text_check": "passed"
           }
         },
         "dates": {
@@ -194,8 +226,12 @@
             "printed_text": "Low-demand season means the TOU Period from 1 September to 31 May of each year."
           },
           "status": {
-            "kind": "estimated",
-            "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+            "kind": "verified",
+            "verifier": "owner",
+            "verifier_kind": "human",
+            "method": "visual comparison with the source page",
+            "verified_on": "2026-11-26",
+            "text_check": "passed"
           }
         }
       }
@@ -219,8 +255,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -237,8 +277,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -255,8 +299,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -273,8 +321,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -291,8 +343,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -309,8 +365,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           }
         ]
@@ -333,8 +393,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -351,8 +415,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -369,8 +437,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -387,8 +459,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -405,8 +481,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           }
         ]
@@ -429,8 +509,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -447,8 +531,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -465,8 +553,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           }
         ]
@@ -489,8 +581,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -507,8 +603,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -525,8 +625,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -543,8 +647,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -561,8 +669,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -579,8 +691,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -597,8 +713,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           }
         ]
@@ -621,8 +741,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -639,8 +763,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -657,8 +785,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -675,8 +807,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -693,8 +829,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           }
         ]
@@ -717,8 +857,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -735,8 +879,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           },
           {
@@ -753,8 +901,12 @@
               "drawn": true
             },
             "status": {
-              "kind": "estimated",
-              "reason": "drawn, not printed (ADR-0016 point 5); estimated until the owner compares it with the page by eye (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "drawn"
             }
           }
         ]
@@ -770,8 +922,12 @@
           "printed_text": "All public holidays for the Nightsave Rural, Homeflex, Ruraflex and Ruraflex Gen tariffs will be treated as the day of the week on which it falls."
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       },
       "coverage": null,
@@ -792,8 +948,12 @@
           "printed_text": "ACTIVE ENERGY CHARGE (c/kWh)"
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       },
       "vat": {
@@ -806,7 +966,7 @@
         },
         "status": {
           "kind": "estimated",
-          "reason": "VAT-inclusive figures are printed beside each rate, so VAT applies at the standard rate; owner to check (P4-13)"
+          "reason": "VAT-inclusive figures are printed beside each rate, so VAT is assumed standard-rated; kept estimated at the owner's hand check (H6, 2026-11-26) until a real Eskom bill shows it"
         }
       },
       "rates": [
@@ -825,8 +985,12 @@
               "printed_text": "736.61 847.10"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "the book's table (PDF p28) has no period labels; peak, standard, off-peak order from the schedule's Table 13 (PDF p33, a picture); owner to check (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         },
@@ -845,8 +1009,12 @@
               "printed_text": "225.38 259.19"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "the book's table (PDF p28) has no period labels; peak, standard, off-peak order from the schedule's Table 13 (PDF p33, a picture); owner to check (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         },
@@ -865,8 +1033,12 @@
               "printed_text": "165.94 190.83"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "the book's table (PDF p28) has no period labels; peak, standard, off-peak order from the schedule's Table 13 (PDF p33, a picture); owner to check (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         },
@@ -885,8 +1057,12 @@
               "printed_text": "343.09 394.55"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "the book's table (PDF p28) has no period labels; peak, standard, off-peak order from the schedule's Table 13 (PDF p33, a picture); owner to check (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         },
@@ -905,8 +1081,12 @@
               "printed_text": "213.49 245.51"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "the book's table (PDF p28) has no period labels; peak, standard, off-peak order from the schedule's Table 13 (PDF p33, a picture); owner to check (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         },
@@ -925,8 +1105,12 @@
               "printed_text": "165.94 190.83"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "the book's table (PDF p28) has no period labels; peak, standard, off-peak order from the schedule's Table 13 (PDF p33, a picture); owner to check (P4-13)"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         }
@@ -946,7 +1130,7 @@
         },
         "status": {
           "kind": "estimated",
-          "reason": "own column in both tables, but schedule footnote 2 (PDF p33) says a legacy charge is in the energy charge; charged separately until the owner decides (P4-13)"
+          "reason": "billed separately as Homeflex item 4 and both tables show; schedule footnote 2 says it is included in the energy charge (text shared with Homepower)"
         }
       },
       "vat": {
@@ -959,7 +1143,7 @@
         },
         "status": {
           "kind": "estimated",
-          "reason": "VAT-inclusive figures are printed beside each rate, so VAT applies at the standard rate; owner to check (P4-13)"
+          "reason": "billed separately as Homeflex item 4 and both tables show; schedule footnote 2 says it is included in the energy charge (text shared with Homepower)"
         }
       },
       "kind": "flat_energy",
@@ -976,7 +1160,7 @@
         },
         "status": {
           "kind": "estimated",
-          "reason": "own column in both tables, but schedule footnote 2 (PDF p33) says a legacy charge is in the energy charge; charged separately until the owner decides (P4-13)"
+          "reason": "billed separately as Homeflex item 4 and both tables show; schedule footnote 2 says it is included in the energy charge (text shared with Homepower)"
         }
       }
     },
@@ -992,8 +1176,12 @@
           "printed_text": "Network demand charge [c/kWh]"
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       },
       "vat": {
@@ -1006,7 +1194,7 @@
         },
         "status": {
           "kind": "estimated",
-          "reason": "VAT-inclusive figures are printed beside each rate, so VAT applies at the standard rate; owner to check (P4-13)"
+          "reason": "VAT-inclusive figures are printed beside each rate, so VAT is assumed standard-rated; kept estimated at the owner's hand check (H6, 2026-11-26) until a real Eskom bill shows it"
         }
       },
       "kind": "flat_energy",
@@ -1022,8 +1210,12 @@
           "printed_text": "28.68 32.98"
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       }
     },
@@ -1039,8 +1231,12 @@
           "printed_text": "Ancilliary service charge [c/kWh]"
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       },
       "vat": {
@@ -1053,7 +1249,7 @@
         },
         "status": {
           "kind": "estimated",
-          "reason": "VAT-inclusive figures are printed beside each rate, so VAT applies at the standard rate; owner to check (P4-13)"
+          "reason": "VAT-inclusive figures are printed beside each rate, so VAT is assumed standard-rated; kept estimated at the owner's hand check (H6, 2026-11-26) until a real Eskom bill shows it"
         }
       },
       "kind": "flat_energy",
@@ -1069,8 +1265,12 @@
           "printed_text": "0.45 0.52"
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       }
     },
@@ -1086,8 +1286,12 @@
           "printed_text": "Service and administartion charge [R/POD/day]"
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       },
       "vat": {
@@ -1100,7 +1304,7 @@
         },
         "status": {
           "kind": "estimated",
-          "reason": "VAT-inclusive figures are printed beside each rate, so VAT applies at the standard rate; owner to check (P4-13)"
+          "reason": "VAT-inclusive figures are printed beside each rate, so VAT is assumed standard-rated; kept estimated at the owner's hand check (H6, 2026-11-26) until a real Eskom bill shows it"
         }
       },
       "kind": "fixed_charge",
@@ -1116,8 +1320,12 @@
           "printed_text": "5.74 6.60"
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       }
     },
@@ -1133,8 +1341,12 @@
           "printed_text": "Network capacity charge (R/POD/day)*"
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       },
       "vat": {
@@ -1147,7 +1359,7 @@
         },
         "status": {
           "kind": "estimated",
-          "reason": "VAT-inclusive figures are printed beside each rate, so VAT applies at the standard rate; owner to check (P4-13)"
+          "reason": "VAT-inclusive figures are printed beside each rate, so VAT is assumed standard-rated; kept estimated at the owner's hand check (H6, 2026-11-26) until a real Eskom bill shows it"
         }
       },
       "kind": "fixed_charge",
@@ -1164,8 +1376,12 @@
           "drawn": true
         },
         "status": {
-          "kind": "estimated",
-          "reason": "schedule Table 13 (PDF p33, picture): R62.89, VAT incl R72.32 (62.89 x 1.15 rounds half up to it); the book (PDF p28) prints R52.89 with R72.32; the owner decides (P4-13)"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "drawn"
         }
       }
     },
@@ -1181,8 +1397,12 @@
           "printed_text": "Generation capacity charge (R/POD/day)"
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       },
       "vat": {
@@ -1195,7 +1415,7 @@
         },
         "status": {
           "kind": "estimated",
-          "reason": "VAT-inclusive figures are printed beside each rate, so VAT applies at the standard rate; owner to check (P4-13)"
+          "reason": "VAT-inclusive figures are printed beside each rate, so VAT is assumed standard-rated; kept estimated at the owner's hand check (H6, 2026-11-26) until a real Eskom bill shows it"
         }
       },
       "kind": "fixed_charge",
@@ -1211,8 +1431,12 @@
           "printed_text": "R4.70 R5.41"
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       }
     },
@@ -1228,8 +1452,12 @@
           "printed_text": "Gen-offset Homeflex – Non-local Authority"
         },
         "status": {
-          "kind": "estimated",
-          "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+          "kind": "verified",
+          "verifier": "owner",
+          "verifier_kind": "human",
+          "method": "visual comparison with the source page",
+          "verified_on": "2026-11-26",
+          "text_check": "passed"
         }
       },
       "vat": {
@@ -1242,7 +1470,7 @@
         },
         "status": {
           "kind": "estimated",
-          "reason": "the Gen-offset table prints a VAT-inclusive figure beside each credit; standard-rated until a source or real bill says otherwise"
+          "reason": "a VAT-inclusive figure is printed beside each credit, so the credit is assumed standard-rated; kept estimated at the owner's hand check (H6, 2026-11-26) until a source or real bill shows it"
         }
       },
       "rates": [
@@ -1261,8 +1489,12 @@
               "printed_text": "707.51 813.64"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         },
@@ -1281,8 +1513,12 @@
               "printed_text": "201.65 231.90"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         },
@@ -1301,8 +1537,12 @@
               "printed_text": "142.70 164.11"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         },
@@ -1321,8 +1561,12 @@
               "printed_text": "318.39 366.15"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         },
@@ -1341,8 +1585,12 @@
               "printed_text": "189.87 218.35"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         },
@@ -1361,8 +1609,12 @@
               "printed_text": "142.70 164.11"
             },
             "status": {
-              "kind": "estimated",
-              "reason": "estimated until the owner's hand check (P4-13); the text check passes"
+              "kind": "verified",
+              "verifier": "owner",
+              "verifier_kind": "human",
+              "method": "visual comparison with the source page",
+              "verified_on": "2026-11-26",
+              "text_check": "passed"
             }
           }
         }

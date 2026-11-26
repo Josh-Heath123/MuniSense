@@ -47,12 +47,30 @@ def _ids(paths: list[Path]) -> list[str]:
     return [str(p.relative_to(DATA)) for p in paths]
 
 
+# A publication's path: tariffs/<supplier>/<tariff code>/<start>.r<revision>.json, or
+# vat/<country>/<start>.r<revision>.json (ADR-0012). The guards check it against the content.
+TARIFF_PATH = re.compile(
+    r"tariffs/[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*/\d{4}-\d{2}-\d{2}\.r[1-9]\d*\.json"
+)
+VAT_PATH = re.compile(r"vat/[a-z0-9]+(-[a-z0-9]+)*/\d{4}-\d{2}-\d{2}\.r[1-9]\d*\.json")
+
+
 def test_the_layout_holds_the_expected_files() -> None:
-    assert _ids(TARIFF_PUBLICATIONS) == [
+    """The publications known to exist are there, and every one sits where the layout says.
+
+    Not the exact set: a data-only pull request that adds publications must pass these
+    tests without touching code (architect, P4-13 stop).
+    """
+    assert {
         "tariffs/city-of-ekurhuleni/b-residential-1-phase/2026-07-01.r1.json",
         "tariffs/city-of-ekurhuleni/b-residential-3-phase/2026-07-01.r1.json",
-    ]
-    assert _ids(VAT_PUBLICATIONS) == ["vat/south-africa/2018-04-01.r1.json"]
+    } <= set(_ids(TARIFF_PUBLICATIONS))
+    assert {"vat/south-africa/2018-04-01.r1.json"} <= set(_ids(VAT_PUBLICATIONS))
+    assert [p for p in _ids(TARIFF_PUBLICATIONS) if not TARIFF_PATH.fullmatch(p)] == []
+    assert [p for p in _ids(VAT_PUBLICATIONS) if not VAT_PATH.fullmatch(p)] == []
+    # Nothing else under the publication folders: a stray file would escape these checks.
+    assert sorted((DATA / "tariffs").rglob("*.*")) == TARIFF_PUBLICATIONS
+    assert sorted((DATA / "vat").rglob("*.*")) == VAT_PUBLICATIONS
     assert _ids(MANIFESTS) == [
         "sources/ekurhuleni/sources.json",
         "sources/eskom/sources.json",
