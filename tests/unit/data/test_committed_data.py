@@ -47,26 +47,81 @@ def _ids(paths: list[Path]) -> list[str]:
     return [str(p.relative_to(DATA)) for p in paths]
 
 
+# A publication's path: tariffs/<supplier>/<tariff code>/<start>.r<revision>.json, or
+# vat/<country>/<start>.r<revision>.json (ADR-0012). The guards check it against the content.
+TARIFF_PATH = re.compile(
+    r"tariffs/[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*/\d{4}-\d{2}-\d{2}\.r[1-9]\d*\.json"
+)
+VAT_PATH = re.compile(r"vat/[a-z0-9]+(-[a-z0-9]+)*/\d{4}-\d{2}-\d{2}\.r[1-9]\d*\.json")
+
+
 def test_the_layout_holds_the_expected_files() -> None:
-    assert _ids(TARIFF_PUBLICATIONS) == [
+    """The publications known to exist are there, and every one sits where the layout says.
+
+    Not the exact set: a data-only pull request that adds publications must pass these
+    tests without touching code (architect, P4-13 stop).
+    """
+    assert {
         "tariffs/city-of-ekurhuleni/b-residential-1-phase/2026-07-01.r1.json",
         "tariffs/city-of-ekurhuleni/b-residential-3-phase/2026-07-01.r1.json",
-    ]
-    assert _ids(VAT_PUBLICATIONS) == ["vat/south-africa/2018-04-01.r1.json"]
+    } <= set(_ids(TARIFF_PUBLICATIONS))
+    assert {"vat/south-africa/2018-04-01.r1.json"} <= set(_ids(VAT_PUBLICATIONS))
+    assert [p for p in _ids(TARIFF_PUBLICATIONS) if not TARIFF_PATH.fullmatch(p)] == []
+    assert [p for p in _ids(VAT_PUBLICATIONS) if not VAT_PATH.fullmatch(p)] == []
+    # Nothing else under the publication folders: a stray file would escape these checks.
+    assert sorted(p for p in (DATA / "tariffs").rglob("*") if p.is_file()) == TARIFF_PUBLICATIONS
+    assert sorted(p for p in (DATA / "vat").rglob("*") if p.is_file()) == VAT_PUBLICATIONS
     assert _ids(MANIFESTS) == [
         "sources/ekurhuleni/sources.json",
         "sources/eskom/sources.json",
         "sources/sars/sources.json",
     ]
     # Every draft committed before P2-13 was published, then deleted (E55). A draft
-    # committed later is checked by the draft tests below.
-    assert not list((DATA / "drafts").rglob("*.json"))
+    # committed later is checked by the draft tests below, and is never one already
+    # published (its publication pull request deletes it).
+    assert _already_published(DATA) == []
+
+
+def _already_published(data: Path) -> list[Path]:
+    """Committed tariff drafts whose version (supplier, code, effective date) is published."""
+    found = []
+    for draft in _tariff_drafts(data / "drafts"):
+        version = load_file(draft, TariffVersion)
+        folder = data / "tariffs" / version.supplier / version.tariff_code
+        if list(folder.glob(f"{version.effective_from.value.isoformat()}.r*.json")):
+            found.append(draft)
+    return found
+
+
+def test_a_draft_already_published_is_found(tmp_path: Path) -> None:
+    source = FIXTURE_DRAFTS / "city-of-ekurhuleni/2026-27/b-residential-1-phase.json"
+    draft = tmp_path / "drafts/city-of-ekurhuleni/2026-27/b-residential-1-phase.json"
+    draft.parent.mkdir(parents=True)
+    draft.write_bytes(source.read_bytes())
+    folder = tmp_path / "tariffs/city-of-ekurhuleni/b-residential-1-phase"
+    folder.mkdir(parents=True)
+    assert _already_published(tmp_path) == []
+    (folder / "2027-07-01.r1.json").write_text("{}", encoding="utf-8")  # another year
+    assert _already_published(tmp_path) == []
+    (folder / "2026-07-01.r1.json").write_text("{}", encoding="utf-8")
+    assert _already_published(tmp_path) == [draft]
+
+
+def test_each_committed_draft_is_its_fixture_copy() -> None:
+    """The tests check the fixture copies (E62); a committed draft must be the same bytes,
+    so what the owner checks and publishes is what was tested. Passes when no draft is
+    committed, so a publication pull request can delete the drafts without touching code."""
+    for draft in sorted((DATA / "drafts").rglob("*.json")):
+        fixture = FIXTURE_DRAFTS / draft.relative_to(DATA / "drafts")
+        assert fixture.is_file(), draft
+        assert draft.read_bytes() == fixture.read_bytes(), draft
 
 
 # ------------------------------------------------- drafts (committed ones, and the fixtures)
 #
-# `data/drafts/` holds no draft since P2-13, so each check also runs on the fixture drafts
-# (`tests/fixtures/drafts/`): a check that never meets a draft could not fail.
+# `data/drafts/` may hold no draft (none from P2-13 to P4-13), so each check also runs on
+# the fixture drafts (`tests/fixtures/drafts/`): a check that never meets a draft could not
+# fail. These checks read whatever is committed and pass when nothing is.
 
 DRAFT_ROOTS = {"committed": DATA / "drafts", "fixtures": FIXTURE_DRAFTS}
 
@@ -83,10 +138,14 @@ def _catalogue() -> SupplierCatalogue:
     return load_file(DATA / "catalogue" / "suppliers.json", SupplierCatalogue)
 
 
-def test_the_fixture_drafts_are_the_three_published_ones() -> None:
+def test_the_fixture_drafts_are_the_published_ones_and_homeflex() -> None:
     assert [str(p.relative_to(FIXTURE_DRAFTS)) for p in _tariff_drafts(FIXTURE_DRAFTS)] == [
         "city-of-ekurhuleni/2026-27/b-residential-1-phase.json",
         "city-of-ekurhuleni/2026-27/b-residential-3-phase.json",
+        "eskom-direct/2026-27/homeflex-1.json",
+        "eskom-direct/2026-27/homeflex-2.json",
+        "eskom-direct/2026-27/homeflex-3.json",
+        "eskom-direct/2026-27/homeflex-4.json",
     ]
     assert [p.name for p in _vat_drafts(FIXTURE_DRAFTS)] == ["2018-04-01.json"]
 

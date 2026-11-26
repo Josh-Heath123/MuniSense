@@ -191,8 +191,13 @@ def test_a_seasonal_season_missing_from_the_calendar_is_refused() -> None:
 
 def test_the_published_tariff_b_files_load_unchanged() -> None:
     """They have no calendar; they load, and render to the same bytes (the committed-data
-    test checks every publication byte for byte)."""
-    for path in sorted((Path(__file__).resolve().parents[4] / "data" / "tariffs").rglob("*.json")):
+    test checks every publication byte for byte). Only Ekurhuleni's Tariff B files: other
+    publications (Eskom's Homeflex) carry a calendar, and adding them must not break this
+    test (E63)."""
+    folder = Path(__file__).resolve().parents[4] / "data" / "tariffs" / "city-of-ekurhuleni"
+    paths = sorted(folder.glob("b-residential-*/*.json"))
+    assert len(paths) >= 2
+    for path in paths:
         publication = load_bytes(path.read_bytes(), TariffPublication)
         assert publication.version is not None
         assert publication.version.tou_calendar is None

@@ -105,7 +105,7 @@ def _draft(data: Path) -> Path:
 def published(data: Path) -> Path:
     """The VAT rate and the time-of-use version, published; returns the version's file."""
     draft = _draft(data)
-    draft.parent.mkdir(parents=True)
+    draft.parent.mkdir(parents=True, exist_ok=True)
     write_file(draft, _version())
     clock = Clock()
     vat = data / "drafts/vat/south-africa/2018-04-01.json"
