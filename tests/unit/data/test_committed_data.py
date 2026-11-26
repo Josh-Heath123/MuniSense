@@ -69,8 +69,8 @@ def test_the_layout_holds_the_expected_files() -> None:
     assert [p for p in _ids(TARIFF_PUBLICATIONS) if not TARIFF_PATH.fullmatch(p)] == []
     assert [p for p in _ids(VAT_PUBLICATIONS) if not VAT_PATH.fullmatch(p)] == []
     # Nothing else under the publication folders: a stray file would escape these checks.
-    assert sorted((DATA / "tariffs").rglob("*.*")) == TARIFF_PUBLICATIONS
-    assert sorted((DATA / "vat").rglob("*.*")) == VAT_PUBLICATIONS
+    assert sorted(p for p in (DATA / "tariffs").rglob("*") if p.is_file()) == TARIFF_PUBLICATIONS
+    assert sorted(p for p in (DATA / "vat").rglob("*") if p.is_file()) == VAT_PUBLICATIONS
     assert _ids(MANIFESTS) == [
         "sources/ekurhuleni/sources.json",
         "sources/eskom/sources.json",
